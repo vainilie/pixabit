@@ -1,0 +1,12 @@
+# Ignora archivos del sistema Mac 
+.DS_store
+
+# Ignora la carpeta node_modules
+__pycache__
+
+# Ignora todos los archivos de texto
+*.json
+
+# Ignora los archivos relacionados a API keys
+*.ini
+*.env
