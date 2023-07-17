@@ -1,10 +1,12 @@
+import dateutil.parser
+from datetime import datetime, timezone
 
 #
 # ─── MODIFY DATE ──────────────────────────────────────────────────────────────
 #
 
 
-def date(utc):
+def Date(utc):
     """convert time"""
     utc_time = dateutil.parser.parse(utc)
     return utc_time.astimezone().replace(microsecond=0)
@@ -25,4 +27,3 @@ def expired(eval):
     """check if date was in the past"""
     evaluate = date(eval)
     return evaluate < nowLOC
-

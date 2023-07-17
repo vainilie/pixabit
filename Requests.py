@@ -16,11 +16,13 @@ HEADERS = {
 CALLS = 30
 RATE_LIMIT = 60
 
+
 @sleep_and_retry
 @limits(calls=CALLS, period=RATE_LIMIT)
 def CheckLimitCalls():
     """Empty function just to check for calls to API"""
     return
+
 
 def GetAPI(text):
     """request from API (with limits). Text is the string of the type of data to get from the API"""
