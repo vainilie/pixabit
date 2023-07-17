@@ -1,0 +1,23 @@
+[styles]
+foreground = #dadada
+background = #141b1e   
+color0 = #71baf2
+color0 b = #71baf2 bold
+color1 = #e57474
+color2 = #8ccf7e
+color3 = #e5c76b
+color4 = #67b0e8
+color5 = #c47fd5
+color6 = #6cbfbf
+color6 b = #6cbfbf b
+color7 = #96d988
+color8 = #f4d67a
+color9 = #ce89df
+color9 b = #ce89df b
+
+color10 = #67cbe7
+color11 = #ef7e7e
+color12 = #bdc3c2 
+color13 = #b3b9b8
+color14 = #232a2d
+color15 = #2d3437
