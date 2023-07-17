@@ -2,7 +2,7 @@ import json
 
 
 def SaveFile(data, title):
-    outfile = open("files/" + title + ".json", "w", encoding="utf-8")
+    outfile = open(title + ".json", "w", encoding="utf-8")
     json.dump(
         data,
         outfile,

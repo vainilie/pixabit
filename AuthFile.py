@@ -15,14 +15,14 @@ tags["owned"] = "tag-id-here"
 
 def CreateAuth():
     """to create file <auth.ini>"""
-    with open("files/auth.ini", "w") as configfile:
+    with open("auth.ini", "w") as configfile:
         config.write(configfile)
 
 
 def CheckAuth():
     """to check if the file <auth.ini> exists. if not, it will call the create function"""
-    if os.path.exists("files/auth.ini"):
-        config.read("files/auth.ini")
+    if os.path.exists("auth.ini"):
+        config.read("auth.ini")
         print("File exists")
 
     else:
@@ -32,5 +32,5 @@ def CheckAuth():
 
 def GetKey(section, key):
     """Get keys from file [section and key to get]"""
-    config.read("files/auth.ini")
+    config.read("auth.ini")
     return config[section][key]

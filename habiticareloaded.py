@@ -2,7 +2,6 @@
 """open env"""
 import authf
 import argparse
-import dateutil.parser
 import emoji_data_python
 import configparser
 import json
@@ -12,7 +11,6 @@ import os
 import sys
 from rich.prompt import Confirm, Prompt, IntPrompt
 
-from datetime import datetime, timezone
 import timeago
 from rich import box
 from rich import print
@@ -67,8 +65,6 @@ def get_tags():
     return tags
 
 
-
-
 #
 # ─── MODIFY DATE ──────────────────────────────────────────────────────────────
 #
@@ -97,12 +93,8 @@ def expired(eval):
     return evaluate < nowLOC
 
 
-
-
 # ─── % GET STATS ────────────────────────────────────────────────────────────────
 #
-
-
 
 
 # ─── % GET TASKS ────────────────────────────────────────────────────────────────
@@ -123,7 +115,7 @@ def tasks(tags):
     tGrey = []
     tExp = []
     tDue = []
-    alltags=[]
+    alltags = []
 
     for idx, task in enumerate(all_tasks.json()["data"]):
         _task = {}
@@ -186,7 +178,6 @@ def tasks(tags):
             r.append(_task)
 
         else:
-
             if len(task["checklist"]) >= 1:
                 for idy, check in enumerate(task["checklist"]):
                     idxy = float(str(idx) + "." + str(idy))
@@ -240,7 +231,7 @@ def tasks(tags):
     t.update({"due": tDue, "grey": tGrey, "expired": tExp})
     d.update({"done": dDone, "due": dDue, "grey": dGrey})
     alltag = l2s(alltags)
-    all_.update({"habits": h, "dailies": d, "todos": t, "rewards": r,"tags":alltag})
+    all_.update({"habits": h, "dailies": d, "todos": t, "rewards": r, "tags": alltag})
 
     with open("tasks.json", "w", encoding="utf8") as json_file:
         json.dump(
@@ -286,7 +277,6 @@ def display(stat):
 
     about_album.add_row("[i #BDA8FF i]quest", f"{_quest}")
 
-
     about_album.add_row(
         "[i #BDA8FF i]damage up",
         f"{int(_stats.get('quest').get('progress').get('up'))}",
@@ -321,8 +311,7 @@ def display(stat):
     aboute = Table.grid(padding=0, expand=True)
     aboute.add_column(no_wrap=True)
     aboute.add_column(no_wrap=True)
-    aboute.add_row(about,stats)
-
+    aboute.add_row(about, stats)
 
     console.print(
         Panel(
@@ -362,7 +351,7 @@ def sleep(stat):
         requests.post(BASEURL + "user/sleep", headers=HEADERS)
         print("Sing me to sleep:notes:")
 
-    
+
 # ArgParse
 class Debug(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
@@ -402,14 +391,15 @@ stats_ = stats()
 display(stats_)
 display_sleep(stats_)
 
+
 def clean_tags():
-    usedtag=all_["tags"]
-    alltag=[]
+    usedtag = all_["tags"]
+    alltag = []
 
     for tag in myTags:
         alltag.append(tag)
-    used=l2s(usedtag)
-    alls=l2s(alltag)
+    used = l2s(usedtag)
+    alls = l2s(alltag)
     m = alls.difference(used)
     print(f"used: {len(used)} all:{len(alls)}, inter:{len(m)}")
     for x in m:
@@ -417,7 +407,8 @@ def clean_tags():
         print(myTags[x]["name"])
         if Confirm.ask("Delete unused tag?"):
             deletetag = requests.delete(BASEURL + "tags/" + x, headers=HEADERS)
-            
+
             print(deletetag)
-    
+
+
 clean_tags()
