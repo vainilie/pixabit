@@ -1,8 +1,11 @@
 import Requests, SaveFile
 import json
 import emoji_data_python
-from  DatesKLWP import Date
+from DatesKLWP import Date
+
 """parse stats"""
+
+
 def GetStats():
     Response = Requests.GetAPI("user?userFields=stats,party")
     RawData = Response["data"]
@@ -49,13 +52,13 @@ def GetStats():
     Stats.update(
         {
             "username": RawData["auth"]["local"]["username"],
-            "resting": RawData["preferences"]["sleep"],
+            "Sleeping": RawData["preferences"]["sleep"],
             "quest": RawData["party"]["quest"],
             "timestamp": RawData["auth"]["timestamps"]["loggedin"],
             "day_start": RawData["preferences"]["dayStart"],
         }
     )
-    SaveFile.SaveFile(Stats,"Stats")
+    SaveFile.SaveFile(Stats, "Stats")
 
     return Stats
 

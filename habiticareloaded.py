@@ -1,38 +1,32 @@
 #!/usr/bin/env python3
 """open env"""
-import authf
-import argparse
-import emoji_data_python
-import configparser
-import json
-import requests
-import rich
-import os
-import sys
-from rich.prompt import Confirm, Prompt, IntPrompt
-
-import timeago
+console = Console(theme=theme)
+from art import *
+from ratelimit import limits, RateLimitException, sleep_and_retry
 from rich import box
 from rich import print
 from rich.console import Console, ConsoleOptions, Group, RenderableType, RenderResult
+from rich.padding import Padding
 from rich.panel import Panel
+from rich.prompt import Confirm, Prompt, IntPrompt
 from rich.style import Style
 from rich.table import Table
 from rich.text import Text
-from rich.padding import Padding
-from art import *
-import json
 from rich.theme import Theme
-
-theme = Theme.read("styles")
-console = Console(theme=theme)
-nowUTC = datetime.now(timezone.utc)
-nowLOC = nowUTC.astimezone()
-
-
+import argparse
+import authf
+import configparser
+import emoji_data_python
+import json
+import os
 import requests
-from ratelimit import limits, RateLimitException, sleep_and_retry
+import rich
+import sys
+import timeago
 
+nowLOC = nowUTC.astimezone()
+nowUTC = datetime.now(timezone.utc)
+theme = Theme.read("styles")
 
 #
 # ─── % GET TAGS ─────────────────────────────────────────────────────────────────
@@ -333,8 +327,10 @@ def display(stat):
 def display_sleep(stat):
     if stat["sleeping"] is True:
         prompt = "You are sleeping. Wanna wake up?"
+
     else:
         prompt = "You are awake. Wanna sleep?"
+
     if Confirm.ask(prompt, default=False):
         sleep(stat)
     else:
