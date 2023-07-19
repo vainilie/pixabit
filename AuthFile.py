@@ -20,7 +20,8 @@ def CreateAuth():
 
 
 def CheckAuth():
-    """to check if the file <auth.ini> exists. if not, it will call the create function"""
+    """to check if the file <auth.ini> exists.
+    if not, it will call the create function"""
     if os.path.exists("auth.ini"):
         config.read("auth.ini")
         print("File exists")

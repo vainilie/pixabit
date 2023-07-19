@@ -1,10 +1,8 @@
 import requests
 from AuthFile import GetKey
-from ratelimit import limits, RateLimitException, sleep_and_retry
-import json
+from ratelimit import limits, sleep_and_retry
 
 BASEURL = "https://habitica.com/api/v3/"
-
 USER_ID = GetKey("habitica", "apiUser")
 API_TOKEN = GetKey("habitica", "apiToken")
 HEADERS = {
@@ -12,7 +10,6 @@ HEADERS = {
     "x-api-key": API_TOKEN,
     "Content-Type": "application/json",
 }
-
 CALLS = 30
 RATE_LIMIT = 60
 
@@ -25,9 +22,21 @@ def CheckLimitCalls():
 
 
 def GetAPI(text):
-    """request from API (with limits). Text is the string of the type of data to get from the API"""
+    """request GET from API (with limits).
+    Text is the string of the type of data to get from the API"""
     CheckLimitCalls()
     response = requests.get(BASEURL + text, headers=HEADERS)
+    if response.status_code == 400:
+        print(response.status_code)
+    else:
+        return response.json()
+
+
+def PostAPI(text):
+    """request post from API (with limits).
+    Text is the string of the type of data to get POST the API"""
+    CheckLimitCalls()
+    response = requests.post(BASEURL + text, headers=HEADERS)
     if response.status_code == 400:
         print(response.status_code)
     else:
