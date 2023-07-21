@@ -1,6 +1,7 @@
 import dateutil.parser
 from datetime import datetime, timezone
-
+nowUTC = datetime.now(timezone.utc)
+nowLOC = nowUTC.astimezone()
 #
 # ─── MODIFY DATE ──────────────────────────────────────────────────────────────
 #
