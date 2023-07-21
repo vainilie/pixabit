@@ -24,71 +24,9 @@ import rich
 import sys
 import timeago
 
-nowLOC = nowUTC.astimezone()
-nowUTC = datetime.now(timezone.utc)
+
 theme = Theme.read("styles")
 
-#
-# ─── % GET TAGS ─────────────────────────────────────────────────────────────────
-#
-
-
-def get_tags():
-    """get tags"""
-    tags = {}
-    outfile = open("tags.json", "w", encoding="utf-8")
-    load_tags = requests.get(BASEURL + "tags", headers=HEADERS)
-
-    for idx, tag in enumerate(load_tags.json()["data"]):
-        a_tag = {}
-        name = emoji_data_python.replace_colons(tag["name"])
-        challenge = "challenge" in tag
-        a_tag.update(
-            {"_idx": idx, "id": tag["id"], "name": name, "challenge": challenge}
-        )
-
-        tags.update({tag["id"]: a_tag})
-    json.dump(
-        tags,
-        outfile,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-        indent=3,
-    )
-    return tags
-
-
-#
-# ─── MODIFY DATE ──────────────────────────────────────────────────────────────
-#
-
-
-def date(utc):
-    """convert time"""
-    utc_time = dateutil.parser.parse(utc)
-    return utc_time.astimezone().replace(microsecond=0)
-
-
-def next_one(next_one):
-    """str next"""
-    nextDue = date(next_one)
-    diff = nextDue - nowLOC
-    if diff.days < 8:
-        next_ = nextDue.strftime("%dd%mM%Yy%Hh%Mm%Ss")
-    else:
-        next_ = nextDue.strftime("%A %d %B %H:%M")
-    return next_
-
-
-def expired(eval):
-    """check if date was in the past"""
-    evaluate = date(eval)
-    return evaluate < nowLOC
-
-
-# ─── % GET STATS ────────────────────────────────────────────────────────────────
-#
 
 
 # ─── % GET TASKS ────────────────────────────────────────────────────────────────
@@ -241,111 +179,8 @@ def tasks(tags):
 
 
 #
-# ─── % DISPLAY STATS ────────────────────────────────────────────────────────────
-#
-
-
-def display(stat):
-    """display"""
-    _stats = stat
-    _quest = bool(_stats.get("quest"))
-    about_album = Table.grid(padding=0, expand=True)
-    about_album.add_column(no_wrap=True, justify="right")
-    about_album.add_column(no_wrap=True, justify="left")
-
-    about_album.add_row(
-        "[i #BDA8FF i]username",
-        f"{_stats.get('username')}",
-    )
-    about_album.add_row(
-        "[i #BDA8FF i]level",
-        f"{_stats.get('lvl')}",
-    )
-    about_album.add_row("[i #2995CD i]class", f"{_stats.get('class')}")
-    about_album.add_row("[i #BDA8FF i]sleeping", f"{_stats.get('sleeping')}")
-
-    about_album.add_row(
-        "[i #BDA8FF i]last time logged in",
-        f"{timeago.format(_stats.get('time'), nowLOC)}",
-    )
-
-    about_album.add_row("[i #BDA8FF i]quest", f"{_quest}")
-
-    about_album.add_row(
-        "[i #BDA8FF i]damage up",
-        f"{int(_stats.get('quest').get('progress').get('up'))}",
-    )
-    about_album.add_row(
-        "[i #BDA8FF i]damage down",
-        f"{_stats.get('quest').get('progress').get('down')}",
-    )
-    about_album.add_row(
-        "[i #2995CD i]start time down",
-        f"{_stats.get('start')} am",
-    )
-    for x in all_["rewards"]:
-        about_album.add_row(
-            "[i #2995CD i]start time down",
-            f"{x.get('value')} am",
-        )
-
-    stats = Table.grid(padding=0, expand=True)
-
-    stats.add_row("[i #FFA624 i]gold", f"{int(_stats.get('gp'))}")
-
-    stats.add_row("[i #F74E52 i]health", f"{int(_stats.get('hp'))}")
-
-    stats.add_row("[i #FFBE5D i]experience", f"{int(_stats.get('exp'))}")
-
-    stats.add_row("[i #50B5E9 i]mana", f"{int(_stats.get('mp'))}")
-    about = Table.grid(padding=0, expand=True)
-    about.add_column(no_wrap=True)
-    about.add_row(text2art(_stats.get("username"), font="doom"))
-    about.add_row(about_album)
-    aboute = Table.grid(padding=0, expand=True)
-    aboute.add_column(no_wrap=True)
-    aboute.add_column(no_wrap=True)
-    aboute.add_row(about, stats)
-
-    console.print(
-        Panel(
-            aboute,
-            box=box.ROUNDED,
-            title=f":space_invader: [b]{text2art('Habitica Stats', font='foxy')} :space_invader:",
-            border_style="#BDA8FF",
-            expand=False,
-        ),
-    )
-    return _stats
-
-
-#
 # ─── % TOGGLE SLEEPING ──────────────────────────────────────────────────────────
 #
-
-
-def display_sleep(stat):
-    if stat["sleeping"] is True:
-        prompt = "You are sleeping. Wanna wake up?"
-
-    else:
-        prompt = "You are awake. Wanna sleep?"
-
-    if Confirm.ask(prompt, default=False):
-        sleep(stat)
-    else:
-        print(f"[b]OK :cherry_blossom:")
-
-
-def sleep(stat):
-    """toggle sleep"""
-
-    if stat["sleeping"] is True:
-        requests.post(BASEURL + "user/sleep", headers=HEADERS)
-        print("Woke up!")
-    else:
-        requests.post(BASEURL + "user/sleep", headers=HEADERS)
-        print("Sing me to sleep:notes:")
 
 
 # ArgParse

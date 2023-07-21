@@ -6,14 +6,16 @@ import SaveFile
 import Tags
 import GetStats
 import Sleeping
+import Rich
 
 AuthFile.CheckAuth()
 user = Requests.GetAPI("user")
 SaveFile.SaveFile(user, "UserData")
 Tags.GetTags()
 Stats = GetStats.GetStats()
-
-if Stats["Sleeping"] is True:
+Rich.display(Stats)
+if Stats["sleeping"] is True:
     Sleeping.Sleeping("sleeping", "awake")
 else:
     Sleeping.Sleeping("awake", "sleeping")
+

@@ -1,15 +1,25 @@
 import Requests, SaveFile
 import json
 import emoji_data_python
-from DatesKLWP import Date
+import dateutil
+import dateutil.parser
+from datetime import datetime
 
 """parse stats"""
+
+
+def Date(utc):
+    """convert time"""
+    utc_time = dateutil.parser.parse(utc)
+    return utc_time.astimezone().replace(microsecond=0)
 
 
 def GetStats():
     Response = Requests.GetAPI("user?userFields=stats,party")
     RawData = Response["data"]
     Stats = {}
+    LastLogin = RawData["auth"]["timestamps"]["loggedin"]
+    LastLogin = datetime.fromisoformat(LastLogin)
     # Habits = len(all_["habits"])
     # Rewards = len(all_["rewards"])
     # Dailies = {}
@@ -51,11 +61,14 @@ def GetStats():
     # )
     Stats.update(
         {
-            "username": RawData["auth"]["local"]["username"],
-            "Sleeping": RawData["preferences"]["sleep"],
+            "class": RawData["stats"]["class"],
+            "level": RawData["stats"]["lvl"],
             "quest": RawData["party"]["quest"],
-            "timestamp": RawData["auth"]["timestamps"]["loggedin"],
-            "day_start": RawData["preferences"]["dayStart"],
+            "sleeping": RawData["preferences"]["sleep"],
+            "start": RawData["preferences"]["dayStart"],
+            "stats": RawData["stats"],
+            "time": str(LastLogin),
+            "username": RawData["auth"]["local"]["username"],
         }
     )
     SaveFile.SaveFile(Stats, "Stats")
