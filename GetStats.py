@@ -3,7 +3,8 @@ import json
 import emoji_data_python
 import dateutil
 import dateutil.parser
-from datetime import datetime
+import timeago, datetime
+
 
 """parse stats"""
 
@@ -15,11 +16,14 @@ def Date(utc):
 
 
 def GetStats():
+
     Response = Requests.GetAPI("user?userFields=stats,party")
     RawData = Response["data"]
     Stats = {}
     LastLogin = RawData["auth"]["timestamps"]["loggedin"]
-    LastLogin = datetime.fromisoformat(LastLogin)
+    LastLogin = datetime.datetime.fromisoformat(LastLogin)
+    while RawData["stats"]["class"] =="wizard":
+        RawData["stats"]["class"] = "mage"
     # Habits = len(all_["habits"])
     # Rewards = len(all_["rewards"])
     # Dailies = {}

@@ -6,14 +6,15 @@ from rich.prompt import Confirm, Prompt, IntPrompt
 from art import text2art
 from datetime import datetime, timezone
 from rich.theme import Theme
+import timeago, datetime
 
 from rich import box
+
 theme = Theme.read("styles")
 
 console = Console(theme=theme)
-nowUTC = datetime.now(timezone.utc)
-nowLOC = nowUTC.astimezone()
-
+# nowUTC = datetime.now(timezone.utc)
+# nowLOC = nowUTC.astimezone()
 
 #
 # ─── % DISPLAY STATS ────────────────────────────────────────────────────────────
@@ -22,68 +23,69 @@ nowLOC = nowUTC.astimezone()
 
 def display(Stats):
     """display"""
-    print(nowUTC)
-    print(nowLOC    )
-    userStats = Table.grid(padding=(0,1), expand=True)
+    userStats = Table.grid(padding=(0, 2), expand=True)
     userStats.add_column(no_wrap=True, justify="right")
     userStats.add_column(no_wrap=True, justify="left")
 
     userStats.add_row(
-        "[i #BDA8FF i]Username",
-        f"{Stats.get('username')}",
+        "[habitica][b]",
+        f"[habitica]Hello, [b i]{Stats.get('username')}",
     )
     userStats.add_row(
-        "[i #BDA8FF i]Level",
-        f"{Stats.get('level')}",
     )
-    userStats.add_row("[i #2995CD i]Class", f"{Stats.get('class')}")
-    userStats.add_row("[i #BDA8FF i]Are you sleeping?", f"{Stats.get('sleeping')}")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    LastLogin = Stats.get("time")
+    LastLogin = datetime.datetime.fromisoformat(LastLogin)
+    userStats.add_row(
+        "[neo][b]󰔚",
+        f"You last logged-in [b i]{timeago.format(LastLogin, now)}",
+    )
+    if Stats.get("sleeping") is True:
+        userStats.add_row("[gold][b]󰒲",
+        f"You are [gold][i b]resting[/] in the Inn")
 
+    if bool(Stats.get("quest")) is True:
+        quest = Table.grid(expand=False,)
+        quest.add_column()
+        quest.add_column()
+        quest.add_column()
+        quest.add_row("[pink]You're [i]in a quest", "",
+        f"[up][b] 󰶣 {int(Stats.get('quest').get('progress').get('up'))}",
+        f"[down][b] 󰶡 {int(Stats.get('quest').get('progress').get('down'))}")
+        userStats.add_row("[b][pink]󰞇", quest)
     userStats.add_row(
-        "[i #BDA8FF i]Last time logged in",
-        f"{Stats.get('time')}",
+        "[b #2995CD]start time down",
+        f"{Stats.get('start')} am",
     )
-
-    userStats.add_row(
-        "[i #BDA8FF i]Am I in a quest?", 
-        f"{bool(Stats.get('quest'))}",
-    )
-
-    userStats.add_row(
-        "[i #BDA8FF i]Damage :up:",
-        f"{int(Stats.get('quest').get('progress').get('up'))}",
-    )
-    userStats.add_row(
-        "[i #BDA8FF i]Damage :down:",
-        f"{Stats.get('quest').get('progress').get('down')}",
-    )
-    # userStats.add_row(
-    #     "[i #2995CD i]start time down",
-    #     f"{Stats.get('start')} am",
-    # )
     # for x in all_["rewards"]:
     #     userStats.add_row(
-    #         "[i #2995CD i]start time down",
+    #         "[b #2995CD]start time down",
     #         f"{x.get('value')} am",
     #     )
+    stats = Table.grid(padding=(0, 2), expand=True)
 
-    stats = Table.grid(padding=(0,2), expand=True)
+    stats.add_row("[b #FFA624]󱉏", f"{int(Stats.get('stats').get('gp'))}")
 
-    stats.add_row("[i #FFA624 i]gold", f"{int(Stats.get('stats').get('gp'))}")
+    stats.add_row("[b #F74E52]", f"{int(Stats.get('stats').get('hp'))}")
 
-    stats.add_row("[i #F74E52 i]health", f"{int(Stats.get('stats').get('hp'))}")
+    stats.add_row("[b #FFBE5D]󰫢", f"{int(Stats.get('stats').get('exp'))}")
 
-    stats.add_row("[i #FFBE5D i]experience", f"{int(Stats.get('stats').get('exp'))}")
-
-    stats.add_row("[i #50B5E9 i]mana", f"{int(Stats.get('stats').get('mp'))}")
+    stats.add_row("[b #50B5E9]", f"{int(Stats.get('stats').get('mp'))}")
     about = Table.grid(padding=0, expand=True)
     about.add_column(no_wrap=True)
-    about.add_row(text2art("eelianen", font="ghoulish"))
+    about.add_row("[b #6133b4]" + text2art("HABITICA", font="eftifont"))
     about.add_row(userStats)
-    aboute = Table.grid(padding=0, expand=True)
+    aboute = Table.grid(padding=2, expand=True)
     aboute.add_column(no_wrap=True)
     aboute.add_column(no_wrap=True)
-    aboute.add_row(about, stats)
+    statss=Panel(stats,
+            box=box.ROUNDED,
+            title= f"[b][i]level {Stats.get('level')}:sparkles:",
+            border_style="pink",
+            subtitle= f"{Stats.get('class')}",
+            expand=False,)
+
+    aboute.add_row(about, statss)
 
     console.print(
         Panel(
@@ -95,4 +97,3 @@ def display(Stats):
         ),
     )
     return Stats
-
