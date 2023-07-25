@@ -20,4 +20,5 @@ Rich.display(Stats)
 # else:
 #     Sleeping.Sleeping("awake", "sleeping")
 
-ListTags.Show(Tagsx)
+ListTags.Show(Tagsx, "name")
+ListTags.IDs(Tagsx)

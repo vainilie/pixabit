@@ -23,6 +23,11 @@ console = Console(theme=theme)
 
 def display(Stats):
     """display"""
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    LastLogin = Stats.get("time")
+    LastLogin = datetime.datetime.fromisoformat(LastLogin)
+
     userStats = Table.grid(padding=(0, 2), expand=True)
     userStats.add_column(no_wrap=True, justify="right")
     userStats.add_column(no_wrap=True, justify="left")
@@ -32,26 +37,25 @@ def display(Stats):
         f"[habitica]Hello, [b i]{Stats.get('username')}",
     )
     userStats.add_row(
-    )
-    now = datetime.datetime.now(datetime.timezone.utc)
-    LastLogin = Stats.get("time")
-    LastLogin = datetime.datetime.fromisoformat(LastLogin)
-    userStats.add_row(
         "[neo][b]󰔚",
         f"You last logged-in [b i]{timeago.format(LastLogin, now)}",
     )
     if Stats.get("sleeping") is True:
-        userStats.add_row("[gold][b]󰒲",
-        f"You are [gold][i b]resting[/] in the Inn")
+        userStats.add_row("[gold][b]󰒲", "You are [gold][i b]resting[/] in the Inn")
 
     if bool(Stats.get("quest")) is True:
-        quest = Table.grid(expand=False,)
+        quest = Table.grid(
+            expand=False,
+        )
         quest.add_column()
         quest.add_column()
         quest.add_column()
-        quest.add_row("[pink]You're [i]in a quest", "",
-        f"[up][b] 󰶣 {int(Stats.get('quest').get('progress').get('up'))}",
-        f"[down][b] 󰶡 {int(Stats.get('quest').get('progress').get('down'))}")
+        quest.add_row(
+            "[pink]You're [i]in a quest",
+            "",
+            f"[up][b] 󰶣 {int(Stats.get('quest').get('progress').get('up'))}",
+            f"[down][b] 󰶡 {int(Stats.get('quest').get('progress').get('down'))}",
+        )
         userStats.add_row("[b][pink]󰞇", quest)
     userStats.add_row(
         "[b #2995CD]start time down",
@@ -78,12 +82,14 @@ def display(Stats):
     aboute = Table.grid(padding=2, expand=True)
     aboute.add_column(no_wrap=True)
     aboute.add_column(no_wrap=True)
-    statss=Panel(stats,
-            box=box.ROUNDED,
-            title= f"[b][i]level {Stats.get('level')}:sparkles:",
-            border_style="pink",
-            subtitle= f"{Stats.get('class')}",
-            expand=False,)
+    statss = Panel(
+        stats,
+        box=box.ROUNDED,
+        title=f"[b][i]level {Stats.get('level')}:sparkles:",
+        border_style="pink",
+        subtitle=f"{Stats.get('class')}",
+        expand=False,
+    )
 
     aboute.add_row(about, statss)
 

@@ -1,22 +1,28 @@
-import Requests, SaveFile
-import json
+import Requests
+import SaveFile
 import emoji_data_python
 
 
 def GetTags():
-    TagsCh = {}
-    Tags = {}
+    TagsCh = []
+    Tags = []
     MyTags = {}
     AllTags = Requests.GetAPI("tags")
     for idx, tag in enumerate(AllTags["data"]):
         Tag = {}
-        name = emoji_data_python.replace_colons(tag["name"].replace("target","dart"))
-        Tag.update({"ID": tag["id"], "NAME": name})
+        name = emoji_data_python.replace_colons(tag["name"].replace("target", "dart"))
+        Tag.update({"id": tag["id"], "name": name})
         if "challenge" in tag:
-            TagsCh.update({name: Tag})
+            TagsCh.append(Tag)
         else:
-            Tags.update({name: Tag})
-        MyTags.update({"ChallengeTags": TagsCh, "PersonalTags": Tags})
+            Tags.append(Tag)
+
+    MyTags.update(
+        {
+            "challengeTags": sorted(TagsCh, key=lambda x: x["name"].lower()),
+            "personalTags": sorted(Tags, key=lambda x: x["name"].lower()),
+        }
+    )
 
     SaveFile.SaveFile(MyTags, "AllTags")
     return MyTags
