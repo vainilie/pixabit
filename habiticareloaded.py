@@ -24,6 +24,7 @@ import rich
 import sys
 import timeago
 
+from rich.theme import Theme
 
 theme = Theme.read("styles")
 
