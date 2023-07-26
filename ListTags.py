@@ -51,4 +51,4 @@ def IDs(Tags):
     for Cat in Tags:
         for idx, x in enumerate(Tags[Cat]):
             ids.append(x["id"])
-    return sorted(ids)
+    return sorted(set(ids))
