@@ -8,6 +8,7 @@ import GetStats
 import Sleeping
 import ListTags
 import Rich
+import GetUserData
 
 AuthFile.CheckAuth()
 user = Requests.GetAPI("user")
@@ -21,4 +22,5 @@ Rich.display(Stats)
 #     Sleeping.Sleeping("awake", "sleeping")
 
 ListTags.Show(Tagsx, "name")
-ListTags.IDs(Tagsx)
+ids = ListTags.IDs(Tagsx)
+GetUserData.getTasks(ids)
