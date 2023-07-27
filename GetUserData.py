@@ -2,7 +2,7 @@ import Requests
 import SaveFile
 
 
-def getTasks(ids):
+def getTasks(ids,Tags):
     Taks = Requests.GetAPI("tasks/user")
     Taks = Taks["data"]
     habits = []
@@ -30,4 +30,12 @@ def getTasks(ids):
     )
     SaveFile.SaveFile(Tasks, "AllTasks")
     
+    # Empty tags
     print(set(ids).difference(set(usedtags)))
+    diffe = set(ids).difference(set(usedtags))
+    for dif in diffe:
+        for section in Tags:
+            for element in Tags[section]:
+                if element["id"] == dif:
+                    print(section, element["name"])
+
