@@ -3,7 +3,7 @@
 #
 
 
-def Values(val):
+def value_color(val):
     """replace value with the category"""
     if val > 11:
         value = "best"
