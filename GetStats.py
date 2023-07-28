@@ -1,4 +1,4 @@
-import Requests, SaveFile
+import habitica_api, save_file
 import json
 import emoji_data_python
 import dateutil
@@ -17,7 +17,7 @@ def Date(utc):
 
 def GetStats():
 
-    Response = Requests.GetAPI("user?userFields=stats,party")
+    Response = habitica_api.get("user?userFields=stats,party")
     RawData = Response["data"]
     Stats = {}
     LastLogin = RawData["auth"]["timestamps"]["loggedin"]
@@ -75,7 +75,7 @@ def GetStats():
             "username": RawData["auth"]["local"]["username"],
         }
     )
-    SaveFile.SaveFile(Stats, "Stats")
+    save_file.save_file(Stats, "Stats")
 
     return Stats
 

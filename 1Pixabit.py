@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 """open env"""
-import AuthFile
-import Requests
-import SaveFile
-import Tags
+import auth_file
+import habitica_api
+import save_file
+import tags
 import GetStats
-import Sleeping
-import ListTags
+import sleeping_status
+import rich_tags
 import Rich
 import GetUserData
 
-AuthFile.CheckAuth()
-user = Requests.GetAPI("user")
-SaveFile.SaveFile(user, "UserData")
-Tagsx = Tags.GetTags()
+auth_file.check_auth_file()
+user = habitica_api.get("user")
+save_file.save_file(user, "UserData")
+Tagsx = tags.get_tags()
 Stats = GetStats.GetStats()
 Rich.display(Stats)
 # if Stats["sleeping"] is True:
-#     Sleeping.Sleeping("sleeping", "awake")
+#     sleeping_status.sleeping_status("sleeping", "awake")
 # else:
-#     Sleeping.Sleeping("awake", "sleeping")
-ListTags.Show(Tagsx, "name")
-ids = ListTags.IDs(Tagsx)
-GetUserData.getTasks(ids, Tagsx)
+#     sleeping_status.sleeping_status("awake", "sleeping")
+rich_tags.show_tags(Tagsx, "name")
+user = GetUserData.getTasks(Tagsx)
+ids = tags.get_all_tag_ids(Tagsx,set(user["tags"]))

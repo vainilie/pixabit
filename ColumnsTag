@@ -1,0 +1,9 @@
+def next_one(next):
+    """str next"""
+    nextDue = from_utc(next)
+    diff = nextDue - nowUTC.astimezone()
+    if diff.days < 8:
+        next_ = nextDue.strftime("%dd%mM%Yy%Hh%Mm%Ss")
+    else:
+        next_ = nextDue.strftime("%A %d %B %H:%M")
+    return next_
