@@ -1,33 +1,54 @@
 import habitica_api
-import save_file
 import emoji_data_python
+import values
+import save_file
 import convert_date
-import ColorValues
 
 
 def process_task_tags(task, tags):
+    """
+    Process tags associated with a task.
+
+    Args:
+        task (dict): The task data obtained from the Habitica API.
+        tags (dict): Dictionary containing tag information.
+
+    Returns:
+        list: List of tag names associated with the task.
+    """
     tag_names = []
-    for tag in task["tags"]:
+    for task_tag in task["tags"]:
         for category in tags:
-            for tagg in tags[category]:
-                if tag == tagg["id"]:
-                    tag_names.append(tagg["name"])
+            for tag in tags[category]:
+                if task_tag == tag["id"]:
+                    tag_names.append(tag["name"])
     return tag_names
 
 
 def process_task(task, tags):
+    """
+    Process a single task obtained from the Habitica API.
+
+    Args:
+        task (dict): The task data obtained from the Habitica API.
+        tags (dict): Dictionary containing tag information.
+
+    Returns:
+        dict: Processed task data with relevant details.
+    """
+
     processed_task = {
-        "id": task["id"],
-        "type": task["type"],
-        "text": emoji_data_python.replace_colons(task["text"]),
         "attribute": task["attribute"],
-        "tags_id": task["tags"],
         "challenge": emoji_data_python.replace_colons(task["challenge"]["shortName"])
         if len(task["challenge"]) > 0
         else "",
+        "id": task["id"],
         "notes": emoji_data_python.replace_colons(task["notes"]),
-        "tags_names": process_task_tags(task, tags),
         "priority": task["priority"],
+        "tags_id": task["tags"],
+        "tags_names": process_task_tags(task, tags),
+        "text": emoji_data_python.replace_colons(task["text"]),
+        "type": task["type"],
     }
 
     if task["type"] == "reward":
@@ -49,34 +70,34 @@ def process_task(task, tags):
 
         processed_task.update(
             {
+                "color": values.value_color(task["value"]),
                 "counter": count,
                 "direction": direction,
                 "frequency": task["frequency"],
                 "value": task["value"],
-                "color": ColorValues.value_color(task["value"]),
             }
         )
     else:
         processed_task.update(
             {
-                "completed": task["completed"],
                 "checklist": len(task["checklist"]),
+                "color": values.value_color(task["value"]),
+                "completed": task["completed"],
                 "value": task["value"],
-                "color": ColorValues.value_color(task["value"]),
             }
         )
 
         if task["type"] == "daily":
             processed_task.update(
                 {
-                    "streak": task["streak"],
-                    "next": task["nextDue"][0],
                     "is_due": task["isDue"],
+                    "next": task["nextDue"][0],
                     "status": "grey"
                     if not task["isDue"]
                     else "done"
                     if task["completed"]
                     else "due",
+                    "streak": task["streak"],
                 }
             )
         else:
@@ -98,31 +119,53 @@ def process_task(task, tags):
     return processed_task
 
 
-def getTasks(tags):
+def process_tasks(tags):
+    """
+    Process all tasks obtained from the Habitica API and count tasks by type and status.
+
+    Args:
+        tags (dict): Dictionary containing tag information.
+
+    Returns:
+        dict: Dictionary containing processed tasks grouped by types and tags,
+        along with task counts.
+    """
+
     all_tasks = habitica_api.get("tasks/user")["data"]
     used_tags = set()
     tasks_dict = {
         "habits": [],
-        "todos": {"done": [], "due": [], "grey": [], "red": []},
+        "todos": {"due": [], "grey": [], "red": []},
         "dailys": {"done": [], "due": [], "grey": []},
         "rewards": [],
         "tags": [],
+        "counts": {
+            "total": 0,
+            "habits": 0,
+            "todos": {"due": 0, "grey": 0, "red": 0},
+            "dailys": {"done": 0, "due": 0, "grey": 0},
+            "rewards": 0,
+        },
     }
-
-    for task in all_tasks:
+    number_total = 0
+    for idx, task in enumerate(all_tasks):
+        number_total += 1
         processed_task = process_task(task, tags)
         used_tags.update(task["tags"])
+
         if task["type"] == "todo" or task["type"] == "daily":
+            status = processed_task["status"]
+            type_task = task["type"] + "s"
+            tasks_dict["counts"][type_task][status] += 1
+
             tasks_dict[task["type"] + "s"][processed_task["status"]].append(
                 processed_task
             )
         else:
             tasks_dict[task["type"] + "s"].append(processed_task)
+            tasks_dict["counts"][task["type"] + "s"] += 1
 
-    tasks_dict.update({"tags": list(used_tags)})
-
-    save_file.save_file(tasks_dict, "AllTasks")
+    tasks_dict["tags"] = list(used_tags)
+    tasks_dict["counts"]["total"] = number_total
+    save_file.save_file(tasks_dict, "all_tasks")
     return tasks_dict
-
-
-# ─── % GET TASKS ────────────────────────────────────────────────────────────────

@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""open env"""
 import auth_file
-import habitica_api
-import save_file
-import tags
-import GetStats
-import sleeping_status
-import rich_tags
-import Rich
-import GetUserData
+import get_stats
+import get_tags
+import clean_tags
+import get_tasks
+from rich.theme import Theme
+from rich.console import Console
+
+# Read the theme from "styles" file and initialize the console with the theme
+theme = Theme.read("styles")
+console = Console(theme=theme)
 
 auth_file.check_auth_file()
-user = habitica_api.get("user")
-save_file.save_file(user, "UserData")
-Tagsx = tags.get_tags()
-Stats = GetStats.GetStats()
-Rich.display(Stats)
-# if Stats["sleeping"] is True:
-#     sleeping_status.sleeping_status("sleeping", "awake")
-# else:
-#     sleeping_status.sleeping_status("awake", "sleeping")
-rich_tags.show_tags(Tagsx, "name")
-user = GetUserData.getTasks(Tagsx)
-ids = tags.get_all_tag_ids(Tagsx,set(user["tags"]))
+all_tags = get_tags.get_tags()
+all_tasks = get_tasks.process_tasks(all_tags)
+stats = get_stats.get_stats(all_tasks)
+unused_tags = clean_tags.get_unused_tags(all_tags, all_tasks["tags"])
+
+# Rich.display(Stats)
+# # if Stats["sleeping"] is True:
+# #     sleeping_status.sleeping_status("sleeping", "awake")
+# # else:
+# #     sleeping_status.sleeping_status("awake", "sleeping")
+# rich_tags.show_tags(Tagsx, "name")

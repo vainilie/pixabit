@@ -2,6 +2,10 @@ import requests
 from auth_file import get_key_from_config
 from ratelimit import limits, sleep_and_retry
 
+# Initialize default values for rate limiting
+CALLS = 30
+RATE_LIMIT = 60
+
 BASEURL = "https://habitica.com/api/v3/"
 USER_ID = get_key_from_config("habitica", "user")
 API_TOKEN = get_key_from_config("habitica", "token")
@@ -10,20 +14,11 @@ HEADERS = {
     "x-api-key": API_TOKEN,
     "Content-Type": "application/json",
 }
-CALLS = 30
-RATE_LIMIT = 60
-
-
-@sleep_and_retry
-@limits(calls=CALLS, period=RATE_LIMIT)
-def check_limit_calls():
-    """Empty function just to check for calls to API"""
-    return
 
 
 def make_api_request(method, endpoint):
     """
-    Make a request to the Habitica API (with rate limits).
+    Make an API request to the Habitica API with rate limiting.
 
     Args:
         method (str): The HTTP method ('GET' or 'POST') for the API request.
@@ -31,6 +26,9 @@ def make_api_request(method, endpoint):
 
     Returns:
         dict: The JSON response from the API.
+
+    Raises:
+        requests.exceptions.RequestException: If there is an error in the API response.
     """
     check_limit_calls()
 
@@ -46,27 +44,42 @@ def make_api_request(method, endpoint):
     return response_data
 
 
+@sleep_and_retry
+@limits(calls=CALLS, period=RATE_LIMIT)
+def check_limit_calls():
+    """
+    Empty function used for rate limiting. Decorated by `sleep_and_retry` and `limits`.
+    """
+    return
+
+
 def get(text):
     """
-    Request GET from the Habitica API (with rate limits).
+    Make a GET request to the Habitica API with rate limiting.
 
     Args:
         text (str): The endpoint or type of data to get from the API.
 
     Returns:
         dict: The JSON response from the API.
+
+    Raises:
+        requests.exceptions.RequestException: If there is an error in the API response.
     """
     return make_api_request("GET", text)
 
 
 def post(text):
     """
-    Request POST to the Habitica API (with rate limits).
+    Make a POST request to the Habitica API with rate limiting.
 
     Args:
         text (str): The endpoint or type of data to post to the API.
 
     Returns:
         dict: The JSON response from the API.
+
+    Raises:
+        requests.exceptions.RequestException: If there is an error in the API response.
     """
     return make_api_request("POST", text)
