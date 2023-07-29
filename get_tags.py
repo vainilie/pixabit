@@ -1,7 +1,7 @@
 import habitica_api
 from save_file import save_file
 import emoji_data_python
-from typing import Dict, List, Set
+from typing import Dict, List
 
 
 def get_tags() -> Dict[str, List[Dict[str, str]]]:
@@ -31,27 +31,5 @@ def get_tags() -> Dict[str, List[Dict[str, str]]]:
     processed_tags_data["challengeTags"].sort(key=lambda x: x["name"].lower())
     processed_tags_data["personalTags"].sort(key=lambda x: x["name"].lower())
 
-    save_file(processed_tags_data, "AllTags")
+    save_file(processed_tags_data, "all_tags")
     return processed_tags_data
-
-
-def get_all_tag_ids(
-    tags: Dict[str, List[Dict[str, str]]], used_tags: Set[str]
-) -> List[str]:
-    """
-    Get a sorted list of all tag IDs from the tags dictionary.
-
-    Args:
-        tags (dict): A dictionary containing tag data categorized by type.
-        used_tags (set): A set of used tag IDs.
-
-    Returns:
-        list: A sorted list of all unused tag IDs.
-    """
-    tag_ids = []
-    for category, tag_list in tags.items():
-        for tag in tag_list:
-            tag_ids.append(tag["id"])
-
-    unused_tags = set(tag_ids).difference(used_tags)
-    return sorted(unused_tags)
