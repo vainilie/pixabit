@@ -6,7 +6,7 @@ from typing import Dict, List
 
 def get_tags() -> Dict[str, List[Dict[str, str]]]:
     """
-    Fetch tags from the Habitica API, process them, and save the data to a JSON file.
+    Fetch tags from the Habitica API, process them,and save the data to a JSON file.
 
     Returns:
         dict: A dictionary containing processed tags data with

@@ -1,7 +1,14 @@
 import configparser
 import os.path
-from rich import print
 from rich.prompt import Confirm, Prompt
+from rich.theme import Theme
+from rich.console import Console
+from rich import print
+
+# Read the theme from "styles" file and initialize the console with the theme
+theme = Theme.read("styles")
+console = Console(theme=theme)
+
 
 DEFAULT_CONFIG_FILE = "auth.ini"
 
@@ -37,7 +44,7 @@ def create_auth_file(filename=DEFAULT_CONFIG_FILE):
 
     with open(filename, "w") as configfile:
         config.write(configfile)
-        print(f":heavy_check_mark: [b]{filename}[/] created.")
+        print(f" [b #8ccf7e]:heavy_check_mark: {filename}[/] created.")
     exit()
 
 
@@ -67,10 +74,10 @@ def check_auth_file(filename=DEFAULT_CONFIG_FILE):
         filename (str, optional): The name of the configuration file.
         Defaults to "auth.ini".
     """
-    print(f"[b]Checking if {filename}[/] exists...")
+    print(f"[b #8ccf7e]Checking if {filename}[/] exists...")
 
     if not os.path.exists(filename):
         print(f":x: [b]{filename}[/] doesn't exist.")
         create_auth_file(filename)
     else:
-        print(f":heavy_check_mark: [b]{filename}[/] file exists.")
+        print(f"[b #8ccf7e]:heavy_check_mark: {filename}[/] file exists.")
