@@ -1,5 +1,5 @@
 from typing import Dict, List, Set
-
+import habitica_api
 
 def get_unused_tags(
     tags: Dict[str, List[Dict[str, str]]], used_tags: Set[str]
@@ -43,3 +43,9 @@ def get_unused_tags(
                     {"name": tag["name"], "category": category, "id": tag["id"]}
                 )
     return unused_tags_list
+
+
+def delete_unused_tags(unused_tags):
+    for unused_tag in unused_tags:
+        tag_id = unused_tag["id"]
+        habitica_api.delete(f"tags/{tag_id}")

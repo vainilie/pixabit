@@ -45,6 +45,7 @@ def get_stats(tasks_dict):
         "time": str(last_login),
         "username": raw_data["auth"]["local"]["username"],
         "numbers": tasks_dict["counts"],
+        "broken": len(tasks_dict["broken"])
     }
 
     save_file.save_file(stats, "Stats")

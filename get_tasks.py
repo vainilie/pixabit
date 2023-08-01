@@ -36,10 +36,13 @@ def process_task(task, tags):
     Returns:
         dict: Processed task data with relevant details.
     """
-
+    
     processed_task = {
         "attribute": task["attribute"],
         "challenge": emoji_data_python.replace_colons(task["challenge"]["shortName"])
+        if len(task["challenge"]) > 0
+        else "",
+        "challenge_id": (task["challenge"]["id"])
         if len(task["challenge"]) > 0
         else "",
         "id": task["id"],
@@ -130,9 +133,9 @@ def process_tasks(tags):
         dict: Dictionary containing processed tasks grouped by types and tags,
         along with task counts.
     """
-
     all_tasks = habitica_api.get("tasks/user")["data"]
     used_tags = set()
+    broken_challenges = list()
     tasks_dict = {
         "habits": [],
         "todos": {"due": [], "grey": [], "red": []},
@@ -152,6 +155,8 @@ def process_tasks(tags):
         number_total += 1
         processed_task = process_task(task, tags)
         used_tags.update(task["tags"])
+        if "broken" in task["challenge"]:
+            broken_challenges.append(task["id"])
 
         if task["type"] == "todo" or task["type"] == "daily":
             status = processed_task["status"]
@@ -166,6 +171,7 @@ def process_tasks(tags):
             tasks_dict["counts"][task["type"] + "s"] += 1
 
     tasks_dict["tags"] = list(used_tags)
+    tasks_dict["broken"] = list(broken_challenges)
     tasks_dict["counts"]["total"] = number_total
     save_file.save_file(tasks_dict, "all_tasks")
     return tasks_dict
