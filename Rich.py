@@ -40,6 +40,8 @@ def print_stats(input_stats):
     # Add the 'resting in the Inn' status if user is sleeping
     if input_stats.get("sleeping") is True:
         user_stats.add_row("[gold][b]󰒲", "You are [gold][i b]resting[/] in the Inn")
+    if input_stats.get("broken") > 0:
+        user_stats.add_row("[health][b]💔", "You have broken challenge tasks")
 
     # Add the 'in a quest' information if user is in a quest
     if bool(input_stats.get("quest")) is True:

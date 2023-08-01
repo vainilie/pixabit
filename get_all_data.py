@@ -13,4 +13,7 @@ def save_all_user_data():
         save_all_user_data()
     """
     user_data = habitica_api.get("user")
+    user_challenges = habitica_api.get("challenges/user?page=1")
     save_file.save_file(user_data, "all_user_data")
+    save_file.save_file(user_challenges, "challenges")
+

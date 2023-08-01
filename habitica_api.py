@@ -83,3 +83,19 @@ def post(text):
         requests.exceptions.RequestException: If there is an error in the API response.
     """
     return make_api_request("POST", text)
+
+
+def delete(text):
+    """
+    Make a DELETE request to the Habitica API with rate limiting.
+
+    Args:
+        text (str): The endpoint or type of data to delete to the API.
+
+    Returns:
+        dict: The JSON response from the API.
+
+    Raises:
+        requests.exceptions.RequestException: If there is an error in the API response.
+    """
+    return make_api_request("DELETE", text)
