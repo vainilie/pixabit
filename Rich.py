@@ -21,8 +21,8 @@ def print_stats(input_stats):
 
     # Create a table to show user information
     user_stats = Table.grid(padding=(0, 2), expand=True)
-    user_stats.add_column(no_wrap=True, justify="right")
-    user_stats.add_column(no_wrap=True, justify="left")
+    user_stats.add_column(no_wrap=False, justify="right")
+    user_stats.add_column(no_wrap=False, justify="left")
 
     user_stats.add_row(
         "[habitica][b]",
@@ -37,11 +37,14 @@ def print_stats(input_stats):
         f"Your day starts at {input_stats.get('start')} am",
     )
 
-    # Add the 'resting in the Inn' status if user is sleeping
+    # Add the 'resting in the Inn' status if user is sle    eping
     if input_stats.get("sleeping") is True:
         user_stats.add_row("[gold][b]󰒲", "You are [gold][i b]resting[/] in the Inn")
     if input_stats.get("broken") > 0:
-        user_stats.add_row("[health][b]💔", "You have broken challenge tasks")
+        user_stats.add_row(
+            "[health][b]💔",
+            f"You have {input_stats.get('broken')} broken challenge tasks",
+        )
 
     # Add the 'in a quest' information if user is in a quest
     if bool(input_stats.get("quest")) is True:
@@ -121,9 +124,9 @@ def print_stats(input_stats):
     )
     # Create a table for the final display
     about_panel = Table.grid(padding=2, expand=False)
-    about_panel.add_column(no_wrap=True)
-    about_panel.add_column(no_wrap=True)
-    about_panel.add_column(no_wrap=True)
+    about_panel.add_column(no_wrap=False)
+    about_panel.add_column(no_wrap=False)
+    about_panel.add_column(no_wrap=False)
 
     about_panel.add_row(about, display_stats, display_numbers)
 

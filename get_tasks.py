@@ -36,15 +36,13 @@ def process_task(task, tags):
     Returns:
         dict: Processed task data with relevant details.
     """
-    
+
     processed_task = {
         "attribute": task["attribute"],
         "challenge": emoji_data_python.replace_colons(task["challenge"]["shortName"])
         if len(task["challenge"]) > 0
         else "",
-        "challenge_id": (task["challenge"]["id"])
-        if len(task["challenge"]) > 0
-        else "",
+        "challenge_id": (task["challenge"]["id"]) if len(task["challenge"]) > 0 else "",
         "id": task["id"],
         "notes": emoji_data_python.replace_colons(task["notes"]),
         "priority": task["priority"],
@@ -136,6 +134,7 @@ def process_tasks(tags):
     all_tasks = habitica_api.get("tasks/user")["data"]
     used_tags = set()
     broken_challenges = list()
+    tasks_full = {}
     tasks_dict = {
         "habits": [],
         "todos": {"due": [], "grey": [], "red": []},
@@ -154,6 +153,7 @@ def process_tasks(tags):
     for idx, task in enumerate(all_tasks):
         number_total += 1
         processed_task = process_task(task, tags)
+        tasks_full.update({processed_task["id"]: processed_task})
         used_tags.update(task["tags"])
         if "broken" in task["challenge"]:
             broken_challenges.append(task["id"])
@@ -164,14 +164,16 @@ def process_tasks(tags):
             tasks_dict["counts"][type_task][status] += 1
 
             tasks_dict[task["type"] + "s"][processed_task["status"]].append(
-                processed_task
+                processed_task["id"]
             )
         else:
-            tasks_dict[task["type"] + "s"].append(processed_task)
+            tasks_dict[task["type"] + "s"].append(processed_task["id"])
             tasks_dict["counts"][task["type"] + "s"] += 1
 
     tasks_dict["tags"] = list(used_tags)
     tasks_dict["broken"] = list(broken_challenges)
     tasks_dict["counts"]["total"] = number_total
     save_file.save_file(tasks_dict, "all_tasks")
-    return tasks_dict
+    save_file.save_file(tasks_full, "tasks_data")
+    allan_tasks = dict({"data": tasks_full, "stats": tasks_dict})
+    return allan_tasks

@@ -4,42 +4,36 @@ from rich.table import Table
 from rich.panel import Panel
 
 
-def show_all_tags(tags, key):
-    """
-    Display the specified key of tags in a rich table.
+from rich.theme import Theme
+from rich.console import Console
 
-    Args:
-        tags (dict): A dictionary containing tag data categorized by type.
-        key (str): The key to display from the tags.
+# Read the theme from "styles" file and initialize the console with the theme
+theme = Theme.read("styles")
+console = Console(theme=theme)
 
-    Example:
-        show_tags({"challengeTags": [{"id": "123", "name": "Tag1"}, ...]}, "name")
-    """
-    for category, tag_list in tags.items():
-        tag_ids = [tag[key] for tag in tag_list]
-        tags_display = Table.grid()
-        columns = Columns(
-            (
-                f"[b]{num}.[/] {tag}" for num, tag in enumerate(tag_ids)
-            ),  # Corrected variable name here
-            padding=(0, 2),
-            equal=True,
-            column_first=True,
-            expand=False,
+
+def print_tags(tags):
+    for category in tags:
+        tag_renderables = [
+            f"[b]{num}.[/] [i]{tag['name']}"
+            for num, tag in enumerate(tags[category], start=1)
+        ]
+        tag_render = Panel(
+            Columns(tag_renderables, column_first=True, padding=(0, 4)),
+            expand=True,
+            title=f"[gold][i]{category}",
         )
-        tags_display.add_row(columns)
-        display = Panel(tags_display, title=f"[habitica][b i]{category}")
-        print(display)
+        console.print(tag_render)
 
 
-def list_unused_tags(unused_tags):
-    tags_display = Table.grid()
-    columns = Columns(
-            (
-                f"[b]{num}.[/] {tag['name']}" for num, tag in enumerate(unused_tags)
-            ),  # Corrected variable name here
-            padding=(0, 1)            
-        )
-    tags_display.add_row(columns)
-    display = Panel(tags_display, title=f"[habitica][b i]Unused tags", expand=False,)
-    print(display)
+def print_unused(tags):
+    tag_renderables = [
+        f"[b]{num}.[/] [i]{tag['name']}[/]\n{tag['category']}"
+        for num, tag in enumerate(tags, start=1)
+    ]
+    tag_render = Panel(
+        Columns(tag_renderables, column_first=True, padding=(0, 4)),
+        expand=True,
+        title="[gold][i]Unused Tags",
+    )
+    console.print(tag_render)
