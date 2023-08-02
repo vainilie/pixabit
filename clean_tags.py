@@ -1,6 +1,7 @@
 from typing import Dict, List, Set
 import habitica_api
 
+
 def get_unused_tags(
     tags: Dict[str, List[Dict[str, str]]], used_tags: Set[str]
 ) -> List[Dict[str, str]]:
