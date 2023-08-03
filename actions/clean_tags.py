@@ -1,5 +1,5 @@
 from typing import Dict, List, Set
-import habitica_api
+from core import habitica_api
 
 
 def get_unused_tags(

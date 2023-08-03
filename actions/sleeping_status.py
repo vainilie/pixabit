@@ -1,12 +1,5 @@
-import habitica_api
-from rich.prompt import Confirm
-from rich import print
-from rich.console import Console
-from rich.theme import Theme
-
-# Read and apply the custom theme from "styles" file
-theme = Theme.read("styles")
-console = Console(theme=theme)
+from core import habitica_api
+from utils.rich_utils import Confirm, print
 
 
 def toggle_sleeping_status(on: str, off: str) -> None:

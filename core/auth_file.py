@@ -1,14 +1,41 @@
+"""
+auth_file Module
+================
+
+This module provides functions to create and access the authentication
+configuration file for Habitica API. The configuration file contains the
+user ID, API token, and other settings needed for authentication with the
+Habitica API.
+
+Usage:
+------
+1. Creating the authentication configuration file:
+   The `create_auth_file` function allows users to interactively create
+   the authentication configuration file. It prompts the user to enter their
+   Habitica user ID and API token, or it provides default values that can
+   be edited later.
+
+2. Reading values from the authentication configuration file:
+   The `get_key_from_config` function is used to retrieve specific values
+   from the authentication configuration file. Users can use this function
+   to access their user ID, API token, or other settings stored in the file.
+
+Example:
+--------
+import auth_file
+
+# Create the authentication configuration file
+auth_file.create_auth_file()
+
+# Access the user ID and API token from the configuration file
+user_id = auth_file.get_key_from_config("habitica", "user")
+api_token = auth_file.get_key_from_config("habitica", "token")
+"""
+
+
 import configparser
 import os.path
-from rich.prompt import Confirm, Prompt
-from rich.theme import Theme
-from rich.console import Console
-from rich import print
-
-# Read the theme from "styles" file and initialize the console with the theme
-theme = Theme.read("styles")
-console = Console(theme=theme)
-
+from utils.rich_utils import Confirm, Prompt, print
 
 DEFAULT_CONFIG_FILE = "auth.ini"
 
@@ -19,7 +46,7 @@ def create_auth_file(filename=DEFAULT_CONFIG_FILE):
 
     Args:
         filename (str, optional): The name of the configuration file.
-        Defaults to "auth.ini".
+            Defaults to "auth.ini".
     """
     if Confirm.ask("Should I help you create the file?"):
         input_userid = Prompt.ask(
@@ -56,7 +83,7 @@ def get_key_from_config(section, key, filename=DEFAULT_CONFIG_FILE):
         section (str): The section name in the configuration file.
         key (str): The key to retrieve the value for.
         filename (str, optional): The name of the configuration file.
-        Defaults to "auth.ini".
+            Defaults to "auth.ini".
 
     Returns:
         str: The value associated with the specified key in the given section.
@@ -72,7 +99,7 @@ def check_auth_file(filename=DEFAULT_CONFIG_FILE):
 
     Args:
         filename (str, optional): The name of the configuration file.
-        Defaults to "auth.ini".
+            Defaults to "auth.ini".
     """
     print(f"[b #8ccf7e]Checking if {filename}[/] exists...")
 

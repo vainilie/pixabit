@@ -1,0 +1,43 @@
+# save_file.py
+import os
+import json
+
+
+def save_file(data, title, folder=None):
+    """
+    Save JSON data to a file.
+
+    Args:
+        data (dict or list): The JSON data to be saved.
+        title (str): The name of the file to save the JSON data to (without the ext).
+        folder (str, optional): The folder path where the file should be saved.
+            Defaults to the current working directory if not specified.
+
+    Note:
+        If the `folder` argument is provided, the function will create the folder
+        (if it doesn't exist) and save the file in that folder. If `folder` is None,
+        the file will be saved in the current working directory.
+
+    Example:
+        data = {"name": "John Doe", "age": 30}
+        save_file(data, "data", folder="data_files")
+
+    Example:
+        data = {"name": "Jane Smith", "age": 25}
+        save_file(data, "data")
+    """
+    if folder is not None:
+        os.makedirs(folder, exist_ok=True)
+        filepath = os.path.join(folder, title + ".json")
+    else:
+        filepath = title + ".json"
+
+    with open(filepath, "w", encoding="utf-8") as outfile:
+        json.dump(
+            data,
+            outfile,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+            indent=3,
+        )
