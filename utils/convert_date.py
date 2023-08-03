@@ -1,5 +1,6 @@
 import dateutil.parser
 from datetime import datetime, timezone
+from tzlocal import get_localzone
 import pytz
 
 nowUTC = datetime.now(timezone.utc)
@@ -62,3 +63,18 @@ def is_date_passed(timestamp):
     except ValueError:
         # Invalid timestamp format
         return False
+
+
+def convert_to_local_time(utc):
+    """
+    Convert UTC time to local timezone.
+
+    Args:
+        utc (str): UTC timestamp to be converted.
+
+    Returns:
+        datetime: The converted datetime object in the local timezone.
+    """
+    utc_time = dateutil.parser.parse(utc)
+    local_timezone = get_localzone()
+    return utc_time.astimezone(local_timezone).replace(microsecond=0)
