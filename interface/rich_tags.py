@@ -1,15 +1,4 @@
-from rich import print
-from rich.columns import Columns
-from rich.table import Table
-from rich.panel import Panel
-
-
-from rich.theme import Theme
-from rich.console import Console
-
-# Read the theme from "styles" file and initialize the console with the theme
-theme = Theme.read("styles")
-console = Console(theme=theme)
+from utils.rich_utils import Table, Console, Panel, box, console, Columns
 
 
 def print_tags(tags):

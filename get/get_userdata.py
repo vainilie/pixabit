@@ -1,5 +1,17 @@
+#             _           _ _       _       _
+#            | |         | | |     | |     | |
+#   __ _  ___| |_    __ _| | |   __| | __ _| |_ __ _
+#  / _` |/ _ \ __|  / _` | | |  / _` |/ _` | __/ _` |
+# | (_| |  __/ |_  | (_| | | | | (_| | (_| | || (_| |
+#  \__, |\___|\__|  \__,_|_|_|  \__,_|\__,_|\__\__,_|
+#   __/ |
+#  |___/
+
+
 """
-user_data_manager.py - Module for managing user data from the Habitica API.
+get_userdata Module
+================
+
 
 This module interacts with the Habitica API to retrieve all user data, including
 user details, tasks, and other information. It provides a function to save the

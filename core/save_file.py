@@ -1,6 +1,25 @@
-# save_file.py
+
+# ?                         __ _ _
+# ?  ___  __ ___   _____   / _(_) | ___
+# ? / __|/ _` \ \ / / _ \ | |_| | |/ _ \
+# ? \__ \ (_| |\ V /  __/ |  _| | |  __/
+# ? |___/\__,_| \_/ \___| |_| |_|_|\___|
+# ?
+# ?                   vainilie, 23/08/03
+
+"""
+core.savefile Module -
+This module provides a function to save JSON data to a file.
+
+Functions:
+    save_file(data, title, folder=None)
+        Save JSON data to a file.
+"""
+
 import os
 import json
+
+# % ─── save_file ───────────────────────────────────────────────────────────── ✰ ─
 
 
 def save_file(data, title, folder=None):
@@ -26,6 +45,7 @@ def save_file(data, title, folder=None):
         data = {"name": "Jane Smith", "age": 25}
         save_file(data, "data")
     """
+
     if folder is not None:
         os.makedirs(folder, exist_ok=True)
         filepath = os.path.join(folder, title + ".json")
