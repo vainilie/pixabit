@@ -1,5 +1,18 @@
+#             _     _            _
+#            | |   | |          | |
+#   __ _  ___| |_  | |_ __ _ ___| | _____
+#  / _` |/ _ \ __| | __/ _` / __| |/ / __|
+# | (_| |  __/ |_  | || (_| \__ \   <\__ \
+#  \__, |\___|\__|  \__\__,_|___/_|\_\___/
+#   __/ |
+#  |___/
+
+
 """
-get_tasks.py - Module for processing Habitica tasks data and saving the processed data.
+get_tasks Module
+================
+
+Module for processing Habitica tasks data and saving the processed data.
 
 This module interacts with the Habitica API to retrieve tasks data, processes the
 data for different types of tasks, counts the number of tasks in each category, and

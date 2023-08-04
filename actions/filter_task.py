@@ -1,28 +1,14 @@
-from rich import print
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
-from rich.prompt import Confirm
-from rich.prompt import IntPrompt
-from rich.markdown import Markdown
-from rich.theme import Theme
-from rich.console import Console
-import habitica_api
-
-# Read the theme from "styles" file and initialize the console with the theme
-theme = Theme.read("styles")
-console = Console(theme=theme)
+from utils.rich_utils import Table, Console, Panel, box, console, Markdown, Confirm, IntPrompt
+from core import habitica_api
 
 
 def find(data, look):
     """Extract text from user dict."""
     title = data[look]["text"]
-    types = data[look]["type"]
+    types = data[look]["_type"]
     content = Markdown(f"{title} - {types}")
     return content
 
-
-console = Console()
 
 # def find_broken(data, look):
 
@@ -83,7 +69,7 @@ def find_broken(data, look):
 
         table.add_row(
             str(num),
-            task["type"],
+            task["_type"],
             Markdown(task["text"]),
             task["challenge"],
             tags_names,
