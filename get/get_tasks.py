@@ -191,7 +191,7 @@ def is_daily(task: Dict[str, any]) -> Dict[str, any]:
     return {
         "_status": status,
         "checklist": task["checklist"],
-        "date": task["nextDue"][0],
+        "date": task["nextDue"][0] if len(task["nextDue"]) > 0 else "",
         "is_due": task["isDue"],
         "streak": task["streak"],
         "value_color": value_color.value_color(task["value"]),
@@ -261,10 +261,10 @@ def process_tasks(tags: Dict[str, List[Dict[str, str]]]) -> Dict[str, Dict[str, 
         "broken": [],
     }
     tasks_dict = {
-        "habits": [],
-        "todos": {"due": [], "grey": [], "red": []},
-        "dailys": {"done": [], "due": [], "grey": []},
-        "rewards": [],
+    #     "habits": [],
+    #     "todos": {"due": [], "grey": [], "red": []},
+    #     "dailys": {"done": [], "due": [], "grey": []},
+    #     "rewards": [],
     }
     for idx, task in enumerate(all_tasks):
         processed_task = process_task(task, tags)
@@ -277,11 +277,11 @@ def process_tasks(tags: Dict[str, List[Dict[str, str]]]) -> Dict[str, Dict[str, 
             status = processed_task["_status"]
             type_task = task["type"] + "s"
             cats_dict["tasks"][type_task][status].append(task["id"])
-            tasks_dict[task["type"] + "s"][processed_task["_status"]].append(
-                processed_task["id"]
-            )
+            # tasks_dict[task["type"] + "s"][processed_task["_status"]].append(
+            #     processed_task["id"]
+            # )
         else:
-            tasks_dict[task["type"] + "s"].append(processed_task["id"])
+            #tasks_dict[task["type"] + "s"].append(processed_task["id"])
             cats_dict["tasks"][task["type"] + "s"].append(task["id"])
 
     cats_dict["tags"] = list(used_tags)

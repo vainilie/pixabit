@@ -16,7 +16,7 @@ def find(data, look):
 #     console.print(Columns(user_renderables, width=30, expand=True,align="center"))
 
 
-def list_broken(data, look):
+def delete_broken(data, look):
     broken_challenges = {}
     options = {}
     for num, loo in enumerate(look):
@@ -46,7 +46,7 @@ def list_broken(data, look):
         exit()
 
 
-def find_broken(data, look):
+def list_broken(data, look):
     table = Table(
         title="Broken Tasks", safe_box=True, row_styles=("dim",), box=box.MINIMAL
     )
