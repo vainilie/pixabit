@@ -85,6 +85,8 @@ HEADERS = {
 }
 
 
+@sleep_and_retry
+@limits(calls=CALLS, period=RATE_LIMIT)
 def make_api_request(method, endpoint):
     """
     Make an API request to the Habitica API with rate limiting.
@@ -109,7 +111,7 @@ def make_api_request(method, endpoint):
         raise requests.exceptions.RequestException(
             f"API Error: {response_data['error']}"
         )
-
+    
     return response_data
 
 
@@ -122,6 +124,8 @@ def check_limit_calls():
     return
 
 
+@sleep_and_retry
+@limits(calls=CALLS, period=RATE_LIMIT)
 def get(endpoint):
     """
     Make a GET request to the Habitica API with rate limiting.
@@ -138,6 +142,8 @@ def get(endpoint):
     return make_api_request("GET", endpoint)
 
 
+@sleep_and_retry
+@limits(calls=CALLS, period=RATE_LIMIT)
 def post(endpoint):
     """
     Make a POST request to the Habitica API with rate limiting.
@@ -154,6 +160,8 @@ def post(endpoint):
     return make_api_request("POST", endpoint)
 
 
+@sleep_and_retry
+@limits(calls=CALLS, period=RATE_LIMIT)
 def delete(endpoint):
     """
     Make a DELETE request to the Habitica API with rate limiting.
