@@ -11,7 +11,7 @@ all_tasks = get_tasks.process_tasks(tags)
 stats = get_stats.get_user_stats(all_tasks["cats"])
 unused = unused_tags.get_unused_tags(tags, all_tasks["cats"]["tags"])
 
-sort.sort_alpha()
+#sort.sort_alpha()
 if Confirm.ask("Backup [i]challenges[/i]?", default=True):
     if True:
         get_challenges.get_challenges()
