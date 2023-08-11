@@ -109,6 +109,6 @@ def get_user_stats(tasks_dict):
     }
 
     # Save user statistics to file
-    save_file.save_file(user_stats, "user_stats")
+    save_file.save_file(user_stats, "user_stats", "_json")
 
     return user_stats

@@ -261,10 +261,10 @@ def process_tasks(tags: Dict[str, List[Dict[str, str]]]) -> Dict[str, Dict[str, 
         "broken": [],
     }
     tasks_dict = {
-    #     "habits": [],
-    #     "todos": {"due": [], "grey": [], "red": []},
-    #     "dailys": {"done": [], "due": [], "grey": []},
-    #     "rewards": [],
+        #     "habits": [],
+        #     "todos": {"due": [], "grey": [], "red": []},
+        #     "dailys": {"done": [], "due": [], "grey": []},
+        #     "rewards": [],
     }
     for idx, task in enumerate(all_tasks):
         processed_task = process_task(task, tags)
@@ -281,11 +281,11 @@ def process_tasks(tags: Dict[str, List[Dict[str, str]]]) -> Dict[str, Dict[str, 
             #     processed_task["id"]
             # )
         else:
-            #tasks_dict[task["type"] + "s"].append(processed_task["id"])
+            # tasks_dict[task["type"] + "s"].append(processed_task["id"])
             cats_dict["tasks"][task["type"] + "s"].append(task["id"])
 
     cats_dict["tags"] = list(used_tags)
     cats_dict["broken"] = list(broken_challenges)
-    save_file.save_file(tasks_dict, "tasks_data")
-    save_file.save_file(cats_dict, "tasks_cats")
+    save_file.save_file(tasks_dict, "tasks_data", "_json")
+    save_file.save_file(cats_dict, "tasks_cats", "_json")
     return {"data": tasks_dict, "cats": cats_dict}
