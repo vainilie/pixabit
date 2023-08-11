@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from core import auth_file, save_file, habitica_api
-from get import get_tags, get_tasks, get_stats, get_userdata, get_ch
+from get import get_tags, get_tasks, get_stats, get_userdata, get_ch, get_challenges
 from interface import Rich, rich_tags
 from actions import unused_tags, filter_task, sleeping, category_tags
 from utils.rich_utils import print, Confirm, IntPrompt, Prompt, console
@@ -10,8 +10,10 @@ tags = get_tags.get_tags()
 all_tasks = get_tasks.process_tasks(tags)
 stats = get_stats.get_user_stats(all_tasks["cats"])
 unused = unused_tags.get_unused_tags(tags, all_tasks["cats"]["tags"])
-challenges = get_ch.get_challenges()
-
+if Confirm.ask("Backup [i]challenges[/i]?", default=True):
+    if True:
+        get_challenges.get_challenges()
+        print("Challenges Saved")
 
 if Confirm.ask("Print [i]stats[/i]?", default=True):
     if True:
