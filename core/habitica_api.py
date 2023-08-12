@@ -87,7 +87,6 @@ HEADERS = {
 
 @sleep_and_retry
 @limits(calls=CALLS, period=RATE_LIMIT)
-
 def make_api_request(method, endpoint, data=None):
     """
     Make an API request to the Habitica API with rate limiting.
@@ -106,14 +105,14 @@ def make_api_request(method, endpoint, data=None):
     check_limit_calls()
 
     url = BASEURL + endpoint
-    response = requests.request(method, url, headers=HEADERS,json=data)
+    response = requests.request(method, url, headers=HEADERS, json=data)
 
     response_data = response.json()
     if not response.ok:
         raise requests.exceptions.RequestException(
             f"API Error: {response_data['error']}"
         )
-    
+
     return response_data
 
 
@@ -142,6 +141,7 @@ def get(endpoint):
         requests.exceptions.RequestException: If there is an error in the API response.
     """
     return make_api_request("GET", endpoint)
+
 
 @sleep_and_retry
 @limits(calls=CALLS, period=RATE_LIMIT)

@@ -95,7 +95,7 @@ for task in infor:
 
 
 def sortFunction(value):
-    return value["title"]
+    return value["title"].lower()
 
 
 sortedtasks = sorted(tasks, key=sortFunction)
