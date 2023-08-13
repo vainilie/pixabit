@@ -19,24 +19,27 @@ def create_challenge_from_json(json_path):
             "group": "00000000-0000-4000-A000-000000000000",
             "name": data["_name"],
             "shortName": data["shortName"],
-            "summary": data["summary"],
+            "summary": data["_summary"],
             "description": data["_description"],
             "prize": 1,
         }
 
-        created_challenge = habitica_api.post("challenges", data=challenge_data)
-        challenge_id = created_challenge["data"]["id"]
-        print("Challenge created with ID:", challenge_id)
+        if len(challenge_data["summary"]) < 250:
+            created_challenge = habitica_api.post("challenges", data=challenge_data)
+            challenge_id = created_challenge["data"]["id"]
+            print("Challenge created with ID:", challenge_id)
 
-        tasks = data["_tasks"]
-        keys_to_remove = ["id", "_id", "challenge", "tags"]
-        for task in tasks:
-            for key in keys_to_remove:
-                task.pop(key, None)
+            tasks = data["_tasks"]
+            keys_to_remove = ["id", "_id", "challenge", "tags"]
+            for task in tasks:
+                for key in keys_to_remove:
+                    task.pop(key, None)
 
-        habitica_api.post(f"tasks/challenge/{challenge_id}", data=tasks)
+            habitica_api.post(f"tasks/challenge/{challenge_id}", data=tasks)
+        else:
+            print("Summary is too long. Challenge not created.")
 
 
 # Usage
-json_file_path = "_challenges/Konmari.json"
+json_file_path = "_challenges/Magic Pills.json"
 create_challenge_from_json(json_file_path)

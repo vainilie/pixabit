@@ -34,5 +34,5 @@ def create_tasks_from_challenge_json(json_path):
 
 
 # Usage
-json_file_path = "_challenges/Take care of yourself.json"
+json_file_path = "_challenges/Sandman.json"
 create_tasks_from_challenge_json(json_file_path)
