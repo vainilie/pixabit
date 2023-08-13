@@ -1,49 +1,36 @@
-from core import save_file
-import emoji_data_python
-from get import get_ch, get_rawtasks
+from core import habitica_api, save_file
+import time
 
 
-def get_challenges():
-    tasks = get_rawtasks.get_rawtasks()
-    # Access and manipulate the JSON challenges
-    challenges = get_ch.get_my_challenges()
-    sorted_challenges = sorted(challenges, key=lambda x: x["name"])
+def get_my_challenges():
+    """
+    Get a list of all challenges associated with the user.
 
-    for challenge in sorted_challenges:
-        backup = {}
+    This function retrieves all challenges associated with the user's account from
+    Habitica using paginated requests. The retrieved challenge data is saved to a JSON
+    file named "my_challenges.json" using the save_file module.
 
-        backup = challenge
-        bk_tasks = []
-        for task in tasks:
-            if (len(task["challenge"])) > 0:
-                if task["challenge"]["id"] == backup["id"]:
-                    bk_tasks.append(task)
-        backup["_tasks"] = bk_tasks
-        backup["_name"] = backup.pop("name")
-        backup["_name"] = str.replace(backup["_name"], "/", "|")
-        backup["_description"] = backup.pop("description")
+    Returns:
+        list: A list containing dictionaries representing user's challenges.
 
-        keys_del = [
-            "history",
-            "byHabitica",
-            "completed",
-            "createdAt",
-            "group",
-            "isDue",
-            "nextDue",
-            "updatedAt",
-            "userId",
-            "yesterDaily",
-        ]
-        for task in backup["_tasks"]:
-            for key in keys_del:
-                task.pop(key, None)
+    Example:
+        challenges = get_my_challenges()
+        print(challenges)
+    """
+    counter = 0
+    all_challenges = []
 
-        for key, value in backup.items():
-            if type(value) is str:
-                new_value = emoji_data_python.replace_colons(
-                    value
-                )  # Replace this with your desired new value
-                backup[key] = new_value
+    while True:
+        challenge_data = habitica_api.get(
+            f"challenges/user?page={counter}&member=true"
+        )["data"]
 
-        save_file.save_file(backup, backup["_name"], "_challenges")
+        if not challenge_data:
+            break
+
+        all_challenges.extend(challenge_data)
+        counter += 1
+        time.sleep(60 / 30)  # Delay to avoid overloading the API
+
+    save_file.save_file(all_challenges, "my_challenges", "_json")
+    return all_challenges
