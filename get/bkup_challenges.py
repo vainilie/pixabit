@@ -24,18 +24,19 @@ def join_challenges_and_tasks():
 
     for challenge in sorted_challenges:
         backup = {}
-
         backup = challenge
+
         bk_tasks = []
         for task in tasks:
             if len(task["challenge"]) > 0 and task["challenge"]["id"] == backup["id"]:
                 bk_tasks.append(task)
+
         backup["_tasks"] = bk_tasks
         backup["_name"] = backup.pop("name")
         backup["_name"] = str.replace(backup["_name"], "/", "|")
         backup["shortName"] = str.replace(backup["shortName"], "/", "|")
         backup["_description"] = backup.pop("description")
-
+        backup["_summary"] = (backup.pop("summary") if "summary" in backup else "")
         keys_del = [
             "history",
             "byHabitica",
