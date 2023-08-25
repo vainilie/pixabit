@@ -1,5 +1,5 @@
 from utils.rich_utils import Table, Console, Panel, box, console, Columns
-
+from interface import rich_chtag
 
 def print_tags(tags):
     for category in tags:
@@ -9,10 +9,13 @@ def print_tags(tags):
         ]
         tag_render = Panel(
             Columns(tag_renderables, column_first=True, padding=(0, 4)),
-            expand=True,
+            expand=False,
+            width=50,
             title=f"[gold][i]{category}",
         )
         console.print(tag_render)
+    rich_chtag.print_tags(tags)
+
 
 
 def print_unused(tags):

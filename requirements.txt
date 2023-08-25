@@ -1,8 +1,9 @@
 art==6.0
 emoji-data-python==1.5.0
-ratelimit==2.2.1
-ratelimiter==1.2.0.post0
-requests==2.28.2
+pyrate-limiter==2.10.0
+python-dateutil==2.8.2
+pytz==2023.3
+requests==2.31.0
 rich==13.5.2
 timeago==1.0.16
 tzlocal==5.0.1

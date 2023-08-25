@@ -7,58 +7,63 @@
 #                                             | |
 #                                             |_|
 
-
 """
-habitica_api Module
-==================
+Habitica API Module
+===================
 
-This module provides functions to interact with the Habitica API, allowing the
-user to make GET, POST, and DELETE requests to retrieve and manage data on the
-Habitica platform. It handles user authentication using configuration values
+This module provides functions to interact with the Habitica API, enabling users
+to make GET, POST, PUT, and DELETE requests for retrieving and managing data on
+the Habitica platform. User authentication is managed through configuration values
 retrieved from the auth_file module.
 
-The module also includes rate limiting functionality to avoid exceeding the Habitica
-API rate limits and getting blocked from making further requests.
+The module incorporates rate limiting functionality to prevent exceeding the Habitica
+API rate limits, thereby avoiding potential blocking from making further requests.
 
 Usage:
 ------
-The functions in this module can be used to interact with the Habitica API. Ensure
-that the auth_file module has been properly configured with the user ID and API
-token before making API requests.
+The functions in this module facilitate interaction with the Habitica API. Before
+making API requests, ensure that the auth_file module is properly configured with
+the user ID and API token.
 
-Example:
---------
-import habitica_api
+Module Structure:
+-----------------
+- get_user_id(): Retrieves the user ID from the configuration or generates a default ID.
+- get_api_token(): Retrieves the API token from the config or generates a default token.
+- make_api_request(method, endpoint, data=None): Executes API requests with rate limit.
+- delete(endpoint): Sends a DELETE request using make_api_request().
+- get(endpoint): Sends a GET request using make_api_request().
+- post(endpoint, data=None): Sends a POST request using make_api_request().
+- put(endpoint, data=None): Sends a PUT request using make_api_request().
 
-# Make a GET request to retrieve user data
-response = habitica_api.get("user")
-print(response)
+Important Note:
+---------------
+Configure the auth_file module with valid user credentials before using the functions
+in this module. Failing to do so may result in errors or default values being used.
 
-# Make a POST request to create a new task
-task_data = {
-    "text": "New Task",
-    "type": "todo",
-    "priority": 2
-}
-response = habitica_api.post("tasks/user", data=task_data)
-print(response)
+For further information about the Habitica API, visit https://habitica.com/apidoc.
+
+Please keep this module confidential to avoid potential misuse of authentication data.
 """
 
-
 import requests
+import time
 from core.auth_file import get_key_from_config, create_auth_file
-from ratelimit import limits, sleep_and_retry
 from utils.rich_utils import print
+from pyrate_limiter import Duration, RequestRate, Limiter
 
-# Initialize default values for rate limiting
-CALLS = 30
-RATE_LIMIT = 60
+rate_limits = (RequestRate(29, Duration.MINUTE),)  # 30 requests per minute
+limiter = Limiter(*rate_limits)
 
 
 def get_user_id():
+    """
+    Retrieve the user ID from the configuration or generate a default ID.
+
+    Returns:
+        str: The user ID.
+    """
     try:
-        user_id = get_key_from_config("habitica", "user")
-        return user_id
+        return get_key_from_config("habitica", "user")
     except KeyError:
         print("Error: User ID not found in configuration file.")
         create_auth_file()
@@ -66,9 +71,14 @@ def get_user_id():
 
 
 def get_api_token():
+    """
+    Retrieve the API token from the configuration or generate a default token.
+
+    Returns:
+        str: The API token.
+    """
     try:
-        api_token = get_key_from_config("habitica", "token")
-        return api_token
+        return get_key_from_config("habitica", "token")
     except KeyError:
         print("Error: API token not found in configuration file.")
         create_auth_file()
@@ -85,96 +95,79 @@ HEADERS = {
 }
 
 
-@sleep_and_retry
-@limits(calls=CALLS, period=RATE_LIMIT)
 def make_api_request(method, endpoint, data=None):
     """
-    Make an API request to the Habitica API with rate limiting.
+    Execute an API request with rate limiting.
 
     Args:
-        method (str): The HTTP method ('GET' or 'POST') for the API request.
-        endpoint (str): The endpoint of the Habitica API to interact with.
-        data (dict, optional): The JSON data to send in the request body.
+        method (str): The HTTP method for the request (GET, POST, PUT, DELETE).
+        endpoint (str): The API endpoint.
+        data (dict, optional): JSON data for the request payload.
 
     Returns:
-        dict: The JSON response from the API.
-
-    Raises:
-        requests.exceptions.RequestException: If there is an error in the API response.
+        dict: The JSON response data from the API.
     """
-    check_limit_calls()
-
+    time.sleep(60 / 30)
     url = BASEURL + endpoint
     response = requests.request(method, url, headers=HEADERS, json=data)
-
     response_data = response.json()
     if not response.ok:
+        print(response)
         raise requests.exceptions.RequestException(
             f"API Error: {response_data['error']}"
         )
-
     return response_data
 
 
-@sleep_and_retry
-@limits(calls=CALLS, period=RATE_LIMIT)
-def check_limit_calls():
+def delete(endpoint):
     """
-    Empty function used for rate limiting. Decorated by `sleep_and_retry` and `limits`.
-    """
-    return
-
-
-@sleep_and_retry
-@limits(calls=CALLS, period=RATE_LIMIT)
-def get(endpoint):
-    """
-    Make a GET request to the Habitica API with rate limiting.
+    Send a DELETE request to the specified endpoint.
 
     Args:
-        endpoint (str): The endpoint or type of data to get from the API.
+        endpoint (str): The API endpoint.
 
     Returns:
-        dict: The JSON response from the API.
+        dict: The JSON response data from the API.
+    """
+    return make_api_request("DELETE", endpoint)
 
-    Raises:
-        requests.exceptions.RequestException: If there is an error in the API response.
+
+def get(endpoint):
+    """
+    Send a GET request to the specified endpoint.
+
+    Args:
+        endpoint (str): The API endpoint.
+
+    Returns:
+        dict: The JSON response data from the API.
     """
     return make_api_request("GET", endpoint)
 
 
-@sleep_and_retry
-@limits(calls=CALLS, period=RATE_LIMIT)
 def post(endpoint, data=None):
     """
-    Make a POST request to the Habitica API with rate limiting.
+    Send a POST request to the specified endpoint.
 
     Args:
-        endpoint (str): The endpoint or type of data to post to the API.
-        data (dict, optional): The JSON data to send in the request body.
+        endpoint (str): The API endpoint.
+        data (dict, optional): JSON data for the request payload.
 
     Returns:
-        dict: The JSON response from the API.
-
-    Raises:
-        requests.exceptions.RequestException: If there is an error in the API response.
+        dict: The JSON response data from the API.
     """
     return make_api_request("POST", endpoint, data=data)
 
 
-@sleep_and_retry
-@limits(calls=CALLS, period=RATE_LIMIT)
-def delete(endpoint):
+def put(endpoint, data=None):
     """
-    Make a DELETE request to the Habitica API with rate limiting.
+    Send a PUT request to the specified endpoint.
 
     Args:
-        endpoint (str): The endpoint or type of data to delete to the API.
+        endpoint (str): The API endpoint.
+        data (dict, optional): JSON data for the request payload.
 
     Returns:
-        dict: The JSON response from the API.
-
-    Raises:
-        requests.exceptions.RequestException: If there is an error in the API response.
+        dict: The JSON response data from the API.
     """
-    return make_api_request("DELETE", endpoint)
+    return make_api_request("PUT", endpoint, data=data)
