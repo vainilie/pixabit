@@ -100,7 +100,7 @@ def select_option(selected_action):
         if Confirm.ask("Fix [i]tags[/i]?", default=False):
             category_tags.ischallenge_or_personal_tags(all_tasks["data"])
             category_tags.ispsn_ornot(all_tasks["data"])
-            
+
     elif selected_action == "Print stats":
         if Confirm.ask("Print [i]stats[/i]?", default=False):
             rich_stats.print_stats(stats)

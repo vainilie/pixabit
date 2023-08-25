@@ -1,8 +1,6 @@
 from core.auth_file import get_key_from_config
-from core.habitica_api import post, delete,put
+from core.habitica_api import post, delete, put
 from utils.rich_utils import Confirm, print
-        
-        
 
 
 def set_attr(all_tasks):
@@ -10,7 +8,7 @@ def set_attr(all_tasks):
     int = get_key_from_config("tags", "INT", "tags.ini")
     con = get_key_from_config("tags", "CON", "tags.ini")
     per = get_key_from_config("tags", "PER", "tags.ini")
-    noatr =  get_key_from_config("tags", "NOT_ATR", "tags.ini")
+    noatr = get_key_from_config("tags", "NOT_ATR", "tags.ini")
     tags_to_fix = 0  # Initialize the count of tags to fix
     actions_to_perform = []  # List to store batched actions
 
@@ -29,11 +27,10 @@ def set_attr(all_tasks):
         if per in tags and atr != "per":
             tags_to_fix += 1  # Increment the count
             actions_to_perform.append(("PUT", task_id, "per"))
-            
+
         if per not in tags and con not in tags and str not in tags and int not in tags:
             tags_to_fix += 1  # Increment the count
             actions_to_perform.append(("post", task_id, noatr))
-
 
     if tags_to_fix == 0:
         print(f"All your attr are OK :thumbsup:")
@@ -59,4 +56,3 @@ def set_attr(all_tasks):
             print("[b]Your tasks' attributes  are now clean  :cherry_blossom:")
         else:
             print("[b]OK, no changes done :cherry_blossom:")
-
