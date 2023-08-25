@@ -12,7 +12,6 @@
 get_userdata Module
 ================
 
-
 This module interacts with the Habitica API to retrieve all user data, including
 user details, tasks, and other information. It provides a function to save the
 retrieved data to a file named "all_user_data.json" using the save_file module.

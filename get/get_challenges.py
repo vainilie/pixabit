@@ -22,8 +22,8 @@ def get_my_challenges():
 
     while True:
         challenge_data = habitica_api.get(
-            f"challenges/user?page={counter}&member=true"
-        )["data"]
+            f"challenges/user?member=true&page={counter}"
+        )["data"]    
 
         if not challenge_data:
             break

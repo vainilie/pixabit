@@ -6,7 +6,7 @@ import requests
 import time
 import six
 import sys
-
+import emoji_data_python
 
 class Debug(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):

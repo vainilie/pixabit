@@ -18,15 +18,15 @@ Habitica API.
 Usage:
 ------
 1. Creating the authentication configuration file:
-   The `create_auth_file` function allows users to interactively create
-   the authentication configuration file. It prompts the user to enter their
-   Habitica user ID and API token, or it provides default values that can
-   be edited later.
+    The `create_auth_file` function allows users to interactively create
+    the authentication configuration file. It prompts the user to enter their
+    Habitica user ID and API token, or it provides default values that can
+    be edited later.
 
 2. Reading values from the authentication configuration file:
-   The `get_key_from_config` function is used to retrieve specific values
-   from the authentication configuration file. Users can use this function
-   to access their user ID, API token, or other settings stored in the file.
+    The `get_key_from_config` function is used to retrieve specific values
+    from the authentication configuration file. Users can use this function
+    to access their user ID, API token, or other settings stored in the file.
 
 Example:
 --------

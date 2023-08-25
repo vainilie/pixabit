@@ -19,7 +19,7 @@ def create_challenge_from_json(json_path):
             "group": "00000000-0000-4000-A000-000000000000",
             "name": f"[Permanent] ∞ {data['_name']}",
             "shortName": data["shortName"],
-            "summary": f"[ᴘᴇʀᴍᴀɴᴇɴᴛ ᴄʜᴀʟʟᴇɴɢᴇ] • {data['_summary']}",
+            "summary": f"{data['_summary']}]",
             "description": f"{data['_description']}\n\n---\n---\n- This is an identical copy of the challenge created by [@{data['leader']['auth']['local']['username']}](https://habitica.com/profile/{data['leader']['id']}) in the _{data['group']['name']}_ †.\n- This is a **[ᴘᴇʀᴍᴀɴᴇɴᴛ ᴄʜᴀʟʟᴇɴɢᴇ ∞]** so it will never end. Feel free to join, leave and modify the tasks to fulfill your needs.",
             "prize": 1,
         }
@@ -41,5 +41,5 @@ def create_challenge_from_json(json_path):
 
 
 # Usage
-json_file_path = "_challenges/tinyhabits.json"
+json_file_path = "___challenges/DailySpell.json"
 create_challenge_from_json(json_file_path)
