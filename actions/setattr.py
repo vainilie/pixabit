@@ -1,11 +1,12 @@
 from core.auth_file import get_key_from_config
 from core.habitica_api import post, delete, put
 from utils.rich_utils import Confirm, print
+import json
 
 
 def set_attr(all_tasks):
-    str = get_key_from_config("tags", "STR", "tags.ini")
-    int = get_key_from_config("tags", "INT", "tags.ini")
+    stg = get_key_from_config("tags", "STR", "tags.ini")
+    inl = get_key_from_config("tags", "INT", "tags.ini")
     con = get_key_from_config("tags", "CON", "tags.ini")
     per = get_key_from_config("tags", "PER", "tags.ini")
     noatr = get_key_from_config("tags", "NOT_ATR", "tags.ini")
@@ -15,20 +16,26 @@ def set_attr(all_tasks):
     for task_id, item in all_tasks.items():
         tags = item["tag_id"]
         atr = item["attribute"]
-        if str in tags and atr != "str":
+        if stg in tags and atr != "str":
             tags_to_fix += 1  # Increment the count
-            actions_to_perform.append(("PUT", task_id, "str"))
-        if int in tags and atr != "int":
+            actions_to_perform.append(("put", task_id, "str"))
+        if inl in tags and atr != "int":
             tags_to_fix += 1  # Increment the count
-            actions_to_perform.append(("PUT", task_id, "int"))
+            actions_to_perform.append(("put", task_id, "int"))
         if con in tags and atr != "con":
             tags_to_fix += 1  # Increment the count
-            actions_to_perform.append(("PUT", task_id, "con"))
+            actions_to_perform.append(("put", task_id, "con"))
         if per in tags and atr != "per":
             tags_to_fix += 1  # Increment the count
-            actions_to_perform.append(("PUT", task_id, "per"))
+            actions_to_perform.append(("put", task_id, "per"))
 
-        if per not in tags and con not in tags and str not in tags and int not in tags:
+        if (
+            per not in tags
+            and con not in tags
+            and stg not in tags
+            and inl not in tags
+            and noatr not in tags
+        ):
             tags_to_fix += 1  # Increment the count
             actions_to_perform.append(("post", task_id, noatr))
 
@@ -49,8 +56,11 @@ def set_attr(all_tasks):
         prompt = f"Continue?"
         if Confirm.ask(prompt, default=False):
             for action, task_id, tag in actions_to_perform:
-                if action == "PUT":
-                    put(f"tasks/{task_id}?attribute={tag}")
+                if action == "put":
+                    attribute = {
+                        "attribute": tag,
+                    }
+                    put(f"tasks/{task_id}", data=attribute)
                 if action == "post":
                     post(f"tasks/{task_id}/tags/{tag}")
             print("[b]Your tasks' attributes  are now clean  :cherry_blossom:")
