@@ -114,9 +114,9 @@ def tags_replace(del1, add1, all_tasks, what=None):
                 tags_to_fix += 1  # Increment the count
 
                 actions_to_perform.append(("post", task_id, add1))
-        if what == "replace":
-            tags_to_fix += 1  # Increment the count
-            actions_to_perform.append(("delete", task_id, del1))
+            if what == "replace":
+                tags_to_fix += 1  # Increment the count
+                actions_to_perform.append(("delete", task_id, del1))
 
     if tags_to_fix == 0:
         print(f"All your tags are OK :thumbsup:")
