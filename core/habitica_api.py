@@ -107,7 +107,7 @@ def make_api_request(method, endpoint, data=None):
     Returns:
         dict: The JSON response data from the API.
     """
-    time.sleep(60 / 30)
+    time.sleep(60 / 29)
     url = BASEURL + endpoint
     response = requests.request(method, url, headers=HEADERS, json=data)
     response_data = response.json()

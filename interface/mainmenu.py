@@ -86,7 +86,7 @@ def select_option(selected_action):
             print("Challenges Saved")
 
     elif selected_action == "Broken tasks":
-        if Confirm.ask("Check [i]broken tags[/i]?", default=False):
+        if Confirm.ask("Check [i]broken tasks[/i]?", default=False):
             if stats["broken"] > 0:
                 filter_task.list_broken(all_tasks["data"], all_tasks["cats"]["broken"])
                 if Confirm.ask("Unlink [i]broken tasks[/i]?", default=False):
@@ -99,6 +99,7 @@ def select_option(selected_action):
     elif selected_action == "Fix tags":
         if Confirm.ask("Fix [i]tags[/i]?", default=False):
             category_tags.ischallenge_or_personal_tags(all_tasks["data"])
+        if Confirm.ask("Fix poisoned [i]tags[/i]?", default=False):
             category_tags.ispsn_ornot(all_tasks["data"])
 
     elif selected_action == "Print stats":
