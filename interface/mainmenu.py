@@ -2,7 +2,7 @@ from utils.rich_utils import Confirm, IntPrompt, Panel, Columns, console, print
 from core.auth_file import check_auth_file
 from get import bkup_challenges, get_tags, get_tasks, get_stats, get_userdata
 from interface import rich_stats, rich_tags, mainmenu
-from actions import unused_tags, filter_task, sleeping, category_tags, setattr
+from actions import unused_tags, filter_task, sleeping, category_tags, setattr, challenges
 from art import text2art
 from rich import box, text
 
@@ -23,6 +23,7 @@ def display_main_menu():
     while True:
         actions = [
             "Backup Challenges",
+            "List Challenges",
             "Broken tasks",
             "Fix tags",
             "Print stats",
@@ -85,6 +86,11 @@ def select_option(selected_action):
             bkup_challenges.join_challenges_and_tasks()
             print("Challenges Saved")
 
+    if selected_action == "List Challenges":
+        if Confirm.ask("List [i]challenges[/i]?", default=False):
+            challenges.list_challenges(all_tasks)
+            print("Challenges listed")
+            
     elif selected_action == "Broken tasks":
         if Confirm.ask("Check [i]broken tasks[/i]?", default=False):
             if stats["broken"] > 0:

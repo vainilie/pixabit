@@ -250,6 +250,7 @@ def process_tasks(tags: Dict[str, List[Dict[str, str]]]) -> Dict[str, Dict[str, 
     all_tasks = habitica_api.get("tasks/user")["data"]
     used_tags = set()
     broken_challenges = list()
+    joined_ch = list()
     cats_dict = {
         "tasks": {
             "habits": [],
@@ -259,6 +260,7 @@ def process_tasks(tags: Dict[str, List[Dict[str, str]]]) -> Dict[str, Dict[str, 
         },
         "tags": [],
         "broken": [],
+        "challenge":[]
     }
     tasks_dict = {
         #     "habits": [],
@@ -272,6 +274,8 @@ def process_tasks(tags: Dict[str, List[Dict[str, str]]]) -> Dict[str, Dict[str, 
         used_tags.update(task["tags"])
         if "broken" in task["challenge"]:
             broken_challenges.append(task["id"])
+        if len(task["challenge"])>0:
+            joined_ch.append(task["challenge"].get("id"))
 
         if task["type"] == "todo" or task["type"] == "daily":
             status = processed_task["_status"]
@@ -286,6 +290,7 @@ def process_tasks(tags: Dict[str, List[Dict[str, str]]]) -> Dict[str, Dict[str, 
 
     cats_dict["tags"] = list(used_tags)
     cats_dict["broken"] = list(broken_challenges)
+    cats_dict["challenge"] = list(joined_ch)
     save_file.save_file(tasks_dict, "tasks_data", "_json")
     save_file.save_file(cats_dict, "tasks_cats", "_json")
     return {"data": tasks_dict, "cats": cats_dict}
