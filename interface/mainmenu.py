@@ -86,7 +86,7 @@ def select_option(selected_action):
             bkup_challenges.join_challenges_and_tasks()
             print("Challenges Saved")
 
-    if selected_action == "List Challenges":
+    elif selected_action == "List Challenges":
         if Confirm.ask("List [i]challenges[/i]?", default=False):
             challenges.list_challenges(all_tasks)
             print("Challenges listed")
