@@ -109,6 +109,7 @@ def all_types(
         "tag_id": task["tags"],
         "tag_name": process_task_tags(task, tags),
         "text": emoji_data_python.replace_colons(task["text"]),
+        "created": task["createdAt"]
     }
     return processed_task
 
