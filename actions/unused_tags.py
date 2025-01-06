@@ -37,6 +37,7 @@ Example:
 
 from typing import Dict, List, Set
 from core import habitica_api
+from rich.progress import track
 
 
 def get_unused_tags(
@@ -115,6 +116,6 @@ def delete_unused_tags(unused_tags: List[Dict[str, str]]) -> None:
         have proper authentication and authorization.
 
     """
-    for unused_tag in unused_tags:
+    for unused_tag in track(unused_tags, description="Deleting empty tags..."):
         tag_id = unused_tag["id"]
         habitica_api.delete(f"tags/{tag_id}")

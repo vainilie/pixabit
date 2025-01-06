@@ -1,6 +1,7 @@
 from core.auth_file import get_key_from_config
 from core.habitica_api import post, delete
 from utils.rich_utils import Confirm, print
+from rich.progress import track
 
 
 def ischallenge_or_personal_tags(all_tasks):
@@ -47,7 +48,9 @@ def ischallenge_or_personal_tags(all_tasks):
 
         prompt = f"Continue?"
         if Confirm.ask(prompt, default=False):
-            for action, task_id, tag in actions_to_perform:
+            for action, task_id, tag in track(
+                actions_to_perform, description="Fixing tags..."
+            ):
                 if action == "post":
                     post(f"tasks/{task_id}/tags/{tag}")
                 elif action == "delete":
@@ -89,8 +92,11 @@ def ispsn_ornot(all_tasks):
             )
 
         prompt = f"Continue?"
+
         if Confirm.ask(prompt, default=False):
-            for action, task_id, tag in actions_to_perform:
+            for action, task_id, tag in track(
+                actions_to_perform, description="Fixing poisoned tags..."
+            ):
                 if action == "post":
                     post(f"tasks/{task_id}/tags/{tag}")
                 elif action == "delete":
@@ -134,7 +140,10 @@ def tags_replace(del1, add1, all_tasks, what=None):
 
         prompt = f"Continue?"
         if Confirm.ask(prompt, default=False):
-            for action, task_id, tag in actions_to_perform:
+
+            for action, task_id, tag in track(
+                actions_to_perform, description="Fixing tags..."
+            ):
                 if action == "post":
                     post(f"tasks/{task_id}/tags/{tag}")
                 elif action == "delete":
