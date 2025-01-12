@@ -1,0 +1,5 @@
+from core import auth_file, save_file,habitica_api
+
+guilds = habitica_api.get("groups?type=guilds,privateGuilds,publicGuilds,tavern")                                                            
+print(guilds)                                         
+save_file.save_file(guilds, "guildsindfo")
