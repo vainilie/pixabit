@@ -168,11 +168,12 @@ def select_option(selected_action):
             category_tags.ischallenge_or_personal_tags(all_tasks["data"])
         if Confirm.ask("Fix poisoned [i]tags[/i]?", default=False):
             category_tags.ispsn_ornot(all_tasks["data"])
+        if Confirm.ask("Fix attribute [i]tags[/i]?", default=False):
+            setattr.set_attr(all_tasks["data"])
 
     elif selected_action == "Print stats":
         if Confirm.ask("Print [i]stats[/i]?", default=False):
             rich_stats.print_stats(stats)
-            setattr.set_attr(all_tasks["data"])
 
     elif selected_action == "Print tags":
         if Confirm.ask("Print [i]tags[/i]?", default=False):

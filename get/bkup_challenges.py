@@ -1,7 +1,7 @@
 from core import save_file
 import emoji_data_python
 from get import get_challenges, get_rawtasks
-
+from utils import replace_filename
 
 def join_challenges_and_tasks():
     """
@@ -33,8 +33,7 @@ def join_challenges_and_tasks():
 
         backup["_tasks"] = bk_tasks
         backup["_name"] = backup.pop("name")
-        backup["_name"] = str.replace(backup["_name"], "/", "|")
-        backup["shortName"] = str.replace(backup["shortName"], "/", "|")
+        title = replace_filename.replace_illegal_filename_characters_leading_underscores(backup["_name"])
         backup["_description"] = backup.pop("description")
         backup["_summary"] = (backup.pop("summary") if "summary" in backup else "")
         keys_del = [
@@ -58,4 +57,4 @@ def join_challenges_and_tasks():
                 new_value = emoji_data_python.replace_colons(value)
                 backup[key] = new_value
 
-        save_file.save_file(backup, backup["shortName"], "_challenges")
+        save_file.save_file(backup, title, "___Challenges")

@@ -5,6 +5,7 @@ from rich.progress import track
 
 
 def ischallenge_or_personal_tags(all_tasks):
+    challenges_tags = {}
     challenge_tag = get_key_from_config("tags", "challenge", "tags.ini")
     personal_tag = get_key_from_config("tags", "owned", "tags.ini")
 
@@ -15,6 +16,7 @@ def ischallenge_or_personal_tags(all_tasks):
     for task_id, item in all_tasks.items():
         tags = item["tag_id"]
         is_challenge = len(item["challenge"]) != 0
+
 
         if is_challenge and challenge_tag not in tags:
             tags_to_fix += 1  # Increment the count
