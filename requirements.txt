@@ -1,9 +1,0 @@
-art
-emoji-data-python
-pyrate-limiter==2.10.0
-python-dateutil
-pytz
-requests
-rich
-timeago
-tzlocal

@@ -7,7 +7,7 @@ Provides the user interface for selecting actions within the Habitica CLI applic
 Includes a main menu and categorized submenus for easier navigation.
 """
 
-
+from 
 from utils.rich_utils import Confirm, IntPrompt, Panel, Columns, console, print
 from core.auth_file import check_auth_file
 from get import bkup_challenges, get_tags, get_tasks, get_stats, get_userdata
@@ -26,9 +26,6 @@ from rich import box, print
 from rich.layout import Layout
 from rich.text import Text
 
-# Check authentication file
-check_auth_file()
-
 
 # Initialize data
 def initialize_data():
@@ -42,10 +39,6 @@ def initialize_data():
     stats = get_stats.get_user_stats(all_tasks["cats"])
     unused = unused_tags.get_unused_tags(tags, all_tasks["cats"]["tags"])
     console.print("[bold green]Data refreshed successfully![/bold green]")
-
-
-# Call initialize_data on startup
-initialize_data()
 
 
 def display_menu(title, options):
@@ -192,6 +185,8 @@ def select_option(selected_action):
             rich_tags.print_unused(unused)
         if Confirm.ask("Delete [i]unused tags[/i]?", default=False):
             unused_tags.delete_unused_tags(unused)
+            
+            
     elif selected_action == "Sort alphabetically":
         if Confirm.ask("Sort [i]all tasks alphabetically[/i]?", default=False):
             sort.sort_alpha(all_tasks["data"])
