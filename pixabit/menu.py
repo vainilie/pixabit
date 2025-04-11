@@ -268,7 +268,7 @@ class CliApp:
                     if self.cats_data:  # Need valid cats_data
                         try:
                             self.user_stats = get_user_stats(
-                                self.api_client, self.cats_data
+                                self.api_client, self.cats_data, self.processed_tasks
                             )
                             self.console.log("User stats fetched.")
                             progress.update(
@@ -620,6 +620,9 @@ class CliApp:
     def _display_stats(self):
         """Displays formatted user stats using Rich."""
         stats_data = self.user_stats
+
+        user_dmg = stats_data.get("potential_daily_damage_user", 0.0)
+        party_dmg = stats_data.get("potential_daily_damage_party", 0.0)
         if not stats_data:
             self.console.print(
                 "[yellow]No user stats data available. Refresh data first.[/yellow]"
@@ -635,6 +638,8 @@ class CliApp:
             broken_count = stats_data.get("broken_challenge_tasks", 0)
             is_questing = stats_data.get("quest_active", False)
             quest_key = stats_data.get("quest_key")
+            dmg_color = "red" if user_dmg >= 10 else "yellow" if user_dmg > 0 else "dim"
+            party_dmg_str = f", Party: {party_dmg:.1f}" if party_dmg > 0 else ""
             core_stats_values = stats_data.get("stats", {})
             gp = int(stats_data.get("gp", 0))
             hp = int(stats_data.get("hp", 0))
@@ -676,6 +681,13 @@ class CliApp:
                     ":dragon:",
                     f"[pink]On quest: [i]{quest_key or 'Unknown'}[/i][/pink]",
                 )
+            # --- ADD Damage Row HERE ---
+            user_info_table.add_row(
+                ":biohazard:",
+                f"Potential Daily Damage: [{dmg_color}]User: {user_dmg:.1f}{party_dmg_str}[/]",
+            )
+
+            # ---------------------------
 
             # Core Stats Table
             core_stats_table = Table.grid(padding=(0, 1), expand=True)

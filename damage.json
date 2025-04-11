@@ -1,0 +1,192 @@
+[
+  {
+    "_type": "daily",
+    "attribute": "str",
+    "challenge_id": "f1ef2a57-b205-495d-a888-d179605d1852",
+    "challenge": "🪷 Daily stretch - March",
+    "id": "85cc4851-7757-4d4f-a4bd-9ed0b22c2286",
+    "note": "",
+    "priority": 1.5,
+    "tag_id": [
+      "ba4ff604-5298-411c-919f-e99e534ba1e1",
+      "866a6099-8217-45da-a15d-44de836a4f55",
+      "74ac0358-89ea-4802-bdcf-1dbe93d90b21"
+    ],
+    "tag_name": [
+      "•🏆Challenge",
+      "•── 🜂  🧘",
+      "•── 🜂 火 🧨"
+    ],
+    "text": "🪷 daily stretch",
+    "created": "2025-03-05T08:55:09.077Z",
+    "_status": "due",
+    "checklist": [
+      {
+        "completed": false,
+        "text": "you must",
+        "id": "d2b40974-812a-4ffe-b428-43bf73ca680c"
+      }
+    ],
+    "date": "2025-04-08T06:00:00.000Z",
+    "is_due": true,
+    "streak": 0,
+    "value": -10.065641872820203,
+    "value_color": "worse",
+    "damage_to_user": 3.7
+  },
+  {
+    "_type": "daily",
+    "attribute": "int",
+    "challenge_id": "30ede4ec-7885-47b9-adc1-9ddfc371d266",
+    "challenge": "HP 📜",
+    "id": "a93623f3-ee7f-49f4-8b86-7e95ac91b4a5",
+    "note": "Create and control a jet of clear water from the tip of the wand to cleanse yourself (Shower)",
+    "priority": 1,
+    "tag_id": [
+      "0eeb28ac-2bfc-4c5c-8056-6453c2c9d9ec",
+      "30ede4ec-7885-47b9-adc1-9ddfc371d266",
+      "ba4ff604-5298-411c-919f-e99e534ba1e1"
+    ],
+    "tag_name": [
+      "•🏆Legacy Challenge",
+      "᛭ HP📜",
+      "•🏆Challenge"
+    ],
+    "text": "🛀 Aqua Eructo",
+    "created": "2023-08-08T06:33:52.950Z",
+    "_status": "due",
+    "checklist": [
+      {
+        "completed": false,
+        "text": "Lavar cara al menos",
+        "id": "892f1baf-b5ae-4425-a34f-34ff6f0f2ecb"
+      }
+    ],
+    "date": "2025-04-08T06:00:00.000Z",
+    "is_due": true,
+    "streak": 2,
+    "value": -27.334983517015257,
+    "value_color": "worst",
+    "damage_to_user": 3.9
+  },
+  {
+    "_type": "daily",
+    "attribute": "int",
+    "challenge_id": "30ede4ec-7885-47b9-adc1-9ddfc371d266",
+    "challenge": "HP 📜",
+    "id": "0ea669ef-efae-44fc-bc32-7af7ec472484",
+    "note": "The healing essence of murtlap can moisturize, heal, and improve your overall health (lotion/acne cream/etc)",
+    "priority": 1,
+    "tag_id": [
+      "30ede4ec-7885-47b9-adc1-9ddfc371d266",
+      "0eeb28ac-2bfc-4c5c-8056-6453c2c9d9ec",
+      "ba4ff604-5298-411c-919f-e99e534ba1e1"
+    ],
+    "tag_name": [
+      "᛭ HP📜",
+      "•🏆Legacy Challenge",
+      "•🏆Challenge"
+    ],
+    "text": "🍯 Essence of Murtlap",
+    "created": "2023-08-08T06:33:52.931Z",
+    "_status": "due",
+    "checklist": [
+      {
+        "completed": false,
+        "text": "Día",
+        "id": "7e7ee6ea-71ce-49db-8084-d0a7cef5202e"
+      },
+      {
+        "completed": false,
+        "text": "Noche",
+        "id": "3466fe27-232b-439a-b891-53d00f7f12e6"
+      }
+    ],
+    "date": "2025-04-08T06:00:00.000Z",
+    "is_due": true,
+    "streak": 1,
+    "value": -33.82620701275097,
+    "value_color": "worst",
+    "damage_to_user": 4.6
+  },
+  {
+    "_type": "daily",
+    "attribute": "int",
+    "challenge_id": "30ede4ec-7885-47b9-adc1-9ddfc371d266",
+    "challenge": "HP 📜",
+    "id": "cb6429cd-af98-4d6b-bc39-582585fcc8c0",
+    "note": "The house elves didn't make all that food for nothing!  Eat three meals a day.",
+    "priority": 1,
+    "tag_id": [
+      "30ede4ec-7885-47b9-adc1-9ddfc371d266",
+      "0eeb28ac-2bfc-4c5c-8056-6453c2c9d9ec",
+      "ba4ff604-5298-411c-919f-e99e534ba1e1"
+    ],
+    "tag_name": [
+      "᛭ HP📜",
+      "•🏆Legacy Challenge",
+      "•🏆Challenge"
+    ],
+    "text": "🍲 Dine in the Great Hall",
+    "created": "2023-08-08T06:33:52.832Z",
+    "_status": "due",
+    "checklist": [
+      {
+        "completed": false,
+        "text": "Desayuno",
+        "id": "0a4ab281-a87d-40c2-9aad-8edc852e1a34"
+      },
+      {
+        "completed": false,
+        "text": "Comida",
+        "id": "0d30fdf4-ed66-482f-a591-549f36b4dd1d"
+      },
+      {
+        "completed": false,
+        "text": "Cena",
+        "id": "04d83456-7dda-4d7d-a5d9-ec57dabfb1f6"
+      }
+    ],
+    "date": "2025-04-08T06:00:00.000Z",
+    "is_due": true,
+    "streak": 13,
+    "value": -24.280457114659686,
+    "value_color": "worst",
+    "damage_to_user": 3.6
+  },
+  {
+    "_type": "daily",
+    "attribute": "int",
+    "challenge_id": "b3832cdc-4b93-492f-b081-deb4ace03d68",
+    "challenge": "Daily Spell (August 2022)",
+    "id": "d3a7c096-0a85-4c00-a05b-2bc336d04395",
+    "note": "It’s time to summon your potential for a goal you are working on this week, whether it’s to simply complete a week of work, classes, or projects. Take at least 10 minutes to sit before a lit candle (fake ones are okay) in a dark place. Say an affirmation or sing a song that reminds you to use as much effort as possible to accomplish your goal.  \n\nAfter completing the spell, reward yourself with something that will boost you toward that goal. If Monday is not the start of your work week, save this ritual for your next goal start up.",
+    "priority": 1.5,
+    "tag_id": [
+      "0eeb28ac-2bfc-4c5c-8056-6453c2c9d9ec",
+      "6ac201fc-5829-4c2a-8222-69e801403115",
+      "ba4ff604-5298-411c-919f-e99e534ba1e1"
+    ],
+    "tag_name": [
+      "•🏆Legacy Challenge",
+      "᛭ Daily Spell",
+      "•🏆Challenge"
+    ],
+    "text": "Monday Spell",
+    "created": "2023-08-08T06:52:39.811Z",
+    "_status": "due",
+    "checklist": [
+      {
+        "completed": false,
+        "text": "full moon",
+        "id": "b026f6a6-f79e-4a70-836a-b6dbb9615112"
+      }
+    ],
+    "date": "2025-04-14T06:00:00.000Z",
+    "is_due": true,
+    "streak": 0,
+    "value": -8.77267684339431,
+    "value_color": "bad",
+    "damage_to_user": 3.6
+  }
+]

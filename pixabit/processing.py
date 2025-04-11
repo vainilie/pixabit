@@ -1,6 +1,7 @@
 # pixabit/processing.py
 
 # --- Standard Imports ---
+import math
 import time  # Potentially needed if adding delays or logging timestamps
 from typing import Any, Dict, List, Optional
 
@@ -36,6 +37,7 @@ class TaskProcessor:
             api_client: An authenticated instance of the HabiticaAPI client.
         """
         print("Initializing TaskProcessor...")
+        self.console = console
         self.api_client = api_client
         print("Fetching tags for lookup...")
         self.tags_lookup = self._fetch_and_prepare_tags()
@@ -45,6 +47,64 @@ class TaskProcessor:
             )
         else:
             print(f"Fetched {len(self.tags_lookup)} tags.")
+        # --- Fetch and store user context needed for damage calc ---
+        self.user_data: Dict[str, Any] = {}
+        self.party_data: Dict[str, Any] = {}
+        self.user_con: int = 0
+        self.user_stealth: int = 0  # Current stealth points
+        self.is_sleeping: bool = False
+        self.is_on_boss_quest: bool = False
+        self.boss_str: float = 0.0
+
+        try:
+            self.console.log("  - Fetching user data for context...")
+            self.user_data = self.api_client.get_user_data()  # Use API client method
+            # Use .get with defaults for safe access
+            self.user_con = self.user_data.get("stats", {}).get("con", 0)
+            self.user_stealth = (
+                self.user_data.get("stats", {}).get("buffs", {}).get("stealth", 0)
+            )
+            self.is_sleeping = self.user_data.get("preferences", {}).get("sleep", False)
+            self.console.log(
+                f"  - User Context: CON={self.user_con}, Stealth={self.user_stealth}, Sleeping={self.is_sleeping}"
+            )
+
+            self.console.log("  - Fetching party data for context...")
+            self.party_data = self.api_client.get_party_data()  # Use API client method
+            quest_info = self.party_data.get("quest", {})
+
+            if quest_info and quest_info.get("active"):
+                boss_info = quest_info.get("content", {}).get("boss")
+                if isinstance(boss_info, dict) and boss_info.get("str") is not None:
+                    self.is_on_boss_quest = True
+                    try:
+                        self.boss_str = float(boss_info.get("str", 0.0))
+                    except (ValueError, TypeError):
+                        self.boss_str = 0.0
+                    self.console.log(
+                        f"  - Party Context: On active boss quest (Str={self.boss_str})."
+                    )
+                else:
+                    self.console.log(
+                        "  - Party Context: On active quest (not boss or no str)."
+                    )
+            else:
+                self.console.log("  - Party Context: Not on active quest.")
+
+        except Exception as e:
+            self.console.log(
+                f"  - [Warning] Couldn't fetch all context for TaskProcessor: {e}"
+            )
+            # Ensure defaults if fetches failed
+            self.user_data = self.user_data or {}
+            self.party_data = self.party_data or {}
+            self.user_con = self.user_con or 0
+            self.user_stealth = self.user_stealth or 0
+            self.is_sleeping = self.is_sleeping or False
+            self.is_on_boss_quest = self.is_on_boss_quest or False
+            self.boss_str = self.boss_str or 0.0
+        # ------------------------------------------------------------
+        self.console.log("TaskProcessor Initialized.")
 
     # --- Private Helper Methods ---
     def _fetch_and_prepare_tags(self) -> Dict[str, str]:
@@ -227,6 +287,7 @@ class TaskProcessor:
                             'streak', 'value', 'value_color'.
         """
         processed = {}
+
         is_due_flag = task_data.get("isDue", False)  # Default if missing
         completed_flag = task_data.get("completed", False)  # Default if missing
 
@@ -237,6 +298,7 @@ class TaskProcessor:
             status = "done"  # Due today and completed
         else:
             status = "due"  # Due today but not completed
+
         processed["_status"] = status
 
         processed["checklist"] = task_data.get("checklist", [])
@@ -270,6 +332,103 @@ class TaskProcessor:
         """
         # Rewards primarily have a value (cost)
         return {"value": task_data.get("value", 0)}  # Default cost to 0 if missing
+
+    # --- NEW HELPER METHOD ---
+    def _calculate_checklist_done(self, checklist: Optional[List[Dict]]) -> float:
+        """Calculates the proportion (0.0 to 1.0) of checklist items done."""
+        if not checklist or not isinstance(checklist, list) or len(checklist) == 0:
+            # No checklist or empty = 100% "done" for damage reduction
+            return 1.0
+        completed_count = sum(1 for item in checklist if item.get("completed", False))
+        total_count = len(checklist)
+        return completed_count / total_count if total_count > 0 else 1.0
+
+    # --- MODIFIED _process_daily ---
+    def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
+        """Processes Daily specific fields, including per-task damage calculation."""
+        processed = {}
+        # Status calculation
+        is_due = task_data.get("isDue", False)
+        completed = task_data.get("completed", False)
+        status = "grey" if not is_due else ("done" if completed else "due")
+        processed["_status"] = status
+
+        # Other daily fields
+        checklist_items = task_data.get("checklist", [])
+        processed["checklist"] = checklist_items  # Keep raw items
+        next_due_list = task_data.get("nextDue", [])
+        processed["date"] = (
+            next_due_list[0]
+            if isinstance(next_due_list, list) and len(next_due_list) > 0
+            else ""
+        )
+        processed["is_due"] = is_due
+        processed["streak"] = task_data.get("streak", 0)
+        task_value = task_data.get("value", 0.0)
+        processed["value"] = task_value
+        processed["value_color"] = self._value_color(task_value)
+
+        # --- Damage Calculation Logic ---
+        damage_to_user = 0.0
+        damage_to_party = 0.0
+        # Note: We check current stealth but don't modify it here.
+        # If multiple tasks would be stealthed, this calculates damage as 0 for all,
+        # which might slightly underestimate total damage if stealth runs out.
+        # Accurate stealth accounting would require processing dailies in order.
+        if is_due and not completed and not self.is_sleeping and self.user_stealth <= 0:
+            # Value capping
+            value_min = -47.27
+            value_max = 21.27
+            curr_val = max(value_min, min(task_value, value_max))
+
+            # Base delta (~0-1, higher for more negative value)
+            delta = abs(math.pow(0.9747, curr_val))
+
+            # Checklist reduction (Full completion = 0 damage)
+            checklist_items = task_data.get(
+                "checklist"
+            )  # Get checklist, could be None or []
+            if isinstance(checklist_items, list) and checklist_items:
+
+                checklist_done_ratio = self._calculate_checklist_done(checklist_items)
+                delta *= 1.0 - checklist_done_ratio
+
+            # User Damage
+            con_bonus = max(0.1, 1.0 - (float(self.user_con) / 250.0))
+            priority = task_data.get("priority", 1.0)
+            try:  # Handle priority being string or number
+                prio_float = float(priority)
+                prio_map = {0.1: 0.1, 1.0: 1.0, 1.5: 1.5, 2.0: 2.0}
+                priority_multiplier = prio_map.get(
+                    prio_float, 1.0
+                )  # Default to 1 if invalid
+            except (ValueError, TypeError):
+                priority_multiplier = 1.0
+
+            hp_mod = delta * con_bonus * priority_multiplier * 2.0
+            # damage_to_user = round(hp_mod, 2)  # Round
+            damage_to_user = round(hp_mod * 10) / 10  # New version (1 decimal)
+
+            # Party Damage (Boss Quests)
+            if self.is_on_boss_quest and self.boss_str > 0:
+                boss_delta = delta
+                if priority_multiplier < 1.0:
+                    boss_delta *= priority_multiplier  # Trivial adj
+                damage_to_party_unrounded = boss_delta * self.boss_str
+                damage_to_party = round(
+                    damage_to_party_unrounded, 1
+                )  # Round to 1 decimal
+            else:
+                damage_to_party = 0.0
+        # else: damage remains 0 (sleeping, completed, not due, or stealthed)
+
+        if damage_to_user != 0:
+            processed["damage_to_user"] = damage_to_user
+        if damage_to_party != 0:
+            processed["damage_to_party"] = damage_to_party
+        # -----------------------------
+
+        return processed
 
     # --- Public Processing Methods ---
     def process_single_task(self, task_data: Dict) -> Optional[Dict[str, Any]]:
@@ -547,7 +706,7 @@ class TaskProcessor:
 
 
 def get_user_stats(
-    api_client: HabiticaAPI, cats_dict: Dict[str, Any]
+    api_client: HabiticaAPI, cats_dict: Dict[str, Any], processed_tasks_dict: Dict
 ) -> Dict[str, Any]:
     """
     Retrieves user stats from Habitica API and combines with task counts.
@@ -656,7 +815,38 @@ def get_user_stats(
         print(
             "[yellow]Warning:[/yellow] 'cats_dict' missing or has invalid 'tasks' structure. Task counts will be inaccurate."
         )
+        # Convert last login time (ensure this logic is present)
+    last_login_utc = timestamps.get("loggedin")
+    last_login_local_str = "N/A"
+    if last_login_utc:
+        try:
+            last_login_local = convert_to_local_time(last_login_utc)
+            last_login_local_str = last_login_local.isoformat()
+        except Exception as date_e:
+            print(f"      - [Warning] Error converting last login time: {date_e}")
+            last_login_local_str = "(Time Error)"
 
+        # --- START: New Damage Calculation ---
+    total_potential_user_damage = 0.0
+    total_potential_party_damage = 0.0
+    print("      - Calculating potential daily damage...")
+    try:
+        # Get IDs of dailies marked 'due' by TaskProcessor
+        # (Status reflects non-completion if task is due)
+        due_daily_ids = cats_dict.get("tasks", {}).get("dailys", {}).get("due", [])
+
+        for task_id in due_daily_ids:
+            processed_task = processed_tasks_dict.get(task_id)
+            if processed_task:
+                total_potential_user_damage += processed_task.get("damage_to_user", 0.0)
+                total_potential_party_damage += processed_task.get(
+                    "damage_to_party", 0.0
+                )
+    except Exception as sum_e:
+        print(f"Warning: Error summing damage from processed tasks: {sum_e}")
+    # ------------------------------------------
+
+    # --- END: New Damage Calculation ---
     # --- Prepare Final Stats Dictionary ---
     # Use .get() with defaults for all fields to prevent KeyErrors
     quest_info: Dict[str, Any] = party.get("quest", {})  # Safely get quest dict
@@ -693,7 +883,10 @@ def get_user_stats(
         "tags_in_use_count": len(
             cats_dict.get("tags", [])
         ),  # Count of unique tag IDs used across tasks
-        # Add any other relevant stats extracted from user_data if needed
+        "potential_daily_damage_user": round(total_potential_user_damage, 2),
+        "potential_daily_damage_party": round(
+            total_potential_party_damage, 2
+        ),  # Add any other relevant stats extracted from user_data if needed
     }
 
     return output_stats

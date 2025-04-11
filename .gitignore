@@ -52,7 +52,7 @@ coverage.xml
 cover/
 
 # Environments
-.env # <<< CRITICAL: Ignore the file with secrets
+.env
 .env.bak
 .venv/
 venv/
