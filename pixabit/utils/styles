@@ -1,0 +1,45 @@
+[styles]
+rosewater = #F5E0DC
+flamingo = #F2CDCD
+pink = #F5C2E7
+mauve = #CBA6F7
+red = #F38BA8
+maroon = #EBA0AC
+peach = #FAB387
+yellow = #F9E2AF
+green = #A6E3A1
+teal = #94E2D5
+sky = #89DCEB
+sapphire = #74C7EC
+blue = #89B4FA
+lavender = #B4BDF8
+text = #CDD6F4
+subtext1 = #BAC2DE
+subtext0 = #A6ADC8
+overlay2 = #9399B2
+overlay1 = #7F849C
+overlay0 = #6C7086
+surface2 = #585B70
+surface1 = #45475A
+surface0 = #313244
+base = #1E1E2E
+mantle = #181825
+crust = #11111B
+
+
+[Rose Pine]
+base = #191724
+surface = #1f1d2e
+overlay = #26233a
+muted = #6e6a86
+subtle = #908caa
+text = #e0def4
+love = #eb6f92
+gold = #f6c177
+rose = #ebbcba
+pine = #31748f
+foam = #9ccfd8
+iris = #c4a7e7
+highlightLow = #21202e
+highlightMed = #403d52
+highlightHigh = #524f67
