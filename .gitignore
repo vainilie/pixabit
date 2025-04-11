@@ -53,6 +53,7 @@ cover/
 
 # Environments
 .env # <<< CRITICAL: Ignore the file with secrets
+.env.bak
 .venv/
 venv/
 env/
