@@ -339,7 +339,7 @@ class HabiticaAPI:
             traceback.print_exc()  # Print full traceback for these cases
             raise  # Re-raise the unexpected error
 
-    def _request_or(
+    def _request_original(
         self, method: str, endpoint: str, **kwargs: Any
     ) -> HabiticaApiResponse:
         """

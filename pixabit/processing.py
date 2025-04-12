@@ -50,16 +50,82 @@ class TaskProcessor:
         # --- Fetch and store user context needed for damage calc ---
         self.user_data: Dict[str, Any] = {}
         self.party_data: Dict[str, Any] = {}
-        self.user_con: int = 0
-        self.user_stealth: int = 0  # Current stealth points
+
+        self.game_content: Dict[str, Any] = {}  # To store /content response
+        self.gear_stats_lookup: Dict[str, Dict] = {}  # To store content.gear.flat
+        self.user_con: int = 0  # Effective CON
+        self.user_stealth: int = 0
         self.is_sleeping: bool = False
         self.is_on_boss_quest: bool = False
         self.boss_str: float = 0.0
 
+        # --- Fetch Game Content (ONCE) ---
+        self.console.log("  - Fetching game content (for gear stats)...")
+        # The /content endpoint response is usually NOT wrapped in {success, data}
+        raw_content = self.api_client.get("/content")  # Use basic GET
+        if isinstance(raw_content, dict):
+            self.game_content = raw_content
+            # Create a direct lookup for gear stats: gear_key -> {con: X, str: Y ...}
+            self.gear_stats_lookup = self.game_content.get("gear", {}).get("flat", {})
+            if not self.gear_stats_lookup:
+                self.console.log(
+                    "  - [Warning] Could not find gear data in /content response."
+                )
+        else:
+            self.console.log("  - [Warning] Failed to fetch or parse game content.")
         try:
             self.console.log("  - Fetching user data for context...")
             self.user_data = self.api_client.get_user_data()  # Use API client method
             # Use .get with defaults for safe access
+
+            # --- Fetch User Data (as before) ---
+            self.console.log("  - Fetching full user data for context...")
+            self.user_data = self.api_client.get_user_data()
+            if not self.user_data:
+                raise ValueError("Failed to fetch user data")
+            # -----------------------
+
+            # --- Calculate EFFECTIVE CON (Using Content Lookup) ---
+            base_stats = self.user_data.get("stats", {})
+            buffs = base_stats.get("buffs", {})
+            # Get the dictionary of equipped gear KEYS (e.g., {"weapon": "weapon_warrior_6", ...})
+            equipped_gear_keys = (
+                self.user_data.get("items", {}).get("gear", {}).get("equipped", {})
+            )
+
+            # 1. Base CON (includes allocated points, class/level base from user data)
+            base_con = base_stats.get("con", 0)
+
+            # 2. Buff CON
+            buff_con = buffs.get("con", 0)
+
+            # 3. Gear CON Bonus (Lookup equipped keys in content data)
+            gear_con_bonus = 0
+            if isinstance(equipped_gear_keys, dict) and self.gear_stats_lookup:
+                # Iterate through the VALUES of the equipped dict, which are the gear keys/IDs
+                for gear_key in equipped_gear_keys.values():
+                    if not gear_key:
+                        continue  # Skip if slot is empty
+                    # Look up this gear key in the stats lookup created from /content
+                    gear_item_stats = self.gear_stats_lookup.get(gear_key)
+                    if isinstance(gear_item_stats, dict):
+                        # Add the CON value found in the content data for this item
+                        gear_con_bonus += gear_item_stats.get("con", 0)
+            # ---------------------------------------------------------
+
+            # Calculate final effective CON
+            self.user_con = base_con + buff_con + gear_con_bonus
+            # --------------------------------------------------
+
+            # --- Get other relevant context from user data ---
+            self.user_stealth = buffs.get("stealth", 0)
+            self.is_sleeping = self.user_data.get("preferences", {}).get("sleep", False)
+            # -----------------------------------------------
+
+            self.console.log(
+                f"  - User Context: Effective CON={self.user_con}, Stealth={self.user_stealth}, Sleeping={self.is_sleeping}"
+            )
+
             self.user_con = self.user_data.get("stats", {}).get("con", 0)
             self.user_stealth = (
                 self.user_data.get("stats", {}).get("buffs", {}).get("stealth", 0)
