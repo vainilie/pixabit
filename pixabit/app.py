@@ -1,9 +1,11 @@
 # pixabit/cli/app.py
 import datetime  # For stats display
+import difflib  # For fuzzy matching
 import json  # Keep for temp display if needed
 import os
 import sys
 import time  # Keep for potential pauses if needed
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set
 
 import timeago  # For stats display
@@ -111,7 +113,7 @@ class CliApp:
         )  # Keep for debug if needed
         while True:
             categories = {
-                "Manage Tasks": ["List Broken Tasks", "Unlink Broken Tasks"],
+                "Manage Tasks": ["Handle Broken Tasks", "Replicate Monthly Setup"],
                 "Manage Tags": [
                     "Display All Tags",
                     "Display Unused Tags",
@@ -346,24 +348,29 @@ class CliApp:
                 # Step 5: Fetch All Challenges
                 progress.update(
                     refresh_task_id,
-                    description="[cyan]Step X/5: Fetching Challenges...",
+                    description="[cyan]Step /5: Fetching Challenges...",
                 )
                 self.console.log("Starting: Fetch Challenges")
                 try:
-                    # Fetch ALL accessible challenges once
-                    # Use member_only=False if replicate feature needs owned ones
-                    fetched_challenges = self.api_client.get_challenges(
-                        member_only=False
-                    )
-                    self.all_challenges_cache = (
-                        fetched_challenges
-                        if isinstance(fetched_challenges, list)
-                        else []
-                    )
-                    self.console.log(
-                        f"Fetched and cached {len(self.all_challenges_cache)} challenges."
-                    )
-                    progress.update(refresh_task_id, advance=1)
+                    if self.all_challenges_cache is None:
+                        self.console.log("Fetching challenges...")
+                        # Fetch ALL accessible challenges once
+                        # Use member_only=False if replicate feature needs owned ones
+                        fetched_challenges = self.api_client.get_challenges(
+                            member_only=True
+                        )
+                        self.all_challenges_cache = (
+                            fetched_challenges
+                            if isinstance(fetched_challenges, list)
+                            else []
+                        )
+                        self.console.log(
+                            f"Fetched and cached {len(self.all_challenges_cache)} challenges."
+                        )
+                        progress.update(refresh_task_id, advance=1)
+                    else:
+                        progress.update(refresh_task_id, advance=1)
+
                 except Exception as e:
                     progress.update(
                         refresh_task_id,
@@ -484,10 +491,12 @@ class CliApp:
         refresh_needed = False
         try:
             # --- Action mapping ---
-            if action_name == "List Broken Tasks":
-                self._display_broken_tasks()
-            elif action_name == "Unlink Broken Tasks":
-                refresh_needed = self._unlink_broken_tasks_action()
+            # if action_name == "List Broken Tasks":
+            #     self._display_broken_tasks()
+            if action_name == "Handle Broken Tasks":
+                refresh_needed = self._handle_broken_tasks_action()
+            if action_name == "Replicate Monthly Setup":
+                refresh_needed = self._replicate_monthly_setup_action()
             # --- Tags ---
             elif action_name == "Display All Tags":
                 self._display_tags()
@@ -994,12 +1003,19 @@ class CliApp:
         """Handles listing challenges the user has JOINED (not owned)
         and leaving a selected one, optionally unlinking tasks first."""
         if self.all_challenges_cache is None:
-            self.console.print(
-                "[yellow]Challenge list not loaded. Please refresh data first (App -> Refresh Data).[/yellow]"
-            )
+            self.console.print("[yellow]Challenge  cache list not loaded.")
+            try:
+                # Fetch challenges user has access to (includes owned and joined)
+                all_accessible_challenges = self.api_client.get_challenges(
+                    member_only=True
+                )
+            except Exception as e:
+                self.console.print(f"[error]Error fetching challenges: {e}[/error]")
             return False
+        else:
+            all_accessible_challenges = self.all_challenges_cache
 
-        # Filter self.all_challenges_cache instead of fetching anew
+        # Filter self.all_challenges_cache instead of fetching a new list
         user_id = self.api_client.user_id
         joined_challenges = [
             ch
@@ -1008,12 +1024,6 @@ class CliApp:
         ]
 
         #   self.console.print("\nFetching challenges you are a member of...")
-        try:
-            # Fetch challenges user has access to (includes owned and joined)
-            all_accessible_challenges = self.api_client.get_challenges(member_only=True)
-        except Exception as e:
-            self.console.print(f"[error]Error fetching challenges: {e}[/error]")
-            return False
 
         # --- ADD FILTERING LOGIC HERE ---
         joined_challenges = []
@@ -1044,9 +1054,9 @@ class CliApp:
         )
         # ... (Keep the same table columns as before: Num, Name, ID, Guild?, Memb, Created, Updated, Prize) ...
         table.add_column("Num", style="dim", width=4, justify="right")
-        table.add_column("Name", style="file", min_width=25, ratio=3, no_wrap=False)
+        table.add_column("Name", style="sapphire", min_width=25, ratio=3, no_wrap=False)
         #        table.add_column("ID", style="magenta", width=36)
-        table.add_column("Guild?", style="yellow", width=6)
+        table.add_column("Guild?", style="yellow", width=15)
         table.add_column("Memb", style="blue", width=5, justify="right")
         table.add_column("Created", style="green", width=11)
         #        table.add_column("Updated", style="green", min_width=12, ratio=1)
@@ -1183,12 +1193,11 @@ class CliApp:
             self.console.print(
                 "  [2] Unlink All Tasks (Remove Permanently) & Leave Challenge"
             )
-            self.console.print("  [3] Leave Challenge (Keep Tasks Linked)")
             self.console.print("  [0] Cancel")
 
             action_choice = IntPrompt.ask(
                 "Enter your choice",
-                choices=["0", "1", "2", "3"],
+                choices=["0", "1", "2"],
                 show_choices=False,
                 console=self.console,
             )
@@ -1199,81 +1208,61 @@ class CliApp:
                 self.console.print("Operation cancelled.")
                 return False
 
-            # --- Perform Unlinking if chosen (Actions 1 or 2) ---
-            if action_choice in [1, 2]:
-                if not tasks:
-                    self.console.print(
-                        "[yellow]No tasks to unlink for this challenge.[/yellow]"
-                    )
-                    # Continue to leaving step
-                else:
-                    keep_option = "keep" if action_choice == 1 else "remove"
-                    action_desc = (
-                        "Keeping personal copies"
-                        if keep_option == "keep"
-                        else "Removing permanently"
-                    )
-                    if Confirm.ask(
-                        f"Unlink all {len(tasks)} tasks ({action_desc})?",
-                        default=True,
-                        console=self.console,
-                    ):
-                        self.console.print(
-                            f"Attempting to unlink all tasks ({action_desc})..."
-                        )
-                        try:
-                            unlink_response = (
-                                self.api_client.unlink_all_challenge_tasks(
-                                    selected_challenge_id, keep=keep_option
-                                )
-                            )
-                            self.console.print(
-                                "[green]Tasks unlinked successfully.[/green]"
-                            )
-                            # Even if unlinking works, we still need to leave. Proceed.
-                        except Exception as e:
-                            self.console.print(
-                                f"[error]Error unlinking tasks: {e}. Cannot proceed with leaving.[/error]"
-                            )
-                            return False  # Stop if unlinking failed when requested
-                    else:
-                        self.console.print(
-                            "Unlinking cancelled. Aborting leave action."
-                        )
-                        return False  # User cancelled the unlink step
+            # Determine keep parameter based on choice 1 or 2
+            keep_param = "keep-all" if action_choice == 1 else "remove-all"
+            action_desc = (
+                "Keeping personal copies"
+                if keep_param == "keep-all"
+                else "Removing permanently"
+            )
 
-            # --- Perform Leave Challenge (Actions 1, 2 after unlink, or 3 directly) ---
-            if action_choice in [1, 2, 3]:
-                if Confirm.ask(
-                    f"Confirm leaving challenge '{selected_challenge_name}'?",
-                    default=True,
-                    console=self.console,
-                ):
-                    self.console.print(
-                        f"Attempting to leave challenge '{selected_challenge_name}'..."
+            # Confirm leaving with the chosen task handling
+            if Confirm.ask(
+                f"Confirm leaving challenge '{selected_challenge_name}' and handling tasks by '{action_desc}'?",
+                default=True,
+                console=self.console,
+            ):
+                self.console.print(
+                    f"Attempting to leave challenge '{selected_challenge_name}' ({action_desc})..."
+                )
+                try:
+                    # Single API call using the new method
+                    response = self.api_client.leave_challenge(
+                        selected_challenge_id, keep=keep_param
                     )
-                    try:
-                        response = self.api_client.post(
-                            f"/challenges/{selected_challenge_id}/leave"
-                        )
+                    self.console.print(
+                        f"[bold green]Successfully left challenge '{selected_challenge_name}'.[/bold green]"
+                    )
+
+                    # !! ADD: Manually update the cache !!
+                    if self.all_challenges_cache is not None:
+                        self.all_challenges_cache = [
+                            ch
+                            for ch in self.all_challenges_cache
+                            if ch.get("id") != selected_challenge_id
+                        ]
                         self.console.print(
-                            f"[bold green]Successfully left challenge '{selected_challenge_name}'.[/bold green]"
+                            "[dim]In-memory challenge cache updated.[/dim]"
                         )
-                        should_refresh = True  # Refresh needed after leaving
-                    except Exception as e:
-                        self.console.print(
-                            f"[error]Error leaving challenge {selected_challenge_id}: {e}[/error]"
-                        )
-                        should_refresh = False  # No refresh on error
-                else:
-                    self.console.print("Leave challenge cancelled.")
+
+                    # !! CHANGE: Set should_refresh to False even on success !!
                     should_refresh = False
 
-            return should_refresh  # Return True only if leave was successful
+                except Exception as e:
+                    self.console.print(
+                        f"[bold red]Error leaving challenge {selected_challenge_id}: {e}[/bold red]"
+                    )
+                    should_refresh = False  # No refresh on error
+            else:
+                self.console.print("Leave challenge cancelled.")
+                should_refresh = False
 
+            # !! CHANGE: Return False so _execute_action doesn't refresh !!
+            return False  # Always return False now for this action
+
+        # except blocks remain the same
         except (ValueError, IndexError):
-            # ... (Handle errors as before) ...
-            self.console.print("[error]Invalid selection.[/error]")
+            self.console.print("[bold red]Invalid selection.[/bold red]")
             return False
         except KeyboardInterrupt:
             self.console.print("\nOperation cancelled by user.")
@@ -1281,60 +1270,677 @@ class CliApp:
 
     # >> REPLICATE MONTHLY SETUP
     def _replicate_monthly_setup_action(self) -> bool:
-        """Handles the action of replicating monthly setup."""
+        """Replicates attributes, tags, and optionally position from an old challenge to a new one."""
+        self.console.print("\n--- Replicate Monthly Challenge Setup ---")
+        should_refresh = False
+        old_challenge_id = None
+        new_challenge_id = None
 
-        if self.all_challenges_cache is None:
-            self.console.print(
-                "[yellow]Challenge list not loaded. Please refresh data first (App -> Refresh Data).[/yellow]"
+        try:
+            # --- Select OLD Challenge (from Broken Tasks) ---
+            self.console.print("Gathering potential source (old/broken) challenges...")
+            broken_ids = self.cats_data.get("broken", [])
+            if not broken_ids:
+                self.console.print(
+                    "[yellow]No broken tasks found to identify potential old challenges.[/yellow]"
+                )
+                # You might want to ask for manual ID input here as a fallback, or just return
+                return False
+
+            # Group broken tasks by challenge ID to get unique old challenges
+            old_challenges_found = {}  # Store {id: name}
+            for task_id in broken_ids:
+                task_detail = self.processed_tasks.get(task_id)
+                if task_detail:
+                    challenge_id = task_detail.get("challenge_id")
+                    if challenge_id and challenge_id not in old_challenges_found:
+                        # Use shortName if available, else the ID itself
+                        challenge_name = task_detail.get("challenge", challenge_id)
+                        old_challenges_found[challenge_id] = challenge_name
+
+            if not old_challenges_found:
+                self.console.print(
+                    "[yellow]Could not extract challenge info from broken tasks.[/yellow]"
+                )
+                return False
+
+            old_challenge_list_for_selection = list(
+                old_challenges_found.items()
+            )  # List of (id, name) tuples
+
+            old_challenge_table = Table(
+                title="Select Source (Old/Broken) Challenge", box=box.ROUNDED
             )
-            return False
+            old_challenge_table.add_column("Num", style="dim", width=4)
+            old_challenge_table.add_column("Name / ID", style="cyan")
+            old_challenge_table.add_column("ID", style="magenta")
+
+            for i, (ch_id, ch_name) in enumerate(old_challenge_list_for_selection):
+                old_challenge_table.add_row(str(i + 1), ch_name, ch_id)
+
+            self.console.print(old_challenge_table)
+            old_choice = IntPrompt.ask(
+                f"Enter number for OLD challenge (Source) (1-{len(old_challenge_list_for_selection)})",
+                choices=[
+                    str(i) for i in range(1, len(old_challenge_list_for_selection) + 1)
+                ],
+                show_choices=False,
+                console=self.console,
+            )
+            old_challenge_id, old_challenge_name = old_challenge_list_for_selection[
+                old_choice - 1
+            ]
+
+            # --- Select NEW Challenge (from Active Cache) ---
+            self.console.print("\nLoading current challenges to select destination...")
+            if self.all_challenges_cache is None:
+                self.console.print(
+                    "[yellow]Challenge list not loaded. Please refresh data first.[/yellow]"
+                )
+                return False
+
+                # Filter self.all_challenges_cache instead of fetching a new list
+            user_id = self.api_client.user_id
+            challenges_to_display = [
+                ch
+                for ch in self.all_challenges_cache
+                if ch.get("leader", {}).get("_id") != user_id
+            ]
+
+            #   self.console.print("\nFetching challenges you are a member of...")
+
+            # # --- ADD FILTERING LOGIC HERE ---
+            # joined_challenges = []
+            # user_id = (
+            #     self.api_client.user_id
+            # )  # Get the current user's ID from the api_client instance
+            # for challenge in self.all_challenges_cache:
+            #     # Keep the challenge only if the leader's ID does NOT match the user's ID
+            #     leader_id = challenge.get("leader", {}).get("_id")
+            #     if leader_id and leader_id != user_id:
+            #         joined_challenges.append(challenge)
+
+            if not challenges_to_display:
+                self.console.print(
+                    "[yellow]No current challenges found to select as destination.[/yellow]"
+                )
+                return False
+
+            new_challenge_table = Table(
+                title="Select Destination (New) Challenge", box=box.ROUNDED
+            )
+            new_challenge_table.add_column("Num", style="dim", width=4)
+            new_challenge_table.add_column("Name", style="cyan")
+            new_challenge_table.add_column("ID", style="magenta")
+
+            # Filter out the selected old challenge ID from the choices for the new one
+            valid_new_challenges = [
+                ch
+                for ch in challenges_to_display
+                if ch.get("id") and ch.get("id") != old_challenge_id
+            ]
+
+            if not valid_new_challenges:
+                self.console.print(
+                    f"[yellow]No other challenges found to select as destination.[/yellow]"
+                )
+                return False
+
+            for i, ch in enumerate(valid_new_challenges):
+                new_challenge_table.add_row(
+                    str(i + 1), ch.get("name", "N/A"), ch.get("id")
+                )
+
+            self.console.print(new_challenge_table)
+
+            new_choice = IntPrompt.ask(
+                f"Enter number for NEW challenge (Destination) (1-{len(valid_new_challenges)})",
+                choices=[str(i) for i in range(1, len(valid_new_challenges) + 1)],
+                show_choices=False,
+                console=self.console,
+            )
+            new_challenge = valid_new_challenges[new_choice - 1]
+            new_challenge_id = new_challenge["id"]
+            new_challenge_name = new_challenge.get("name", new_challenge_id)
+
+            # --- Confirm Selection ---
+            self.console.print(
+                f"\nSource (Old): [cyan]'{old_challenge_name}'[/] ({old_challenge_id})"
+            )
+            self.console.print(
+                f"Destination (New): [cyan]'{new_challenge_name}'[/] ({new_challenge_id})"
+            )
+            if not Confirm.ask(
+                "Confirm challenge selection?", default=True, console=self.console
+            ):
+                return False
+
+            # & --- Step 2: Get Task Lists ---
+            self.console.print(
+                f"Gathering tasks for OLD challenge ID '{old_challenge_id}' from processed data..."
+            )
+            # Filter processed tasks instead of calling API for old challenge
+            old_tasks = [
+                task_data
+                for task_data in self.processed_tasks.values()
+                if task_data.get("challenge_id") == old_challenge_id
+            ]
+
+            if not old_tasks:
+                self.console.print(
+                    f"[yellow]Warning: No tasks found linked to old challenge ID '{old_challenge_id}' in processed data.[/yellow]"
+                )
+                # Ask user if they want to continue without source tasks?
+                if not Confirm.ask(
+                    "Continue anyway (no properties will be replicated)?",
+                    default=False,
+                    console=self.console,
+                ):
+                    return False
+
+            self.console.print(
+                f"Fetching tasks for NEW challenge '{new_challenge_name}'..."
+            )
+            new_tasks = [
+                task_data
+                for task_data in self.processed_tasks.values()
+                if task_data.get("challenge_id") == new_challenge_id
+            ]
+            self.console.print(
+                f"Found {len(old_tasks)} tasks linked to old challenge ID, {len(new_tasks)} tasks in new challenge."
+            )
+
+            # --- 3. Filter Task Type (Optional) ---
+            task_type_filter = None
+            if Confirm.ask(
+                "Replicate for [cyan]Dailies only[/]? (No = All task types)",
+                default=True,
+                console=self.console,
+            ):
+                task_type_filter = "daily"
+                old_tasks = [t for t in old_tasks if t.get("type") == "daily"]
+                new_tasks = [t for t in new_tasks if t.get("type") == "daily"]
+                self.console.print(
+                    f"Filtered to {len(old_tasks)} old dailies, {len(new_tasks)} new dailies."
+                )
+
+            # --- 4. Match Tasks (Fuzzy) ---
+            similarity_threshold = 0.85  # Adjust as needed (0.0 to 1.0)
+            matched_tasks = []  # List of tuples: (old_task_dict, new_task_dict)
+            # Use a set to track new tasks already matched to prevent duplicates
+            matched_new_task_ids = set()
+
+            self.console.print(
+                f"Matching tasks with similarity > {similarity_threshold*100}%..."
+            )
+            for old_task in old_tasks:
+                best_match_new_task = None
+                highest_ratio = 0.0
+                old_text = old_task.get("text", "")
+                if not old_text:
+                    continue  # Skip old tasks without text
+
+                for new_task in new_tasks:
+                    new_id = new_task.get("id")
+                    # Skip new tasks already matched
+                    if not new_id or new_id in matched_new_task_ids:
+                        continue
+
+                    new_text = new_task.get("text", "")
+                    if not new_text:
+                        continue  # Skip new tasks without text
+
+                    # Calculate similarity ratio
+                    matcher = difflib.SequenceMatcher(None, old_text, new_text)
+                    ratio = matcher.ratio()
+
+                    # Check if this is the best match found so far for this old_task
+                    if ratio > highest_ratio and ratio >= similarity_threshold:
+                        highest_ratio = ratio
+                        best_match_new_task = new_task
+
+                # If a good enough match was found for this old_task, store it
+                if best_match_new_task:
+                    matched_tasks.append((old_task, best_match_new_task))
+                    # Mark the new task as matched so it can't be matched again
+                    matched_new_task_ids.add(best_match_new_task["id"])
+
+            if not matched_tasks:
+                self.console.print(
+                    "[yellow]No matching tasks found based on the criteria.[/yellow]"
+                )
+                return False
+
+            self.console.print(f"Found {len(matched_tasks)} potential task pairs:")
+            for old, new in matched_tasks:
+                self.console.print(
+                    f"  - [dim]'{old.get('text', 'N/A')}'[/] -> [cyan]'{new.get('text', 'N/A')}'[/]"
+                )
+
+            if not Confirm.ask(
+                "Proceed with replicating attributes and tags for these pairs?",
+                default=True,
+                console=self.console,
+            ):
+                self.console.print("Replication cancelled.")
+                return False
+
+            # --- 5. Apply Attributes & Tags ---
+            self.console.print("Applying attributes and tags...")
+            replication_errors = 0
+            for i, (old_task, new_task) in enumerate(matched_tasks):
+                old_task_id = old_task["id"]
+                new_task_id = new_task["id"]
+                new_task_text = new_task.get("text", new_task_id)
+                self.console.print(
+                    f"  ({i+1}/{len(matched_tasks)}) Processing: '{new_task_text}'"
+                )
+
+                # Attribute
+                old_attribute = old_task.get("attribute", "str")  # Default to 'str'
+                try:
+                    self.api_client.set_attribute(new_task_id, old_attribute)
+                    self.console.print(f"    - Set attribute to: {old_attribute}")
+                except Exception as e:
+                    self.console.print(
+                        f"    [red]- Error setting attribute for {new_task_id}: {e}[/red]"
+                    )
+                    replication_errors += 1
+
+                # Tags
+                old_tags = old_task.get("tags", [])
+                # TODO: Add logic here to filter out unwanted tags if necessary
+                # e.g., filter out tags matching old_challenge_id or specific meta-tags
+                tags_to_add = old_tags
+                if tags_to_add:
+                    self.console.print(f"    - Adding {len(tags_to_add)} tags...")
+                    for tag_id in tags_to_add:
+                        try:
+                            self.api_client.add_tag_to_task(new_task_id, tag_id)
+                            # time.sleep(0.2) # Optional small delay between tag adds
+                        except Exception as e:
+                            # Handle cases where tag already exists on task (API might error)
+                            if "already has the tag" in str(e).lower():
+                                self.console.print(
+                                    f"      - Tag {tag_id} likely already exists."
+                                )
+                            else:
+                                self.console.print(
+                                    f"      [red]- Error adding tag {tag_id} for {new_task_id}: {e}[/red]"
+                                )
+                                replication_errors += 1
+
+            self.console.print("Attribute and tag replication finished.")
+            if replication_errors > 0:
+                self.console.print(
+                    f"[yellow]Completed with {replication_errors} errors.[/yellow]"
+                )
+
+            # --- 6. Apply Position (Optional) ---
+            if Confirm.ask(
+                "\nAttempt to replicate task order? (This can take a LONG time)",
+                default=False,
+                console=self.console,
+            ):
+                self.console.print("Determining task order...")
+                # Get the order of the OLD tasks that were successfully matched
+                old_task_order_map = {task["id"]: i for i, task in enumerate(old_tasks)}
+
+                # Sort the NEW tasks based on the original order of their OLD counterparts
+                # This gives the desired final order for the new tasks
+                def sort_key(new_task_match_tuple):
+                    old_task_id = new_task_match_tuple[0][
+                        "id"
+                    ]  # Get old task id from the tuple
+                    return old_task_order_map.get(
+                        old_task_id, float("inf")
+                    )  # Place unmatched ones last
+
+                # Sort the matched_tasks list itself based on the old task order
+                sorted_matched_tasks = sorted(matched_tasks, key=sort_key)
+                # Extract the new task IDs in the desired final order
+                desired_new_task_order_ids = [
+                    new_task["id"] for old_task, new_task in sorted_matched_tasks
+                ]
+
+                if not desired_new_task_order_ids:
+                    self.console.print(
+                        "[yellow]Could not determine desired order.[/yellow]"
+                    )
+                else:
+                    num_to_move = len(desired_new_task_order_ids)
+                    est_time_secs = num_to_move * 2.1  # Estimate time
+                    self.console.print(
+                        f"Will move {num_to_move} tasks. Estimated time: ~{est_time_secs:.1f} seconds."
+                    )
+                    if Confirm.ask(
+                        "Proceed with moving tasks?", default=True, console=self.console
+                    ):
+                        self.console.print("Moving tasks (in reverse order)...")
+                        move_errors = 0
+                        # Iterate in REVERSE of the desired final order
+                        for task_id_to_move in reversed(desired_new_task_order_ids):
+                            try:
+                                self.console.print(
+                                    f"  - Moving task {task_id_to_move} to top (pos 0)..."
+                                )
+                                self.api_client.move_task_to_position(
+                                    task_id_to_move, 0
+                                )
+                                time.sleep(2.1)  # IMPORTANT: Wait for rate limit
+                            except Exception as e:
+                                self.console.print(
+                                    f"  [red]- Error moving task {task_id_to_move}: {e}[/red]"
+                                )
+                                move_errors += 1
+                        self.console.print("Task moving finished.")
+                        if move_errors > 0:
+                            self.console.print(
+                                f"[yellow]Completed moving with {move_errors} errors.[/yellow]"
+                            )
+                    else:
+                        self.console.print("Task moving cancelled.")
+            else:
+                self.console.print("Skipping position replication.")
+
+            # --- 7. Final Cleanup (Optional) ---
+            self.console.print("\nReplication process complete.")
+            if old_challenge_id:  # Ensure we have the old challenge ID
+                if Confirm.ask(
+                    f"\nDo you want to unlink all tasks from the OLD challenge '{old_challenge_name}' ({old_challenge_id}) now?",
+                    default=False,
+                    console=self.console,
+                ):
+                    # Ask whether to remove tasks permanently
+                    remove_permanently = Confirm.ask(
+                        "Remove tasks permanently? (No = Keep personal copies)",
+                        default=False,
+                        console=self.console,
+                    )  # Default to safer option
+                    keep_param = "remove-all" if remove_permanently else "keep-all"
+                    action_desc = (
+                        "Removing permanently"
+                        if keep_param == "remove-all"
+                        else "Keeping personal copies"
+                    )
+
+                    if Confirm.ask(
+                        f"Confirm unlinking all tasks from OLD challenge ({action_desc})?",
+                        default=True,
+                        console=self.console,
+                    ):
+                        self.console.print(
+                            f"Attempting to unlink all tasks from {old_challenge_id} ({action_desc})..."
+                        )
+                        try:
+                            # Use the corrected API method
+                            response = self.api_client.unlink_all_challenge_tasks(
+                                old_challenge_id, keep=keep_param
+                            )
+                            self.console.print(
+                                f"[bold green]Successfully unlinked tasks from old challenge '{old_challenge_name}'.[/bold green]"
+                            )
+
+                            should_refresh = (
+                                True  # Refresh needed after modifying tasks
+                            )
+                        except Exception as e:
+                            self.console.print(
+                                f"[bold red]Error unlinking tasks from old challenge {old_challenge_id}: {e}[/bold red]"
+                            )
+                    else:
+                        self.console.print("Unlinking from old challenge cancelled.")
+                else:
+                    self.console.print("Skipping cleanup of old challenge tasks.")
+
+        except Exception as e:
+            self.console.print(
+                f"[bold red]An error occurred during the replication process: {e}[/bold red]"
+            )
+            self.console.print_exception(
+                show_locals=False
+            )  # Show traceback for debugging
+            should_refresh = False  # Don't refresh if the process errored out
+
+        return should_refresh  # Return True if major steps likely succeeded
 
         # Use self.all_challenges_cache to display options
         challenges_to_display = self.all_challenges_cache
         # ... build table from challenges_to_display ...
         # ... prompt user to select old/new numbers based on this list ...
 
-    # >> UNLINK ALL CHALLENGE TASKS
-    def unlink_all_challenge_tasks(
-        self, challenge_id: str, keep: str = "keep-all"
-    ) -> Dict[str, Any]:
-        """
-        Unlinks ALL tasks associated with a challenge, optionally removing them from users.
-        NOTE: Uses the /tasks/unlink-all/ endpoint.
+    # >> HANDLE BROKEN TASKS
 
-        Args:
-            challenge_id (str): The ID of the challenge whose tasks should be unlinked.
-            keep (str): Determines the behavior for users. Habitica API documentation for
-                        this endpoint specifies 'keep-all' or 'remove-all'.
-                        Defaults to 'keep-all'.
+    # Add near other imports at the top of pixabit/menu.py if not present
+    # Ensure Table, Confirm, IntPrompt, Prompt, box are imported from .utils.display
 
-        Returns:
-            Dict[str, Any]: API response confirming the bulk unlink action. Returns empty dict `{}`
-                            on unexpected non-dict response.
+    # Replace or add this method inside the CliApp class in pixabit/menu.py
 
-        Raises:
-            ValueError: If `keep` is not 'keep-all' or 'remove-all'.
-            requests.exceptions.RequestException: For network or API errors.
-            ValueError: For invalid JSON responses.
-        """
-        # Use the correct keep parameter values based on user-provided doc snippet
-        if keep not in ["keep-all", "remove-all"]:
-            raise ValueError(
-                "keep must be 'keep-all' or 'remove-all' for this endpoint"
+    def _handle_broken_tasks_action(self) -> bool:
+        """Groups broken tasks by challenge, allows bulk or individual unlinking."""
+        broken_ids = self.cats_data.get("broken", [])
+        should_refresh = False
+
+        if not broken_ids:
+            self.console.print("[green]✅ No broken tasks found.[/green]")
+            return False
+
+        # --- Group broken tasks by challenge ID ---
+        broken_by_challenge = defaultdict(list)
+        challenge_names = {}  # Store challenge names for display
+        valid_broken_tasks = (
+            []
+        )  # Store tasks with details for individual selection later
+
+        for task_id in broken_ids:
+            task_detail = self.processed_tasks.get(task_id)
+            if task_detail:
+                challenge_id = task_detail.get("challenge_id")
+                if (
+                    challenge_id
+                ):  # Only include tasks that still have a challenge ID linkage
+                    challenge_name = task_detail.get(
+                        "challenge", challenge_id
+                    )  # Use shortName or ID
+                    task_info = {"id": task_id, "text": task_detail.get("text", "N/A")}
+                    broken_by_challenge[challenge_id].append(task_info)
+                    if challenge_id not in challenge_names:
+                        challenge_names[challenge_id] = (
+                            challenge_name  # Store first encountered name
+                        )
+                    valid_broken_tasks.append(
+                        {
+                            **task_info,
+                            "challenge_id": challenge_id,
+                            "challenge_name": challenge_name,
+                        }
+                    )
+
+        if not broken_by_challenge:
+            self.console.print(
+                "[yellow]No broken tasks with valid challenge links found.[/yellow]"
+            )
+            return False
+
+        # --- Display Summary by Challenge ---
+        self.console.print(
+            f"\n[yellow]Found {len(valid_broken_tasks)} broken tasks across {len(broken_by_challenge)} challenges:[/yellow]"
+        )
+        challenge_table = Table(title="Challenges with Broken Tasks", box=box.ROUNDED)
+        challenge_table.add_column("Num", style="dim", width=4)
+        challenge_table.add_column("Challenge Name / ID", style="cyan")
+        challenge_table.add_column(
+            "Broken Task Count", style="magenta", justify="right"
+        )
+
+        challenge_list_for_selection = list(broken_by_challenge.keys())
+        for i, challenge_id in enumerate(challenge_list_for_selection):
+            name = challenge_names.get(challenge_id, challenge_id)
+            count = len(broken_by_challenge[challenge_id])
+            challenge_table.add_row(str(i + 1), name, str(count))
+
+        self.console.print(challenge_table)
+
+        # --- Prompt for Action Mode ---
+        self.console.print("\nHow do you want to manage these broken tasks?")
+        self.console.print("  [1] Manage by Challenge (Bulk Unlink)")
+        self.console.print("  [2] Manage Individually (Select One Task)")
+        self.console.print("  [0] Cancel")
+
+        try:
+            mode_choice = IntPrompt.ask(
+                "Enter choice",
+                choices=["0", "1", "2"],
+                show_choices=False,
+                console=self.console,
             )
 
-        # Use the correct endpoint path /tasks/unlink-all/
-        endpoint = f"/tasks/unlink-all/{challenge_id}?keep={keep}"
+            if mode_choice == 0:
+                self.console.print("Operation cancelled.")
+                return False
 
-        # Make the POST request (no data payload needed)
-        result = self.post(endpoint)  # Use self.post which handles _request internally
+            # --- Mode 1: Manage by Challenge (Bulk) ---
+            elif mode_choice == 1:
+                challenge_num_choice = IntPrompt.ask(
+                    f"Enter challenge number to manage (1-{len(challenge_list_for_selection)})",
+                    choices=[
+                        str(i) for i in range(1, len(challenge_list_for_selection) + 1)
+                    ],
+                    show_choices=False,
+                    console=self.console,
+                )
+                selected_challenge_id = challenge_list_for_selection[
+                    challenge_num_choice - 1
+                ]
+                selected_challenge_name = challenge_names.get(
+                    selected_challenge_id, selected_challenge_id
+                )
+                tasks_in_selected_challenge = broken_by_challenge[selected_challenge_id]
 
-        if isinstance(result, dict):
-            return result
-        print(
-            f"Warning: Expected dict from POST {endpoint}, got {type(result)}. Returning empty dict."
-        )
-        return {}
+                self.console.print(
+                    f"\nTasks for challenge [cyan]'{selected_challenge_name}'[/]:"
+                )
+                for task_info in tasks_in_selected_challenge:
+                    self.console.print(
+                        f"  - {task_info['text']} ([dim]{task_info['id']}[/dim])"
+                    )
+
+                keep_personal_copy = Confirm.ask(
+                    f"\nChoose unlink action for all {len(tasks_in_selected_challenge)} tasks in this challenge:\nKeep personal copies?",
+                    default=True,
+                    console=self.console,
+                )
+                keep_param = "keep-all" if keep_personal_copy else "remove-all"
+                action_desc = (
+                    "keeping personal copies"
+                    if keep_param == "keep-all"
+                    else "removing permanently"
+                )
+
+                if Confirm.ask(
+                    f"Bulk-unlink all listed tasks for '{selected_challenge_name}' ({action_desc})?",
+                    default=True,
+                    console=self.console,
+                ):
+                    self.console.print(
+                        f"Attempting bulk unlink for challenge {selected_challenge_id} ({action_desc})..."
+                    )
+                    try:
+                        response = self.api_client.unlink_all_challenge_tasks(
+                            selected_challenge_id, keep=keep_param
+                        )
+                        self.console.print(
+                            f"[bold green]Bulk unlink successful for challenge '{selected_challenge_name}'.[/bold green]"
+                        )
+                        should_refresh = True
+                    except Exception as e:
+                        self.console.print(
+                            f"[bold red]Error during bulk unlink for challenge {selected_challenge_id}: {e}[/bold red]"
+                        )
+                        self.console.print(
+                            "[yellow]Note: This might happen if the challenge was deleted. Try individual unlinking.[/yellow]"
+                        )
+                        should_refresh = False  # Don't refresh if bulk failed
+                else:
+                    self.console.print("Bulk unlink cancelled.")
+                    should_refresh = False
+
+            # --- Mode 2: Manage Individually ---
+            elif mode_choice == 2:
+                # Display all valid broken tasks numbered
+                individual_table = Table(
+                    title="Select Individual Broken Task", box=box.ROUNDED
+                )
+                individual_table.add_column("Num", style="dim", width=4)
+                individual_table.add_column("Task Text", style="cyan")
+                individual_table.add_column("Challenge", style="magenta")
+                individual_table.add_column("Task ID", style="dim")
+
+                for i, task_info in enumerate(valid_broken_tasks):
+                    individual_table.add_row(
+                        str(i + 1),
+                        task_info["text"],
+                        task_info["challenge_name"],
+                        task_info["id"],
+                    )
+
+                self.console.print(individual_table)
+
+                task_num_choice = IntPrompt.ask(
+                    f"Enter number of the task to unlink (1-{len(valid_broken_tasks)})",
+                    choices=[str(i) for i in range(1, len(valid_broken_tasks) + 1)],
+                    show_choices=False,
+                    console=self.console,
+                )
+                selected_task = valid_broken_tasks[task_num_choice - 1]
+                selected_task_id = selected_task["id"]
+                selected_task_text = selected_task["text"]
+
+                keep_personal_copy = Confirm.ask(
+                    f"Keep a personal copy of '{selected_task_text}' after unlinking?",
+                    default=True,
+                    console=self.console,
+                )
+                keep_param = "keep" if keep_personal_copy else "remove"
+                action_desc = (
+                    "keeping personal copy"
+                    if keep_param == "keep"
+                    else "removing permanently"
+                )
+
+                if Confirm.ask(
+                    f"Unlink task '{selected_task_text}' ({action_desc})?",
+                    default=True,
+                    console=self.console,
+                ):
+                    self.console.print(
+                        f"Attempting to unlink task {selected_task_id} ({action_desc})..."
+                    )
+                    try:
+                        response = self.api_client.unlink_task_from_challenge(
+                            selected_task_id, keep=keep_param
+                        )
+                        self.console.print(
+                            f"[bold green]Successfully unlinked task '{selected_task_text}'.[/bold green]"
+                        )
+                        should_refresh = True
+                    except Exception as e:
+                        self.console.print(
+                            f"[bold red]Error unlinking task {selected_task_id}: {e}[/bold red]"
+                        )
+                        should_refresh = False
+                else:
+                    self.console.print("Unlink cancelled.")
+                    should_refresh = False
+
+        except (ValueError, IndexError):
+            self.console.print("[bold red]Invalid selection.[/bold red]")
+            should_refresh = False
+        except KeyboardInterrupt:
+            self.console.print("\nOperation cancelled by user.")
+            should_refresh = False
+
+        return should_refresh
 
     # --------------------------------------------------------------------------
     # 6. STATIC METHODS

@@ -1,7 +1,9 @@
 # pixabit/processing.py
 
 # --- Standard Imports ---
+import json
 import math
+import os
 import time  # Potentially needed if adding delays or logging timestamps
 from typing import Any, Dict, List, Optional
 
@@ -11,7 +13,7 @@ import emoji_data_python
 from .api import HabiticaAPI
 from .utils.dates import convert_to_local_time, is_date_passed
 from .utils.display import console, print
-from .utils.save_file import save_file
+from .utils.save_json import save_json
 
 
 # ==============================================================================
@@ -36,85 +38,185 @@ class TaskProcessor:
         Args:
             api_client: An authenticated instance of the HabiticaAPI client.
         """
-        print("Initializing TaskProcessor...")
+        # --- START OF METHOD --- (Level 0 Indent)
+        # console.log("--- TaskProcessor __init__ START ---")  # Your debug line
+
+        # --- Level 1 Indent (Inside __init__) ---
+        # console.print("Initializing TaskProcessor...") # Original print, can be removed if using log
+        CACHE_FILE_CONTENT = "content_cache.json"
+
         self.console = console
         self.api_client = api_client
-        print("Fetching tags for lookup...")
+        console.log("Fetching tags for lookup...", style="info")
         self.tags_lookup = self._fetch_and_prepare_tags()
         if not self.tags_lookup:
-            print(
-                "Warning: Tag lookup is empty. Tag names may not be processed correctly."
+            console.log(
+                "Warning: Tag lookup is empty. Tag names may not be processed correctly.",
+                style="warning",
             )
         else:
-            print(f"Fetched {len(self.tags_lookup)} tags.")
-        # --- Fetch and store user context needed for damage calc ---
+            console.log(f"Fetched {len(self.tags_lookup)} tags.", style="success")
+
+        # Initialize attributes
         self.user_data: Dict[str, Any] = {}
         self.party_data: Dict[str, Any] = {}
-
-        self.game_content: Dict[str, Any] = {}  # To store /content response
-        self.gear_stats_lookup: Dict[str, Dict] = {}  # To store content.gear.flat
-        self.user_con: int = 0  # Effective CON
+        self.game_content: Dict[str, Any] = {}
+        self.gear_stats_lookup: Dict[str, Dict] = {}
+        self.user_con: int = 0
         self.user_stealth: int = 0
         self.is_sleeping: bool = False
         self.is_on_boss_quest: bool = False
         self.boss_str: float = 0.0
 
+        # --- Fetch/Load Game Content (with Caching) ---
+        self.console.log("Fetching game content (for gear stats)...", style="info")
         # --- Fetch Game Content (ONCE) ---
-        self.console.log("  - Fetching game content (for gear stats)...")
+
         # The /content endpoint response is usually NOT wrapped in {success, data}
-        raw_content = self.api_client.get("/content")  # Use basic GET
+        # --- Fetch/Load Game Content (with Caching) ---
+        raw_content = None
+
+        # 1. Try loading from cache first (Level 1 Indent)
+        if os.path.exists(CACHE_FILE_CONTENT):
+            self.console.log(
+                f"Found cache file: '{CACHE_FILE_CONTENT}'. Attempting to load..."
+            )
+            try:
+                with open(CACHE_FILE_CONTENT, "r", encoding="utf-8") as f:
+                    raw_content = json.load(f)
+                self.console.log(
+                    "Successfully loaded game content from cache.", style="success"
+                )
+            except (json.JSONDecodeError, IOError, Exception) as e:
+                self.console.log(
+                    f"[Warning] Failed to load or parse cache file '{CACHE_FILE_CONTENT}': {e}. Will fetch from API.",
+                    style="warning",
+                )
+                raw_content = None  # Ensure raw_content is None so we fetch fresh
+
+        # 2. If cache didn't load, fetch from API and save to cache
+        if raw_content is None:
+            self.console.log(
+                "Cache not found or failed to load. Fetching game content from API...",
+                style="warning",
+            )
+            try:
+                # The /content endpoint response is usually NOT wrapped in {success, data}
+                raw_content = self.api_client.get("/content")  # Use basic GET
+                if (
+                    isinstance(raw_content, dict) and raw_content
+                ):  # Check if fetch was successful
+                    self.console.log(
+                        "Successfully fetched game content from API.", style="success"
+                    )
+                    # Save the fetched content to the cache file
+                    try:
+                        with open(CACHE_FILE_CONTENT, "w", encoding="utf-8") as f:
+                            json.dump(
+                                raw_content, f, ensure_ascii=False
+                            )  # No indent for smaller file size maybe? Or indent=4
+                        self.console.log(
+                            f"Saved fetched game content to cache file: '{CACHE_FILE_CONTENT}'",
+                            style="success",
+                        )
+                    except (IOError, Exception) as e:
+                        self.console.log(
+                            f"[Warning] Failed to save game content to cache file '{CACHE_FILE_CONTENT}': {e}",
+                            style="warning",
+                        )
+                else:
+                    self.console.log(
+                        "[Warning] Failed to fetch valid game content from API.",
+                        style="warning",
+                    )
+                    raw_content = {}  # Use empty dict to prevent errors later
+
+            except Exception as e:
+                self.console.log(
+                    f"[Warning] Error during API fetch for game content: {e}",
+                    style="warning",
+                )
+                raw_content = {}  # Use empty dict on error
+
+        # 3. Process the raw_content (whether from cache or API)
         if isinstance(raw_content, dict):
             self.game_content = raw_content
             # Create a direct lookup for gear stats: gear_key -> {con: X, str: Y ...}
             self.gear_stats_lookup = self.game_content.get("gear", {}).get("flat", {})
             if not self.gear_stats_lookup:
                 self.console.log(
-                    "  - [Warning] Could not find gear data in /content response."
+                    "[Warning] Could not find gear data in game content.",
+                    style="warning",
                 )
         else:
-            self.console.log("  - [Warning] Failed to fetch or parse game content.")
-        try:
-            self.console.log("  - Fetching user data for context...")
-            self.user_data = self.api_client.get_user_data()  # Use API client method
-            # Use .get with defaults for safe access
+            self.console.log(
+                "[Warning] Game content is not a valid dictionary.", style="warning"
+            )
+            self.game_content = {}
+            self.gear_stats_lookup = {}
 
-            # --- Fetch User Data (as before) ---
-            self.console.log("  - Fetching full user data for context...")
+        # --- Fetch User/Party Data and Calculate CON --- (Level 1 Indent)
+        # This is the outer 'try' block where the error likely originated
+        try:  # <<<<< Level 1 Indent
+            # Level 2 Indent
+            self.console.log("Fetching full user data for context...", style="info")
             self.user_data = self.api_client.get_user_data()
             if not self.user_data:
-                raise ValueError("Failed to fetch user data")
+                raise ValueError("Failed to fetch user data", style="error")
             # -----------------------
 
             # --- Calculate EFFECTIVE CON (Using Content Lookup) ---
             base_stats = self.user_data.get("stats", {})
+            level = self.user_data.get("stats", {}).get("lvl", 0)
+            user_class = self.user_data.get("stats", {}).get(
+                "class"
+            )  # Get user's class
             buffs = base_stats.get("buffs", {})
-            # Get the dictionary of equipped gear KEYS (e.g., {"weapon": "weapon_warrior_6", ...})
             equipped_gear_keys = (
                 self.user_data.get("items", {}).get("gear", {}).get("equipped", {})
             )
+            # Component 1: Level Bonus
+            level_bonus = min(50, math.floor(level / 2))
 
-            # 1. Base CON (includes allocated points, class/level base from user data)
-            base_con = base_stats.get("con", 0)
+            # Component 2: Allocated Points (Assuming this is base_con from API)
+            allocated_points_con = base_stats.get("con", 0)
 
-            # 2. Buff CON
+            # Component 3: Buff CON
             buff_con = buffs.get("con", 0)
 
-            # 3. Gear CON Bonus (Lookup equipped keys in content data)
-            gear_con_bonus = 0
+            # Components 4 & 5: Base Gear CON + Class Equip Bonus
+            total_base_gear_con = 0  # Initialize accumulator
+            total_class_equip_bonus = 0  # Initialize accumulator
+
             if isinstance(equipped_gear_keys, dict) and self.gear_stats_lookup:
-                # Iterate through the VALUES of the equipped dict, which are the gear keys/IDs
                 for gear_key in equipped_gear_keys.values():
                     if not gear_key:
-                        continue  # Skip if slot is empty
-                    # Look up this gear key in the stats lookup created from /content
+                        continue
                     gear_item_stats = self.gear_stats_lookup.get(gear_key)
                     if isinstance(gear_item_stats, dict):
-                        # Add the CON value found in the content data for this item
-                        gear_con_bonus += gear_item_stats.get("con", 0)
+                        # Get THIS item's base CON
+                        item_base_con = gear_item_stats.get("con", 0)
+                        # Add to total base gear CON
+                        total_base_gear_con += item_base_con
+
+                        # Check for class bonus
+                        gear_item_class = gear_item_stats.get(
+                            "klass", None
+                        )  # Habitica uses 'klass' in content data
+                        if gear_item_class == user_class:
+                            item_class_bonus = item_base_con * 0.5
+                            total_class_equip_bonus += item_class_bonus
+
             # ---------------------------------------------------------
 
-            # Calculate final effective CON
-            self.user_con = base_con + buff_con + gear_con_bonus
+            # Calculate final effective CON using all 5 components
+            self.user_con = (
+                allocated_points_con
+                + level_bonus
+                + total_base_gear_con
+                + total_class_equip_bonus
+                + buff_con  # Component 4 (Allocated)  # Component 1 (Level)  # Component 2 (Equipment Base)  # Component 3 (Class Bonus)  # Component 5 (Buffs)
+            )
             # --------------------------------------------------
 
             # --- Get other relevant context from user data ---
@@ -123,19 +225,10 @@ class TaskProcessor:
             # -----------------------------------------------
 
             self.console.log(
-                f"  - User Context: Effective CON={self.user_con}, Stealth={self.user_stealth}, Sleeping={self.is_sleeping}"
+                f"User Context: Effective CON={self.user_con}, Stealth={self.user_stealth}, Sleeping={self.is_sleeping}"
             )
 
-            self.user_con = self.user_data.get("stats", {}).get("con", 0)
-            self.user_stealth = (
-                self.user_data.get("stats", {}).get("buffs", {}).get("stealth", 0)
-            )
-            self.is_sleeping = self.user_data.get("preferences", {}).get("sleep", False)
-            self.console.log(
-                f"  - User Context: CON={self.user_con}, Stealth={self.user_stealth}, Sleeping={self.is_sleeping}"
-            )
-
-            self.console.log("  - Fetching party data for context...")
+            self.console.log("Fetching party data for context...")
             self.party_data = self.api_client.get_party_data()  # Use API client method
             quest_info = self.party_data.get("quest", {})
 
@@ -148,18 +241,21 @@ class TaskProcessor:
                     except (ValueError, TypeError):
                         self.boss_str = 0.0
                     self.console.log(
-                        f"  - Party Context: On active boss quest (Str={self.boss_str})."
+                        f"Party Context: On active boss quest (Str={self.boss_str}).",
+                        style="info",
                     )
                 else:
                     self.console.log(
-                        "  - Party Context: On active quest (not boss or no str)."
+                        "Party Context: On active quest (not boss or no str).",
+                        style="info",
                     )
             else:
-                self.console.log("  - Party Context: Not on active quest.")
+                self.console.log("Party Context: Not on active quest.", style="info")
 
         except Exception as e:
             self.console.log(
-                f"  - [Warning] Couldn't fetch all context for TaskProcessor: {e}"
+                f"[Warning] Couldn't fetch all context for TaskProcessor: {e}",
+                style="warning",
             )
             # Ensure defaults if fetches failed
             self.user_data = self.user_data or {}
@@ -170,9 +266,10 @@ class TaskProcessor:
             self.is_on_boss_quest = self.is_on_boss_quest or False
             self.boss_str = self.boss_str or 0.0
         # ------------------------------------------------------------
-        self.console.log("TaskProcessor Initialized.")
+        self.console.log("TaskProcessor Initialized.", style="info")
 
     # --- Private Helper Methods ---
+    # & -     def _fetch_and_prepare_tags(self) -> Dict[str, str]:
     def _fetch_and_prepare_tags(self) -> Dict[str, str]:
         """
         Fetches all user tags from the Habitica API.
@@ -189,14 +286,15 @@ class TaskProcessor:
             tags_list = self.api_client.get_tags()
             # Ensure ID exists before adding to lookup
             return {
-                tag["id"]: tag.get("name", tag["id"])  # Use ID as fallback name
+                tag["id"]: tag.get("name", tag["id"])
                 for tag in tags_list
-                if "id" in tag  # Only include tags that have an ID
-            }
+                if "id" in tag
+            }  # Use ID as fallback name  # Only include tags that have an ID
         except Exception as e:
-            print(f"Error fetching or processing tags: {e}")
+            console.print(f"Error fetching or processing tags: {e}", style="error")
             return {}
 
+    # & -     def _value_color(self, value: Optional[float]) -> str:
     def _value_color(self, value: Optional[float]) -> str:
         """
         Determines a descriptive color string based on a numerical task value.
@@ -231,6 +329,7 @@ class TaskProcessor:
             color = "worst"  # Value is -16 or lower
         return color
 
+    # & -     def _process_task_tags(self, task_data: Dict) -> List[str]:
     def _process_task_tags(self, task_data: Dict) -> List[str]:
         """
         Retrieves the names of tags associated with a task using the pre-fetched lookup.
@@ -245,14 +344,16 @@ class TaskProcessor:
         """
         tag_ids = task_data.get("tags", [])
         if not isinstance(tag_ids, list):
-            print(
-                f"Warning: Task {task_data.get('id', 'N/A')} has non-list tags: {tag_ids}"
+            console.print(
+                f"Warning: Task {task_data.get('id', 'N/A')} has non-list tags: {tag_ids}",
+                style="warning",
             )
             return []  # Handle unexpected type
         # Use tags_lookup, fallback to tag_id if name not found
         return [self.tags_lookup.get(tag_id, tag_id) for tag_id in tag_ids]
 
     # --- Private Task Type Processors ---
+    # & -     def _process_habit(self, task_data: Dict) -> Dict[str, Any]:
     def _process_habit(self, task_data: Dict) -> Dict[str, Any]:
         """
         Processes fields specific to Habit-type tasks.
@@ -296,6 +397,7 @@ class TaskProcessor:
         processed["value_color"] = self._value_color(task_value)
         return processed
 
+    # & -     def _process_todo(self, task_data: Dict) -> Dict[str, Any]:
     def _process_todo(self, task_data: Dict) -> Dict[str, Any]:
         """
         Processes fields specific to To-Do type tasks.
@@ -322,8 +424,9 @@ class TaskProcessor:
                 else:
                     processed["_status"] = "due"  # Due in the future
             except Exception as e:
-                print(
-                    f"Error checking To-Do date ({deadline_str}) for task {task_data.get('id', 'N/A')}: {e}. Status set to 'grey'."
+                console.print(
+                    f"Error checking To-Do date ({deadline_str}) for task {task_data.get('id', 'N/A')}: {e}. Status set to 'grey'.",
+                    style="error",
                 )
                 processed["_status"] = "grey"  # Fallback on date processing error
         else:
@@ -337,6 +440,7 @@ class TaskProcessor:
         processed["value_color"] = self._value_color(task_value)
         return processed
 
+    # & -     def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
     def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
         """
         Processes fields specific to Daily-type tasks.
@@ -383,6 +487,7 @@ class TaskProcessor:
         processed["value_color"] = self._value_color(task_value)
         return processed
 
+    # & -     def _process_reward(self, task_data: Dict) -> Dict[str, Any]:
     def _process_reward(self, task_data: Dict) -> Dict[str, Any]:
         """
         Processes fields specific to Reward-type tasks.
@@ -400,6 +505,7 @@ class TaskProcessor:
         return {"value": task_data.get("value", 0)}  # Default cost to 0 if missing
 
     # --- NEW HELPER METHOD ---
+    # & -     def _calculate_checklist_done(self, checklist: Optional[List[Dict]]) -> float:
     def _calculate_checklist_done(self, checklist: Optional[List[Dict]]) -> float:
         """Calculates the proportion (0.0 to 1.0) of checklist items done."""
         if not checklist or not isinstance(checklist, list) or len(checklist) == 0:
@@ -410,6 +516,7 @@ class TaskProcessor:
         return completed_count / total_count if total_count > 0 else 1.0
 
     # --- MODIFIED _process_daily ---
+    # & -     def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
     def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
         """Processes Daily specific fields, including per-task damage calculation."""
         processed = {}
@@ -497,6 +604,7 @@ class TaskProcessor:
         return processed
 
     # --- Public Processing Methods ---
+    # & -     def process_single_task(self, task_data: Dict) -> Optional[Dict[str, Any]]:
     def process_single_task(self, task_data: Dict) -> Optional[Dict[str, Any]]:
         """
         Processes a single raw task dictionary into a standardized, enriched format.
@@ -514,8 +622,9 @@ class TaskProcessor:
                                       task data is invalid (e.g., missing 'id').
         """
         if not isinstance(task_data, dict) or not task_data.get("id"):
-            print(
-                f"Warning: Skipping invalid task data (missing ID or not a dict): {task_data}"
+            console.print(
+                f"Warning: Skipping invalid task data (missing ID or not a dict): {task_data}",
+                style="warning",
             )
             return None
 
@@ -527,8 +636,9 @@ class TaskProcessor:
             "challenge", {}
         )  # Default to empty dict if missing
         if not isinstance(challenge_info, dict):
-            print(
-                f"Warning: Task {task_id} has non-dict challenge info: {challenge_info}"
+            console.print(
+                f"Warning: Task {task_id} has non-dict challenge info: {challenge_info}",
+                style="warning",
             )
             challenge_info = {}  # Ensure it's a dict
 
@@ -541,6 +651,7 @@ class TaskProcessor:
                 "attribute", "str"
             ),  # Default attribute if missing? Habitica default is str
             "challenge_id": challenge_info.get("id", ""),
+            "challenge_task_id": challenge_info.get("taskId", ""),
             "challenge": emoji_data_python.replace_colons(
                 challenge_info.get("shortName", "")
             ),
@@ -567,7 +678,9 @@ class TaskProcessor:
         elif task_type == "reward":
             type_specific_data = self._process_reward(task_data)
         else:
-            print(f"Warning: Unknown task type '{task_type}' for task ID {task_id}")
+            console.print(
+                f"Warning: Unknown task type '{task_type}' for task ID {task_id}"
+            )
             # Add minimal common fields if type is unknown?
             processed["value"] = task_data.get("value", 0.0)
             processed["value_color"] = self._value_color(processed["value"])
@@ -575,6 +688,7 @@ class TaskProcessor:
         processed.update(type_specific_data)
         return processed
 
+    # & -     def process_and_categorize_all(self) -> Dict[str, Dict]:
     def process_and_categorize_all(self) -> Dict[str, Dict]:
         """
         Fetches all tasks using the API client, processes each task individually,
@@ -596,11 +710,11 @@ class TaskProcessor:
                              'cats': The dictionary containing categorized task IDs and metadata.
                              Returns a default empty structure if fetching tasks fails.
         """
-        print("Fetching all tasks via API client...")
+        console.print("Fetching all tasks via API client...")
         try:
             all_tasks_raw = self.api_client.get_tasks()
         except Exception as e:
-            print(f"Fatal Error: Could not fetch tasks: {e}")
+            console.print(f"Fatal Error: Could not fetch tasks: {e}", style="error")
             # Return empty but valid structure to prevent downstream errors
             return {
                 "data": {},
@@ -617,7 +731,7 @@ class TaskProcessor:
                 },
             }
 
-        print(f"Processing {len(all_tasks_raw)} tasks...")
+        console.print(f"Processing {len(all_tasks_raw)} tasks...", style="info")
         tasks_dict = {}  # Stores {task_id: processed_task_dict}
         # Initialize categories structure fully
         cats_dict = {
@@ -672,8 +786,9 @@ class TaskProcessor:
                     cats_dict["tasks"][type_key][status].append(task_id)
                 else:
                     # This should ideally not happen if _status is always set correctly
-                    print(
-                        f"Warning: Could not categorize task {task_id} - invalid type/status ({type_key}/{status})"
+                    console.print(
+                        f"Warning: Could not categorize task {task_id} - invalid type/status ({type_key}/{status})",
+                        style="warning",
                     )
                     # Optionally add to a general 'uncategorized' list or just log
             elif task_type in ["habit", "reward"]:
@@ -686,15 +801,16 @@ class TaskProcessor:
         cats_dict["tags"] = sorted(list(cats_dict["tags"]))
         cats_dict["challenge"] = sorted(list(cats_dict["challenge"]))
 
-        print("Processing complete.")
+        console.print("Processing complete.", style="success")
         return {"data": tasks_dict, "cats": cats_dict}
 
     # --- File Saving ---
+    # & -     def save_processed_data(self, processed_data: Dict):
     def save_processed_data(self, processed_data: Dict):
         """
         Saves the processed task data and category dictionaries to separate files.
 
-        Uses the `save_file` utility function. Expects the input dictionary
+        Uses the `save_json` utility function. Expects the input dictionary
         to have 'data' and 'cats' keys.
 
         Args:
@@ -707,22 +823,24 @@ class TaskProcessor:
             or "data" not in processed_data
             or "cats" not in processed_data
         ):
-            print("Error: No valid processed data provided to save.")
+            console.print(
+                "Error: No valid processed data provided to save.", style="error"
+            )
             return
         try:
-            print("Saving processed data...")
-            # Use the imported save_file function
+            console.print("Saving processed data...", style="info")
+            # Use the imported save_json function
             # Save main task data (ID -> processed task)
-            save_file(
+            save_json(
                 processed_data["data"], "tasks_data", "_processed"
             )  # e.g., tasks_data_processed.json
             # Save category data (lists/dicts of task IDs)
-            save_file(
+            save_json(
                 processed_data["cats"], "tasks_cats", "_processed"
             )  # e.g., tasks_cats_processed.json
-            print("Processed data saved successfully.")
+            console.print("Processed data saved successfully.", style="success")
         except Exception as e:
-            print(f"Error saving processed files: {e}")
+            console.print(f"Error saving processed files: {e}", style="error")
 
 
 # ==============================================================================
@@ -734,12 +852,12 @@ class TaskProcessor:
 #
 # if __name__ == "__main__": # Example guard
 #     try:
-#         print("--- Starting Pixabit Processing ---")
+#         console.print("--- Starting Pixabit Processing ---")
 #         # Assume API client is configured via environment variables or .env file
 #         api = HabiticaAPI()
 #         processor = TaskProcessor(api_client=api)
 #
-#         print("\nProcessing and categorizing all tasks...")
+#         console.print("\nProcessing and categorizing all tasks...")
 #         processed_results = processor.process_and_categorize_all()
 #
 #         if processed_results:
@@ -748,22 +866,22 @@ class TaskProcessor:
 #             # Example: Calculate stats if needed (assuming get_user_stats exists)
 #             # if 'cats' in processed_results:
 #             #      user_stats = get_user_stats(api_client=api, cats_dict=processed_results['cats'])
-#             #      print("\n--- User Stats ---")
+#             #      console.print("\n--- User Stats ---")
 #             #      import json
-#             #      print(json.dumps(user_stats, indent=2))
+#             #      console.print(json.dumps(user_stats, indent=2))
 #             #      # Save stats if needed
-#             #      # from pixabit.utils.save_file import save_file
-#             #      # save_file(user_stats, "user_stats", "_calculated")
+#             #      # from pixabit.utils.save_json import save_json
+#             #      # save_json(user_stats, "user_stats", "_calculated")
 #             # else:
-#             #      print("Skipping user stats calculation: 'cats' data missing.")
+#             #      console.print("Skipping user stats calculation: 'cats' data missing.")
 #         else:
-#              print("Processing failed, no results to save or analyze.")
+#              console.print("Processing failed, no results to save or analyze.")
 #
-#         print("\n--- Pixabit Processing Finished ---")
+#         console.print("\n--- Pixabit Processing Finished ---")
 #
 #     except Exception as e:
-#         print(f"\n--- An error occurred in the main processing script ---")
-#         print(f"{type(e).__name__}: {e}")
+#         console.print(f"\n--- An error occurred in the main processing script ---")
+#         console.print(f"{type(e).__name__}: {e}")
 #         # Optionally re-raise or log traceback for debugging
 #         # import traceback
 #         # traceback.print_exc()
@@ -771,6 +889,7 @@ class TaskProcessor:
 # User Stats ───────────────────────────────────────────────────────────────
 
 
+# & - def get_user_stats(
 def get_user_stats(
     api_client: HabiticaAPI, cats_dict: Dict[str, Any], processed_tasks_dict: Dict
 ) -> Dict[str, Any]:
@@ -804,28 +923,31 @@ def get_user_stats(
         requests.exceptions.RequestException: If the API call to fetch user data fails.
         Exception: Catches and reports other unexpected errors during processing or saving.
     """
-    print("Fetching user data for stats...")
+    console.print("Fetching user data for stats...")
     output_stats: Dict[str, Any] = {}  # Initialize empty dict
 
     try:
         # Fetch user data including stats, party, preferences, auth timestamps
         user_data = api_client.get_user_data()  # Fetches /user endpoint data
         if not isinstance(user_data, dict) or not user_data:  # More robust check
-            print(
-                "[bold red]Error:[/bold red] Failed to fetch valid user data from API."
+            console.print(
+                "[error]Error:[/error] Failed to fetch valid user data from API."
             )
             return {}  # Return empty dict on failure
 
         # --- Safely extract data from nested dictionaries ---
         stats: Dict[str, Any] = user_data.get("stats", {})
         party: Dict[str, Any] = user_data.get("party", {})
+        balance = user_data.get("balance", 0.0)
+        gems_count = int(balance * 4)
+
         preferences: Dict[str, Any] = user_data.get("preferences", {})
         auth: Dict[str, Any] = user_data.get("auth", {})
         timestamps: Dict[str, Any] = auth.get("timestamps", {})
         local_auth: Dict[str, Any] = auth.get("local", {})  # Contains username
 
     except Exception as e:
-        print(f"[bold red]Error fetching or parsing user data:[/bold red] {e}")
+        console.print(f"[error]Error fetching or parsing user data:[/error] {e}")
         return {}  # Return empty dict on failure
 
     # --- Process Raw Data ---
@@ -845,7 +967,7 @@ def get_user_stats(
                 sep=" ", timespec="minutes"
             )
         except Exception as e:
-            print(
+            console.print(
                 f"[yellow]Warning:[/yellow] Could not convert last login time '{last_login_utc}': {e}"
             )
             last_login_local_str = (
@@ -878,7 +1000,7 @@ def get_user_stats(
                     f"Unknown format ({type(cat_data)})"  # Handle unexpected format
                 )
     else:
-        print(
+        console.print(
             "[yellow]Warning:[/yellow] 'cats_dict' missing or has invalid 'tasks' structure. Task counts will be inaccurate."
         )
         # Convert last login time (ensure this logic is present)
@@ -889,13 +1011,15 @@ def get_user_stats(
             last_login_local = convert_to_local_time(last_login_utc)
             last_login_local_str = last_login_local.isoformat()
         except Exception as date_e:
-            print(f"      - [Warning] Error converting last login time: {date_e}")
+            console.print(
+                f"      - [Warning] Error converting last login time: {date_e}"
+            )
             last_login_local_str = "(Time Error)"
 
         # --- START: New Damage Calculation ---
     total_potential_user_damage = 0.0
     total_potential_party_damage = 0.0
-    print("      - Calculating potential daily damage...")
+    console.print("      - Calculating potential daily damage...")
     try:
         # Get IDs of dailies marked 'due' by TaskProcessor
         # (Status reflects non-completion if task is due)
@@ -909,7 +1033,7 @@ def get_user_stats(
                     "damage_to_party", 0.0
                 )
     except Exception as sum_e:
-        print(f"Warning: Error summing damage from processed tasks: {sum_e}")
+        console.print(f"Warning: Error summing damage from processed tasks: {sum_e}")
     # ------------------------------------------
 
     # --- END: New Damage Calculation ---
@@ -934,6 +1058,7 @@ def get_user_stats(
         "exp": stats.get("exp", 0.0),  # Use float for potential decimals
         "toNextLevel": stats.get("toNextLevel", 0),
         "gp": stats.get("gp", 0.0),  # Gold can have decimals
+        "gems": gems_count,
         "quest_active": quest_info.get("active", False),
         "quest_key": quest_info.get("key"),  # Will be None if no quest or not active
         "sleeping": preferences.get("sleep", False),
@@ -967,7 +1092,7 @@ def get_user_stats(
 #
 # if __name__ == "__main__": # Example guard
 #     try:
-#         print("--- Running Example: Get User Stats ---")
+#         console.print("--- Running Example: Get User Stats ---")
 #         api = HabiticaAPI()
 #
 #         # First, run the task processor to get the 'cats' dictionary
@@ -986,7 +1111,7 @@ def get_user_stats(
 #                 "broken": [], "tags": [], "challenge": []
 #             }
 #         }
-#         print("Note: Using placeholder task categorization data for stats calculation.")
+#         console.print("Note: Using placeholder task categorization data for stats calculation.")
 #
 #         if processed_results and 'cats' in processed_results:
 #             # Call get_user_stats with the API client and the categories

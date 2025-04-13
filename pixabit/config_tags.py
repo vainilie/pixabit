@@ -2,29 +2,25 @@
 # MARK: - MODULE DOCSTRING
 """
 Provides functionality for interactively setting up specific Tag IDs in the .env file.
-
 This module fetches existing tags from the user's Habitica account, displays them,
 and prompts the user to select or create tags for predefined configuration roles
 (e.g., Challenge Tag, Attribute Tags). The selected/created tag IDs are then
 saved back to the `.env` file.
-
 Functions:
     interactive_tag_setup(api_client): Runs the main interactive setup process.
     configure_tags(): A simple wrapper to initialize API and run setup, useful for CLI commands.
-
 Requires:
     - An authenticated `HabiticaAPI` instance from `.api`.
-    - Rich library components (`Confirm`, `Prompt`, `Console`, `IntPrompt`, `Table`)
+    - Rich library components (`Confirm`, `Prompt`, `console`, `IntPrompt`, `Table`)
       likely provided via a `utils.display` module.
     - `python-dotenv` library functions (`find_dotenv`, `get_key`, `set_key`).
 """
-
-# MARK: - IMPORTS
 import os
 from typing import Any, Dict, List, Optional  # Added Any for tag data
 
 from dotenv import find_dotenv, get_key, set_key
 
+# MARK: - IMPORTS
 from .api import HabiticaAPI
 from .utils.display import Confirm, IntPrompt, Prompt, Table, console, print
 
@@ -45,6 +41,7 @@ TAG_CONFIG_KEYS: Dict[str, str] = {
 
 
 # MARK: - CORE FUNCTIONS
+# & - def interactive_tag_setup(api_client: HabiticaAPI) -> None:
 def interactive_tag_setup(api_client: HabiticaAPI) -> None:
     """
     Interactively configures specific tag IDs in the .env file.
@@ -66,7 +63,7 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
         IOError: If reading from or writing to the .env file fails.
         Exception: Catches and reports other unexpected errors during the process.
     """
-    CONSOLE.print(
+    console.print(
         "[bold cyan]--- Interactive Tag Configuration ---[/]", justify="center"
     )
 
@@ -82,42 +79,42 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
             # Resolve needed for parent.parent if __file__ is relative
             project_root = Path(__file__).resolve().parent.parent
             dotenv_path_candidate = project_root / ".env"
-            CONSOLE.print(
+            console.print(
                 f"No .env found automatically, checking/creating: [cyan]{dotenv_path_candidate}[/]"
             )
             if not os.path.exists(dotenv_path_candidate):
                 # Create empty file if it doesn't exist
                 open(dotenv_path_candidate, "a").close()
-                CONSOLE.print(".env file created.")
+                console.print(".env file created.")
             dotenv_path = str(dotenv_path_candidate)  # Use the created path
         except Exception as e:
-            CONSOLE.print(f"[bold red]Could not find or create .env file: {e}[/]")
-            CONSOLE.print("Please ensure a .env file exists in your project root.")
+            console.print(f"[error]Could not find or create .env file: {e}[/]")
+            console.print("Please ensure a .env file exists in your project root.")
             return
-    CONSOLE.print(f"Using configuration file: [cyan]{dotenv_path}[/]")
+    console.print(f"Using configuration file: [cyan]{dotenv_path}[/]")
 
     # --- 2. Fetch existing tags ---
     all_tags: List[Dict[str, Any]] = []
     try:
-        CONSOLE.print("Fetching all available tags from Habitica...")
+        console.print("Fetching all available tags from Habitica...")
         all_tags = api_client.get_tags()  # get_tags should return a list
         if not isinstance(all_tags, list):  # Add explicit type check
-            CONSOLE.print(
-                f"[bold red]Error:[/bold red] Expected a list of tags from API, but received {type(all_tags)}. Cannot proceed."
+            console.print(
+                f"[error]Error:[/error] Expected a list of tags from API, but received {type(all_tags)}. Cannot proceed."
             )
             return
         if not all_tags:
-            CONSOLE.print(
+            console.print(
                 "[yellow]No tags found in your Habitica account. You can create them during this setup.[/]"
             )
             # Allow proceeding even if no tags exist yet
 
         # Sort tags for consistent display
         all_tags.sort(key=lambda t: t.get("name", "").lower())
-        CONSOLE.print(f"Found {len(all_tags)} tags.")
+        console.print(f"Found {len(all_tags)} tags.")
 
     except Exception as e:
-        CONSOLE.print(f"[bold red]Error fetching tags from Habitica API: {e}[/]")
+        console.print(f"[error]Error fetching tags from Habitica API: {e}[/]")
         return  # Cannot proceed without tags list
 
     # --- 3. Display tags ---
@@ -141,9 +138,9 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
                 str(i + 1), tag.get("name", "[i]No Name[/i]"), tag.get("id", "N/A")
             )
 
-    CONSOLE.print(table)
+    console.print(table)
     if not valid_tags_for_selection:
-        CONSOLE.print(
+        console.print(
             "[yellow]You'll need to use the 'Create New' option for all tags.[/]"
         )
 
@@ -151,7 +148,7 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
     selected_ids: Dict[str, str] = {}  # Store chosen env_key: tag_id pairs
 
     for tag_description, env_key in TAG_CONFIG_KEYS.items():
-        CONSOLE.print(
+        console.print(
             f"\n--- Configuring: [bold green]{tag_description}[/bold green] (Variable: {env_key}) ---"
         )
         # Get current value from .env to show the user and allow keeping it
@@ -199,12 +196,12 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
                     if current_value_id:
                         # User wants to keep the current value
                         selected_ids[env_key] = current_value_id
-                        CONSOLE.print(
+                        console.print(
                             f"  Keeping current value '[cyan]{current_name or current_value_id}[/cyan]' for {tag_description}."
                         )
                         break  # Exit inner loop, proceed to next tag type
                     else:
-                        CONSOLE.print(
+                        console.print(
                             "[prompt.invalid]Cannot keep current value as none is set. Please select or create.[/]"
                         )
                         # Continue inner loop to re-prompt
@@ -219,13 +216,13 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
                     tag_name = selected_tag.get("name", "[i]No Name[/i]")
                     if tag_id:
                         selected_ids[env_key] = tag_id
-                        CONSOLE.print(
+                        console.print(
                             f"  Selected '[cyan]{tag_name}[/cyan]' ([magenta]{tag_id}[/magenta]) for {tag_description}."
                         )
                         break  # Exit inner loop
                     else:  # Should not happen if valid_tags_for_selection is built correctly
-                        CONSOLE.print(
-                            "[bold red]Internal Error:[/bold red] Selected tag has no ID. Please report this."
+                        console.print(
+                            "[error]Internal Error:[/error] Selected tag has no ID. Please report this."
                         )
 
                 elif choice == 0:
@@ -246,7 +243,7 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
 
                         if new_name:
                             try:
-                                CONSOLE.print(
+                                console.print(
                                     f"Creating tag '[cyan]{new_name}[/cyan]' via API..."
                                 )
                                 # Call the API to create the tag
@@ -256,7 +253,7 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
                                     new_name_from_api = created_tag_data.get(
                                         "name", new_name
                                     )  # Use name from API response
-                                    CONSOLE.print(
+                                    console.print(
                                         f"[bold green]Successfully created tag '[cyan]{new_name_from_api}[/cyan]' with ID: [magenta]{new_id}[/magenta][/]"
                                     )
                                     selected_ids[env_key] = new_id
@@ -271,23 +268,23 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
 
                                     break  # Tag created and selected, exit inner loop
                                 else:
-                                    CONSOLE.print(
-                                        f"[bold red]API Error:[/bold red] Did not return valid data for created tag '{new_name}'. Please select an existing tag or try again."
+                                    console.print(
+                                        f"[error]API Error:[/error] Did not return valid data for created tag '{new_name}'. Please select an existing tag or try again."
                                     )
                             except Exception as create_err:
-                                CONSOLE.print(
-                                    f"[bold red]Error creating tag '{new_name}': {create_err}[/]"
+                                console.print(
+                                    f"[error]Error creating tag '{new_name}': {create_err}[/]"
                                 )
                                 # Allow user to retry or select existing by continuing loop
                         else:
-                            CONSOLE.print("Tag creation cancelled (no name entered).")
+                            console.print("Tag creation cancelled (no name entered).")
                             # Continue inner loop
                     else:
-                        CONSOLE.print("Tag creation cancelled.")
+                        console.print("Tag creation cancelled.")
                         # Continue inner loop
                 else:
                     # Invalid number entered (should be caught by IntPrompt choices, but maybe not)
-                    CONSOLE.print(
+                    console.print(
                         f"[prompt.invalid]Invalid choice.[/] Please use options: {prompt_options}."
                     )
                     # Continue inner loop
@@ -295,13 +292,13 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
             except (
                 ValueError
             ):  # Catches non-integer input if IntPrompt fails validation
-                CONSOLE.print(
+                console.print(
                     f"[prompt.invalid]Please enter a valid number ({prompt_options}).[/]"
                 )
                 # Continue inner loop
             except NotImplementedError:  # From DummyIntPrompt if Rich unavailable
-                CONSOLE.print(
-                    "[bold red]Error:[/bold red] Rich library components are required for interaction."
+                console.print(
+                    "[error]Error:[/error] Rich library components are required for interaction."
                 )
                 return  # Exit function if interaction isn't possible
 
@@ -309,8 +306,8 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
     # --- End of for tag_description... loop ---
 
     # --- 5. Confirm before saving ---
-    CONSOLE.print("\n" + "=" * 60)
-    CONSOLE.print("[bold yellow]Review Final Selections:[/]")
+    console.print("\n" + "=" * 60)
+    console.print("[bold yellow]Review Final Selections:[/]")
     all_selections_valid = True
     for desc, key in TAG_CONFIG_KEYS.items():
         tag_id = selected_ids.get(key)
@@ -322,61 +319,58 @@ def interactive_tag_setup(api_client: HabiticaAPI) -> None:
                 if tag_info
                 else "[yellow]MISSING TAG[/yellow]"
             )
-            CONSOLE.print(
+            console.print(
                 f"  [field]{desc:<45}[/field]: '[cyan]{tag_name}[/cyan]' ([magenta]{tag_id}[/magenta])"
             )
         else:
-            CONSOLE.print(
-                f"  [field]{desc:<45}[/field]: [bold red]** Not Set **[/bold red]"
-            )
+            console.print(f"  [field]{desc:<45}[/field]: [error]** Not Set **[/error]")
             all_selections_valid = False  # Mark if any tag is missing
-    CONSOLE.print("=" * 60)
+    console.print("=" * 60)
 
     if not all_selections_valid:
-        CONSOLE.print(
-            "[bold red]Warning:[/bold red] Not all required tags have been assigned. Saving is incomplete."
+        console.print(
+            "[error]Warning:[/error] Not all required tags have been assigned. Saving is incomplete."
         )
         if not Confirm.ask(
             "Some tags are missing. Continue saving the assigned tags anyway?",
             default=False,
         ):
-            CONSOLE.print("Operation cancelled. No changes saved.")
+            console.print("Operation cancelled. No changes saved.")
             return
         else:
-            CONSOLE.print("Proceeding to save assigned tags...")
+            console.print("Proceeding to save assigned tags...")
 
     if not Confirm.ask(
         f"\nSave these selections to [cyan]'{os.path.basename(dotenv_path)}'[/cyan]?",
         default=True,
     ):
-        CONSOLE.print("Operation cancelled. No changes saved.")
+        console.print("Operation cancelled. No changes saved.")
         return
 
     # --- 6. Write to .env file ---
     try:
-        CONSOLE.print(f"Updating '[cyan]{dotenv_path}[/cyan]'...")
+        console.print(f"Updating '[cyan]{dotenv_path}[/cyan]'...")
         num_updated = 0
         for key, value in selected_ids.items():
             # set_key returns True if value was changed, False otherwise (or raises error)
             updated = set_key(dotenv_path, key, value, quote_mode="always")
             if updated:
                 num_updated += 1  # Count only actual changes/additions
-        CONSOLE.print(
+        console.print(
             f"[bold green]:heavy_check_mark: Successfully set/updated {len(selected_ids)} key(s) in [cyan]{os.path.basename(dotenv_path)}[/cyan]! ({num_updated} actually changed)[/]"
         )
-        CONSOLE.print("Restart the application if needed for changes to take effect.")
+        console.print("Restart the application if needed for changes to take effect.")
     except IOError as e:
-        CONSOLE.print(
-            f"[bold red]Error writing to .env file at '{dotenv_path}': {e}[/]"
-        )
+        console.print(f"[error]Error writing to .env file at '{dotenv_path}': {e}[/]")
     except Exception as e:  # Catch potential errors from set_key itself
-        CONSOLE.print(f"[bold red]Unexpected error saving to .env file: {e}[/]")
+        console.print(f"[error]Unexpected error saving to .env file: {e}[/]")
 
 
 # --- End of interactive_tag_setup ---
 
 
 # MARK: - EXAMPLE CALLER FUNCTION
+# & - def configure_tags() -> None:
 def configure_tags() -> None:
     """
     Runs the interactive tag setup process.
@@ -388,17 +382,17 @@ def configure_tags() -> None:
     Returns:
         None
     """
-    CONSOLE.print("[bold blue]Starting interactive tag configuration...[/]")
+    console.print("[bold blue]Starting interactive tag configuration...[/]")
     try:
         # Need an API client instance first. This assumes the basic
         # USER_ID and API_TOKEN might already be in .env or config.
         api = HabiticaAPI()
     except ValueError as e:
-        CONSOLE.print(f"[bold red]API Initialization Error:[/bold red] {e}")
-        CONSOLE.print("Cannot proceed without valid API credentials.")
+        console.print(f"[error]API Initialization Error:[/error] {e}")
+        console.print("Cannot proceed without valid API credentials.")
         return
     except Exception as e:
-        CONSOLE.print(f"[bold red]Unexpected Error initializing API: {e}[/]")
+        console.print(f"[error]Unexpected Error initializing API: {e}[/]")
         return
 
     # Run the interactive setup using the initialized API client
@@ -406,9 +400,9 @@ def configure_tags() -> None:
         interactive_tag_setup(api)
     except Exception as e:
         # Catch errors from the setup process itself
-        CONSOLE.print(f"[bold red]Error during tag configuration: {e}[/]")
+        console.print(f"[error]Error during tag configuration: {e}[/]")
 
-    CONSOLE.print("[bold blue]Tag configuration finished.[/]")
+    console.print("[bold blue]Tag configuration finished.[/]")
 
 
 # Example of direct execution (less common for setup utilities)

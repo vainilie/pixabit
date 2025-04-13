@@ -1,13 +1,11 @@
 # pixabit/challenge_backup.py
 """
 Provides the ChallengeBackupper class for backing up Habitica challenges.
-
 This module defines the `ChallengeBackupper` class, which utilizes an authenticated
 HabiticaAPI client to fetch user challenges and associated tasks. It processes
 this data by cleaning task information, handling emoji codes in text fields,
 and then saves each challenge (along with its processed tasks) as an
 individual JSON file in a specified output directory.
-
 The process involves:
 1. Fetching all challenges the user is a member of.
 2. Fetching all user tasks (used to find tasks linked to challenges).
@@ -17,27 +15,25 @@ The process involves:
     b. Processing challenge text fields (name, description, summary) for emojis.
     c. Generating a filesystem-safe filename based on the challenge name.
     d. Saving the processed challenge data (including cleaned tasks) as a JSON file.
-
 Requires:
 - An authenticated `HabiticaAPI` instance from `.api`.
-- Utility functions `save_file` from `.utils.save_file`.
+- Utility functions `save_json` from `.utils.save_json`.
 - Utility function `replace_illegal_filename_characters` from
   `.utils.replace_illegal_filename_characters`.
 - The `emoji-data-python` library for emoji code conversion.
 - The `pathvalidate` library (likely used within the filename cleaning utility).
 """
-
 import os
 import typing
 from typing import Any, Dict, List, Tuple
 
 import emoji_data_python
+from pathvalidate import sanitize_filename
 
 from .api import HabiticaAPI
-from .processing import TaskProcessor
-from .utils.clean_name import replace_illegal_filename_characters
+from .data_processor import TaskProcessor
 from .utils.display import console, print
-from .utils.save_file import save_file
+from .utils.save_json import save_json
 
 
 class ChallengeBackupper:
@@ -65,6 +61,7 @@ class ChallengeBackupper:
         # "challenge",    # Keep challenge link within task? Removed by default.
     ]
 
+    # & -     def __init__(self, api_client: HabiticaAPI):
     def __init__(self, api_client: HabiticaAPI):
         """
         Initializes the ChallengeBackupper.
@@ -80,6 +77,7 @@ class ChallengeBackupper:
 
     # --- Public Methods ---
 
+    # & -     def create_backups(self, output_folder: str = "_challenge_backups") -> None:
     def create_backups(self, output_folder: str = "_challenge_backups") -> None:
         """
         Executes the full challenge backup process.
@@ -115,7 +113,7 @@ class ChallengeBackupper:
 
             # 3. Prepare Output Directory
             os.makedirs(output_folder, exist_ok=True)
-            print(f"Saving backups to folder: [cyan]'{output_folder}'[/]")
+            print(f"Saving backups to folder: [file]'{output_folder}'[/]")
 
             # 4. Process and Save Each Challenge
             # Sort challenges by original name (case-insensitive) for consistent order
@@ -151,7 +149,7 @@ class ChallengeBackupper:
                 )
 
                 # Generate filename using shortName preferably, cleaned for filesystem
-                safe_title = replace_illegal_filename_characters(short_name)
+                safe_title = short_name
                 if not safe_title:  # Handle cases where name is only illegal chars
                     safe_title = f"challenge_{challenge_id}"
                 filename = f"{safe_title}.json"
@@ -159,23 +157,23 @@ class ChallengeBackupper:
 
                 # Save the file
                 try:
-                    # Use the imported save_file utility
-                    save_file(
+                    # Use the imported save_json utility
+                    save_json(
                         data=processed_backup,
                         filename=filepath,  # Pass the full path
                         suffix="",  # No suffix needed as extension is in filename
                     )
                     print(
-                        f"  [green]:heavy_check_mark: Saved backup:[/green] [cyan]{filename}[/]"
+                        f"  [green]:heavy_check_mark: Saved backup:[/green] [file]{filename}[/]"
                     )
                     saved_count += 1
                 except IOError as save_err:
                     print(
-                        f"  [bold red]:x: Error saving backup file '{filename}': {save_err}[/]"
+                        f"  [error]:x: Error saving backup file '{filename}': {save_err}[/]"
                     )
                 except Exception as save_err:  # Catch other potential save errors
                     print(
-                        f"  [bold red]:x: Unexpected error saving backup '{filename}': {save_err}[/]"
+                        f"  [error]:x: Unexpected error saving backup '{filename}': {save_err}[/]"
                     )
 
             print(
@@ -184,16 +182,16 @@ class ChallengeBackupper:
 
         except requests.exceptions.RequestException as api_err:
             print(
-                f"\n[bold red]:x: API Error during challenge backup process: {api_err}[/]"
+                f"\n[error]:x: API Error during challenge backup process: {api_err}[/]"
             )
             # Optionally re-raise if needed elsewhere: raise
         except IOError as io_err:
             print(
-                f"\n[bold red]:x: File System Error during challenge backup process (e.g., creating folder '{output_folder}'): {io_err}[/]"
+                f"\n[error]:x: File System Error during challenge backup process (e.g., creating folder '{output_folder}'): {io_err}[/]"
             )
         except Exception as e:
             print(
-                f"\n[bold red]:x: An unexpected error occurred during the challenge backup process: {e}[/]"
+                f"\n[error]:x: An unexpected error occurred during the challenge backup process: {e}[/]"
             )
             # Optional: Add more detailed logging for unexpected errors
             # import traceback
@@ -201,6 +199,7 @@ class ChallengeBackupper:
 
     # --- Internal Helper Methods ---
 
+    # & -     def _fetch_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     def _fetch_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         Fetches all user tasks and challenges the user is a member of via the API.
@@ -226,6 +225,7 @@ class ChallengeBackupper:
 
         return tasks, challenges
 
+    # & -     def _group_tasks_by_challenge(
     def _group_tasks_by_challenge(
         self, tasks: List[Dict[str, Any]]
     ) -> Dict[str, List[Dict[str, Any]]]:
@@ -265,6 +265,7 @@ class ChallengeBackupper:
         )
         return tasks_by_challenge
 
+    # & -     def _clean_task_for_backup(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
     def _clean_task_for_backup(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Removes specified transient or user-specific keys from a task dictionary.
@@ -289,6 +290,7 @@ class ChallengeBackupper:
         # print(f"    Cleaned task '{task_data.get('text', 'N/A')}', removed {keys_removed_count} keys.")
         return cleaned_task
 
+    # & -     def _process_single_challenge(
     def _process_single_challenge(
         self, challenge_data: Dict[str, Any], challenge_tasks_raw: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
@@ -364,12 +366,12 @@ if __name__ == "__main__":
         api = HabiticaAPI()  # Reads credentials from config/.env by default
     except (ImportError, ValueError, FileNotFoundError) as config_err:
         print(
-            f"[bold red]:x: Failed to initialize Habitica API. Is .env file configured? Error: {config_err}[/]"
+            f"[error]:x: Failed to initialize Habitica API. Is .env file configured? Error: {config_err}[/]"
         )
         exit(1)  # Exit if API can't be initialized
     except Exception as api_init_err:
         print(
-            f"[bold red]:x: An unexpected error occurred initializing Habitica API: {api_init_err}[/]"
+            f"[error]:x: An unexpected error occurred initializing Habitica API: {api_init_err}[/]"
         )
         exit(1)
 
@@ -386,7 +388,7 @@ if __name__ == "__main__":
         backupper.create_backups(output_folder=backup_folder)
 
     except Exception as main_err:
-        print(f"[bold red]:x: Failed to run challenge backup process: {main_err}[/]")
+        print(f"[error]:x: Failed to run challenge backup process: {main_err}[/]")
         # Optional: Detailed traceback for debugging standalone runs
         # import traceback
         # traceback.print_exc()

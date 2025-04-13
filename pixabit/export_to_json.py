@@ -2,13 +2,11 @@
 # MARK: - MODULE DOCSTRING
 """
 Provides functions for exporting various Habitica data structures to JSON files.
-
 This module includes functions to fetch specific data types (like tags,
 challenges with tasks, raw tasks, full user data) using the HabiticaAPI client
 and save them into well-formatted JSON files. It leverages helper utilities
 for file saving and potentially other classes like ChallengeBackupper for
 more complex export processes.
-
 Functions:
     save_user_stats_into_json: Fetches all user stats and saves them as JSON.
     save_tags_into_json: Fetches all user tags and saves them as JSON.
@@ -16,26 +14,25 @@ Functions:
     save_tasks_without_proccessing: Fetches all raw tasks and saves as a single JSON file.
     save_processed_tasks_into_json: Saves an already processed task dictionary as JSON.
     save_all_userdata_into_json: Fetches the complete user object and saves as JSON.
-
 Internal Helpers:
     _save_json: Helper function to save Python data to JSON with error handling.
 """
-
-# MARK: - IMPORTS
 import json
 import os
 from typing import Any, Dict, List, Union
 
 import emoji_data_python
 
+# MARK: - IMPORTS
 from . import config
 from .api import HabiticaAPI
-from .challenge_backup import ChallengeBackupper
-from .processing import TaskProcessor, get_user_stats
+from .data_processor import TaskProcessor, get_user_stats
+from .export_challenges import ChallengeBackupper
 from .utils.display import console, print
 
 
 # MARK: - INTERNAL HELPER FUNCTIONS
+# & - def _save_json(data: Union[Dict[str, Any], List[Any]], filepath: str) -> None:
 def _save_json(data: Union[Dict[str, Any], List[Any]], filepath: str) -> None:
     """
     Saves Python data (dict or list) to a JSON file with pretty printing.
@@ -65,20 +62,20 @@ def _save_json(data: Union[Dict[str, Any], List[Any]], filepath: str) -> None:
         # Write the file with UTF-8 encoding and nice indentation
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
-        print(f"[green]Successfully saved data to:[/green] [cyan]{filepath}[/]")
+        print(f"[green]Successfully saved data to:[/green] [file]{filepath}[/]")
 
     except TypeError as e:
         # Handle cases where data cannot be serialized to JSON
         print(
-            f"[bold red]Error:[/bold red] Data structure not JSON serializable for '{filepath}'. {e}"
+            f"[error]Error:[/error] Data structure not JSON serializable for '{filepath}'. {e}"
         )
     except IOError as e:
         # Handle file system errors (permissions, disk full, etc.)
-        print(f"[bold red]Error:[/bold red] Could not write file '{filepath}': {e}")
+        print(f"[error]Error:[/error] Could not write file '{filepath}': {e}")
     except Exception as e:
         # Catch any other unexpected errors during saving
         print(
-            f"[bold red]Error:[/bold red] An unexpected error occurred saving to '{filepath}': {e}"
+            f"[error]Error:[/error] An unexpected error occurred saving to '{filepath}': {e}"
         )
 
 
@@ -86,6 +83,7 @@ def _save_json(data: Union[Dict[str, Any], List[Any]], filepath: str) -> None:
 
 
 # --- Tag Exports ---
+# & - def save_user_stats_into_json(
 def save_user_stats_into_json(
     api_client: HabiticaAPI,
     tasks_processed: dict,
@@ -108,7 +106,7 @@ def save_user_stats_into_json(
     Returns:
         None
     """
-    print(f"Fetching tags to save to [cyan]{output_filename}[/]...")
+    print(f"Fetching tags to save to [file]{output_filename}[/]...")
     try:
         user_stats = get_user_stats(
             api_client, tasks_processed["cats"]
@@ -116,7 +114,7 @@ def save_user_stats_into_json(
 
         if not isinstance(user_stats, dict):  # Check if API returned expected type
             print(
-                "[bold red]Error:[/bold red] Failed to fetch tags or received unexpected data format from API."
+                "[error]Error:[/error] Failed to fetch tags or received unexpected data format from API."
             )
             return
 
@@ -134,13 +132,14 @@ def save_user_stats_into_json(
         _save_json(user_stats, output_filename)
 
     except requests.exceptions.RequestException as api_err:
-        print(f"[bold red]API Error fetching stats: {api_err}[/]")
+        print(f"[error]API Error fetching stats: {api_err}[/]")
     except Exception as e:
         # Catch any other exceptions during the process
-        print(f"[bold red]Error in save_user_stats_into_json: {e}[/]")
+        print(f"[error]Error in save_user_stats_into_json: {e}[/]")
 
 
 # --- Tag Exports ---
+# & - def save_tags_into_json(
 def save_tags_into_json(
     api_client: HabiticaAPI, output_filename: str = "tags_all.json"
 ) -> None:
@@ -159,13 +158,13 @@ def save_tags_into_json(
     Returns:
         None
     """
-    print(f"Fetching tags to save to [cyan]{output_filename}[/]...")
+    print(f"Fetching tags to save to [file]{output_filename}[/]...")
     try:
         tags_list = api_client.get_tags()  # Should return List[Dict] or []
 
         if not isinstance(tags_list, list):  # Check if API returned expected type
             print(
-                "[bold red]Error:[/bold red] Failed to fetch tags or received unexpected data format from API."
+                "[error]Error:[/error] Failed to fetch tags or received unexpected data format from API."
             )
             return
 
@@ -202,13 +201,14 @@ def save_tags_into_json(
         _save_json(category, output_filename)
 
     except requests.exceptions.RequestException as api_err:
-        print(f"[bold red]API Error fetching tags: {api_err}[/]")
+        print(f"[error]API Error fetching tags: {api_err}[/]")
     except Exception as e:
         # Catch any other exceptions during the process
-        print(f"[bold red]Error in save_tags_into_json: {e}[/]")
+        print(f"[error]Error in save_tags_into_json: {e}[/]")
 
 
 # --- Challenge Exports ---
+# & - def save_full_challenges_into_json(
 def save_full_challenges_into_json(
     api_client: HabiticaAPI, output_folder: str = "_challenge_backups"
 ) -> None:
@@ -226,12 +226,12 @@ def save_full_challenges_into_json(
     Returns:
         None
     """
-    print(f"Starting full challenge backup to folder: [cyan]{output_folder}[/]...")
+    print(f"Starting full challenge backup to folder: [file]{output_folder}[/]...")
     try:
         # Ensure ChallengeBackupper was imported successfully
         if "ChallengeBackupper" not in globals() or not callable(ChallengeBackupper):
             print(
-                "[bold red]Error:[/bold red] ChallengeBackupper class is not available. Cannot perform backup."
+                "[error]Error:[/error] ChallengeBackupper class is not available. Cannot perform backup."
             )
             return
 
@@ -239,12 +239,13 @@ def save_full_challenges_into_json(
         backupper.create_backups(output_folder=output_folder)
         # Success message is usually printed within create_backups
     except Exception as e:
-        print(f"[bold red]Error occurred during challenge backup process: {e}[/]")
+        print(f"[error]Error occurred during challenge backup process: {e}[/]")
         # import traceback # Uncomment for detailed debug info
         # traceback.print_exc()
 
 
 # --- Task Exports ---
+# & - def save_tasks_without_proccessing(
 def save_tasks_without_proccessing(
     api_client: HabiticaAPI, output_filename: str = "tasks_raw.json"
 ) -> None:
@@ -263,13 +264,13 @@ def save_tasks_without_proccessing(
     Returns:
         None
     """
-    print(f"Fetching raw tasks to save to [cyan]{output_filename}[/]...")
+    print(f"Fetching raw tasks to save to [file]{output_filename}[/]...")
     try:
         raw_tasks = api_client.get_tasks()  # Fetches all task types
 
         if not isinstance(raw_tasks, list):  # Check API response type
             print(
-                "[bold red]Error:[/bold red] Failed to fetch raw tasks or received unexpected data format."
+                "[error]Error:[/error] Failed to fetch raw tasks or received unexpected data format."
             )
             return
 
@@ -287,11 +288,12 @@ def save_tasks_without_proccessing(
         _save_json(raw_tasks, output_filename)
 
     except requests.exceptions.RequestException as api_err:
-        print(f"[bold red]API Error fetching tasks: {api_err}[/]")
+        print(f"[error]API Error fetching tasks: {api_err}[/]")
     except Exception as e:
-        print(f"[bold red]Error in save_tasks_without_proccessing: {e}[/]")
+        print(f"[error]Error in save_tasks_without_proccessing: {e}[/]")
 
 
+# & - def save_processed_tasks_into_json(
 def save_processed_tasks_into_json(
     processed_tasks_dict: Dict[str, Dict[str, Any]],
     output_filename: str = "tasks_processed.json",
@@ -313,10 +315,10 @@ def save_processed_tasks_into_json(
     Returns:
         None
     """
-    print(f"Saving processed tasks dictionary to [cyan]{output_filename}[/]...")
+    print(f"Saving processed tasks dictionary to [file]{output_filename}[/]...")
     if not isinstance(processed_tasks_dict, dict):
         print(
-            "[bold red]Error:[/bold red] Invalid data format: `processed_tasks_dict` must be a dictionary."
+            "[error]Error:[/error] Invalid data format: `processed_tasks_dict` must be a dictionary."
         )
         return
     if not processed_tasks_dict:
@@ -330,6 +332,7 @@ def save_processed_tasks_into_json(
 
 
 # --- User Data Exports ---
+# & - def save_all_userdata_into_json(
 def save_all_userdata_into_json(
     api_client: HabiticaAPI, output_filename: str = "user_data_full.json"
 ) -> None:
@@ -346,22 +349,22 @@ def save_all_userdata_into_json(
     Returns:
         None
     """
-    print(f"Fetching full user data to save to [cyan]{output_filename}[/]...")
+    print(f"Fetching full user data to save to [file]{output_filename}[/]...")
     try:
         user_data = api_client.get_user_data()  # Fetches the /user object
 
         if not isinstance(user_data, dict) or not user_data:  # Check API response
             print(
-                "[bold red]Error:[/bold red] Failed to fetch user data from API or received empty/invalid data."
+                "[error]Error:[/error] Failed to fetch user data from API or received empty/invalid data."
             )
             return
 
         _save_json(user_data, output_filename)
 
     except requests.exceptions.RequestException as api_err:
-        print(f"[bold red]API Error fetching user data: {api_err}[/]")
+        print(f"[error]API Error fetching user data: {api_err}[/]")
     except Exception as e:
-        print(f"[bold red]Error in save_all_userdata_into_json: {e}[/]")
+        print(f"[error]Error in save_all_userdata_into_json: {e}[/]")
 
 
 # MARK: - EXAMPLE USAGE (Commented out)
@@ -410,9 +413,9 @@ def save_all_userdata_into_json(
 # 		#	 print("Skipping processed task export: No data from processor.")
 #
 # 	except ValueError as config_err: # Catch config errors during API init
-# 		 print(f"[bold red]Configuration Error: {config_err}[/]")
+# 		 print(f"[error]Configuration Error: {config_err}[/]")
 # 	except Exception as e:
-# 		 print(f"[bold red]An error occurred during export: {e}[/]")
+# 		 print(f"[error]An error occurred during export: {e}[/]")
 # 		 # import traceback
 # 		 # traceback.print_exc()
 #

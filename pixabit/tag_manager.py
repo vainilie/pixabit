@@ -1,27 +1,23 @@
 # pixabit/tag_manager.py
 """
 Provides the TagManager class for managing Habitica tags and task attributes.
-
 This module defines the `TagManager` class, which offers methods to enforce
 consistency rules between different types of tags (e.g., challenge vs. personal),
 ensure specific tags are present (e.g., 'poison status' tags), synchronize task
 attributes (STR, INT, CON, PER) with corresponding tags, and identify/manage
 unused tags. It relies on tag IDs loaded from the application's configuration.
-
 Classes:
     TagManager: Manages tag consistency and attribute synchronization.
 """
-
 from typing import Any, Dict, List, Set, Tuple
 
 from rich.progress import (BarColumn, Progress, SpinnerColumn, TextColumn,
                            TimeElapsedColumn, TimeRemainingColumn)
 
 from .api import HabiticaAPI
-from .config import (  # Import required Tag IDs from config module
-    ATTR_TAG_CON_ID, ATTR_TAG_INT_ID, ATTR_TAG_PER_ID, ATTR_TAG_STR_ID,
-    CHALLENGE_TAG_ID, NO_ATTR_TAG_ID, NOT_PSN_TAG_ID, PERSONAL_TAG_ID,
-    PSN_TAG_ID)
+from .config import (ATTR_TAG_CON_ID, ATTR_TAG_INT_ID, ATTR_TAG_PER_ID,
+                     ATTR_TAG_STR_ID, CHALLENGE_TAG_ID, NO_ATTR_TAG_ID,
+                     NOT_PSN_TAG_ID, PERSONAL_TAG_ID, PSN_TAG_ID)
 from .utils.display import Confirm, Table, console, print, track
 
 
@@ -36,6 +32,7 @@ class TagManager:
     to execute changes and requires specific Tag IDs to be configured.
     """
 
+    # & -     def __init__(self, api_client: HabiticaAPI):
     def __init__(self, api_client: HabiticaAPI):
         """
         Initializes the TagManager.
@@ -79,6 +76,7 @@ class TagManager:
         print("[bold blue]TagManager initialized.[/]")
         self._validate_config()  # Check if essential tags are loaded
 
+    # & -     def _validate_config(self):
     def _validate_config(self):
         """Checks if essential tag IDs loaded correctly from config."""
         essential_tags = {
@@ -94,6 +92,7 @@ class TagManager:
 
     # --- Action Execution Helper ---
 
+    # & -     def _confirm_and_execute_actions(
     def _confirm_and_execute_actions(
         self, actions: List[Tuple[str, str, str]], description: str
     ) -> None:
@@ -124,9 +123,9 @@ class TagManager:
         # Estimate time (Habitica rate limit: 30/min => 2 sec/request)
         est_seconds = fix_count * 2.0
         if est_seconds > 120:  # More than 2 minutes
-            est_time_str = f"[cyan]{est_seconds / 60:.1f} minutes[/cyan]"
+            est_time_str = f"[file]{est_seconds / 60:.1f} minutes[/file]"
         else:
-            est_time_str = f"[cyan]{est_seconds:.1f} seconds[/cyan]"
+            est_time_str = f"[file]{est_seconds:.1f} seconds[/file]"
 
         self.console.print(
             f"{description}: Found {fix_count} actions needed. Estimated time: {est_time_str}"
@@ -199,6 +198,7 @@ class TagManager:
 
     # --- Tag Consistency Methods ---
 
+    # & -     def sync_challenge_personal_tags(
     def sync_challenge_personal_tags(
         self, processed_tasks: Dict[str, Dict[str, Any]]
     ) -> None:
@@ -247,6 +247,7 @@ class TagManager:
 
         self._confirm_and_execute_actions(actions, description)
 
+    # & -     def ensure_poison_status_tags(
     def ensure_poison_status_tags(
         self, processed_tasks: Dict[str, Dict[str, Any]]
     ) -> None:
@@ -287,6 +288,7 @@ class TagManager:
 
         self._confirm_and_execute_actions(actions, description)
 
+    # & -     def sync_attributes_to_tags(
     def sync_attributes_to_tags(
         self, processed_tasks: Dict[str, Dict[str, Any]]
     ) -> None:
@@ -371,6 +373,7 @@ class TagManager:
 
     # --- Utility / Other Tag Methods ---
 
+    # & -     def add_or_replace_tag_based_on_other(
     def add_or_replace_tag_based_on_other(
         self,
         processed_tasks: Dict[str, Dict[str, Any]],
@@ -397,7 +400,7 @@ class TagManager:
         """
         if not tag_to_find or not tag_to_add:
             print(
-                "[bold red]Error in add_or_replace_tag: Both 'tag_to_find' and 'tag_to_add' must be valid Tag IDs.[/]"
+                "[error]Error in add_or_replace_tag: Both 'tag_to_find' and 'tag_to_add' must be valid Tag IDs.[/]"
             )
             return
 
@@ -422,6 +425,7 @@ class TagManager:
 
         self._confirm_and_execute_actions(actions, action_desc)
 
+    # & -     def find_unused_tags(
     def find_unused_tags(
         self,
         all_tags: List[Dict[str, Any]],  # Expects list of {'id': ..., 'name': ...}
@@ -456,6 +460,7 @@ class TagManager:
         print(f"Found {len(unused_tags)} potentially unused tags.")
         return unused_tags
 
+    # & -     def delete_unused_tags_interactive(
     def delete_unused_tags_interactive(
         self, all_tags: List[Dict[str, Any]], used_tag_ids: Set[str]
     ) -> None:
@@ -489,7 +494,7 @@ class TagManager:
         # Display unused tags clearly before asking
         table = Table(title="Unused Tags Found", show_lines=True)
         table.add_column("Num", style="dim", width=4, justify="right")
-        table.add_column("Name", style="cyan")
+        table.add_column("Name", style="file")
         table.add_column("ID", style="magenta")
         for i, tag in enumerate(unused_tags_list):
             table.add_row(str(i + 1), tag["name"], tag["id"])
@@ -497,7 +502,7 @@ class TagManager:
 
         # Ask for confirmation to delete ALL listed tags
         if Confirm.ask(
-            "\n[bold red]Delete ALL[/] these unused tags permanently from Habitica?",
+            "\n[error]Delete ALL[/] these unused tags permanently from Habitica?",
             default=False,
         ):
             # --- IMPORTANT ---
