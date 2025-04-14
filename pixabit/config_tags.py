@@ -1,410 +1,430 @@
-# pixabit/tag_setup.py (or config_utils.py / cli/setup.py etc.)
+# pixabit/config_tags.py
 # MARK: - MODULE DOCSTRING
-"""
-Provides functionality for interactively setting up specific Tag IDs in the .env file.
-This module fetches existing tags from the user's Habitica account, displays them,
-and prompts the user to select or create tags for predefined configuration roles
-(e.g., Challenge Tag, Attribute Tags). The selected/created tag IDs are then
-saved back to the `.env` file.
-Functions:
-    interactive_tag_setup(api_client): Runs the main interactive setup process.
-    configure_tags(): A simple wrapper to initialize API and run setup, useful for CLI commands.
-Requires:
-    - An authenticated `HabiticaAPI` instance from `.api`.
-    - Rich library components (`Confirm`, `Prompt`, `console`, `IntPrompt`, `Table`)
-      likely provided via a `utils.display` module.
-    - `python-dotenv` library functions (`find_dotenv`, `get_key`, `set_key`).
-"""
-import os
-from typing import Any, Dict, List, Optional  # Added Any for tag data
+"""Provides functionality for interactively setting up OPTIONAL Tag IDs in the .env file.
 
-from dotenv import find_dotenv, get_key, set_key
+Fetches existing tags, displays them, groups configuration by feature, and allows
+users to select, create, keep existing, or skip/unset tags for predefined roles.
+Saves changes back to the .env file using python-dotenv utilities.
+"""
 
 # MARK: - IMPORTS
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Union  # Added set
+
+import requests  # For API exceptions
+
+# Use specific dotenv functions
+from dotenv import find_dotenv, get_key, set_key, unset_key
+
+# Local Imports
 from .api import HabiticaAPI
-from .utils.display import Confirm, IntPrompt, Prompt, Table, console, print
+
+# Use themed display components
+from .utils.display import (
+    Confirm,
+    Prompt,
+    Rule,
+    Table,
+    box,
+    console,  # Added Rule
+)
 
 # MARK: - CONSTANTS
-# Dictionary mapping descriptive names to the .env variable keys for specific tags
-TAG_CONFIG_KEYS: Dict[str, str] = {
-    "Challenge Tag (for challenge tasks)": "CHALLENGE_TAG_ID",
-    "Personal/Owned Tag (for non-challenge tasks)": "PERSONAL_TAG_ID",
-    "Poisoned Tag (for poison challenge)": "PSN_TAG_ID",
-    "Not Poisoned Tag (default status)": "NOT_PSN_TAG_ID",
-    "No Attribute Tag (for tasks w/o STR/INT/etc)": "NO_ATTR_TAG_ID",
-    "Strength Attribute Tag": "ATTR_TAG_STR_ID",
-    "Intelligence Attribute Tag": "ATTR_TAG_INT_ID",
-    "Constitution Attribute Tag": "ATTR_TAG_CON_ID",
-    "Perception Attribute Tag": "ATTR_TAG_PER_ID",
-    # Add any other specific configuration tags you need here
+# Group tag configurations logically for prompting
+TAG_CONFIG_GROUPS: Dict[str, Dict[str, str]] = {
+    "Challenge/Personal": {
+        "Challenge Tag (for challenge tasks)": "CHALLENGE_TAG_ID",
+        "Personal Tag (for non-challenge tasks)": "PERSONAL_TAG_ID",
+    },
+    "Poison Status": {
+        "Poisoned Tag (e.g., for poison challenge)": "PSN_TAG_ID",
+        "Not Poisoned Tag (default status)": "NOT_PSN_TAG_ID",
+    },
+    "Attributes": {
+        "No Attribute Tag (tasks w/o STR/INT/...)": "NO_ATTR_TAG_ID",
+        "Strength Attribute Tag": "ATTR_TAG_STR_ID",
+        "Intelligence Attribute Tag": "ATTR_TAG_INT_ID",
+        "Constitution Attribute Tag": "ATTR_TAG_CON_ID",
+        "Perception Attribute Tag": "ATTR_TAG_PER_ID",
+    },
+    # Add other logical groups here if needed
+}
+
+# Flattened map for easier lookup later
+ALL_TAG_CONFIG_KEYS: Dict[str, str] = {
+    desc: key for group in TAG_CONFIG_GROUPS.values() for desc, key in group.items()
 }
 
 
-# MARK: - CORE FUNCTIONS
-# & - def interactive_tag_setup(api_client: HabiticaAPI) -> None:
-def interactive_tag_setup(api_client: HabiticaAPI) -> None:
-    """
-    Interactively configures specific tag IDs in the .env file.
-
-    Fetches all tags from the user's Habitica account via the provided API client.
-    Displays the tags in a table. Prompts the user to select an existing tag,
-    create a new tag (via API), or keep the current value (if one exists in
-    .env) for each tag type defined in `TAG_CONFIG_KEYS`. Finally, confirms
-    with the user before saving the chosen tag IDs back to the .env file.
+# MARK: - CORE FUNCTION
+# & - def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]) -> None:
+def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]) -> None:
+    """Interactively configures OPTIONAL tag IDs in the .env file, grouped by feature.
 
     Args:
-        api_client (HabiticaAPI): An authenticated instance of the HabiticaAPI client.
-
-    Returns:
-        None: The function modifies the .env file directly.
-
-    Raises:
-        requests.exceptions.RequestException: If API calls to fetch or create tags fail.
-        IOError: If reading from or writing to the .env file fails.
-        Exception: Catches and reports other unexpected errors during the process.
+        api_client: Authenticated HabiticaAPI client.
+        dotenv_path: Path to the .env file.
     """
     console.print(
-        "[bold cyan]--- Interactive Tag Configuration ---[/]", justify="center"
+        "\n--- Interactive Optional Tag Configuration ---", style="highlight", justify="center"
     )
+    console.print(
+        "Configure Tag IDs for optional features. Skip groups or individual tags if unused."
+    )
+    console.print(f"Using configuration file: [file]'{dotenv_path}'[/]", style="info")
 
-    # --- 1. Find .env file path ---
-    # find_dotenv() searches upwards from the current file or CWD
-    dotenv_path = find_dotenv(
-        raise_error_if_not_found=False, usecwd=True
-    )  # Search CWD too
-    if not dotenv_path or not os.path.exists(dotenv_path):
-        # If not found, try creating one at project root (similar to config.py logic)
-        try:
-            # Assume this script is somewhere within the project structure
-            # Resolve needed for parent.parent if __file__ is relative
-            project_root = Path(__file__).resolve().parent.parent
-            dotenv_path_candidate = project_root / ".env"
-            console.print(
-                f"No .env found automatically, checking/creating: [cyan]{dotenv_path_candidate}[/]"
-            )
-            if not os.path.exists(dotenv_path_candidate):
-                # Create empty file if it doesn't exist
-                open(dotenv_path_candidate, "a").close()
-                console.print(".env file created.")
-            dotenv_path = str(dotenv_path_candidate)  # Use the created path
-        except Exception as e:
-            console.print(f"[error]Could not find or create .env file: {e}[/]")
-            console.print("Please ensure a .env file exists in your project root.")
-            return
-    console.print(f"Using configuration file: [cyan]{dotenv_path}[/]")
+    dotenv_path_str = str(dotenv_path)  # Ensure string for dotenv functions
 
-    # --- 2. Fetch existing tags ---
+    # --- Step 1: Fetch existing tags ---
     all_tags: List[Dict[str, Any]] = []
     try:
-        console.print("Fetching all available tags from Habitica...")
-        all_tags = api_client.get_tags()  # get_tags should return a list
-        if not isinstance(all_tags, list):  # Add explicit type check
-            console.print(
-                f"[error]Error:[/error] Expected a list of tags from API, but received {type(all_tags)}. Cannot proceed."
-            )
-            return
-        if not all_tags:
-            console.print(
-                "[yellow]No tags found in your Habitica account. You can create them during this setup.[/]"
-            )
-            # Allow proceeding even if no tags exist yet
-
-        # Sort tags for consistent display
+        console.print("⏳ Fetching tags from Habitica...", style="info")
+        fetched_tags = api_client.get_tags()
+        if not isinstance(fetched_tags, list):
+            raise TypeError(f"Expected list of tags, got {type(fetched_tags)}")
+        all_tags = fetched_tags
         all_tags.sort(key=lambda t: t.get("name", "").lower())
-        console.print(f"Found {len(all_tags)} tags.")
+        console.print(f"✅ Found {len(all_tags)} existing tags.", style="success")
+    except (requests.exceptions.RequestException, TypeError, Exception) as e:
+        console.print(f"❌ Error fetching tags: {e}", style="error")
+        console.print("Cannot proceed without tag list.")
+        return
 
-    except Exception as e:
-        console.print(f"[error]Error fetching tags from Habitica API: {e}[/]")
-        return  # Cannot proceed without tags list
-
-    # --- 3. Display tags ---
-    # Filter out tags without IDs just before display/selection, keep original list intact
-    valid_tags_for_selection = [tag for tag in all_tags if tag.get("id")]
+    # --- Step 2: Prepare and Display Tags ---
+    valid_tags_for_selection = [tag for tag in all_tags if isinstance(tag, dict) and tag.get("id")]
     num_tags_selectable = len(valid_tags_for_selection)
 
     table = Table(
-        title="Available Habitica Tags", show_lines=True, expand=False, min_width=60
+        title="Available Habitica Tags",
+        show_lines=True,
+        box=box.ROUNDED,
+        border_style="rp_overlay",
     )
-    table.add_column("Num", style="dim", width=4, justify="right")
-    table.add_column("Name", style="cyan", max_width=40)  # Adjust width as needed
-    table.add_column("ID", style="magenta", no_wrap=True)
+    table.add_column("Num", style="subtle", width=4, justify="right")
+    table.add_column("Name", style="rp_foam", max_width=40)
+    table.add_column("ID", style="rp_rose", no_wrap=True)
 
     if not valid_tags_for_selection:
-        table.add_row("...", "[italic]No existing tags found[/italic]", "...")
+        table.add_row("...", "[dim]No existing selectable tags found[/dim]", "...")
     else:
         for i, tag in enumerate(valid_tags_for_selection):
-            # Use i+1 for display number, matching valid list index+1
-            table.add_row(
-                str(i + 1), tag.get("name", "[i]No Name[/i]"), tag.get("id", "N/A")
-            )
-
+            table.add_row(str(i + 1), tag.get("name", "[dim]N/A[/dim]"), tag.get("id"))
     console.print(table)
     if not valid_tags_for_selection:
         console.print(
-            "[yellow]You'll need to use the 'Create New' option for all tags.[/]"
+            "⚠️ You will need to use 'Create New' or 'Skip' for all tags.", style="warning"
         )
 
-    # --- 4. Prompt user for each required tag ---
-    selected_ids: Dict[str, str] = {}  # Store chosen env_key: tag_id pairs
+    # --- Step 3: Prompt User for Each Tag GROUP ---
+    selected_ids: Dict[str, Optional[str]] = {}  # Store {env_key: tag_id or None}
+    keys_to_unset: Set[str] = set()  # Track keys currently in .env that user skips
 
-    for tag_description, env_key in TAG_CONFIG_KEYS.items():
-        console.print(
-            f"\n--- Configuring: [bold green]{tag_description}[/bold green] (Variable: {env_key}) ---"
-        )
-        # Get current value from .env to show the user and allow keeping it
-        current_value_id = get_key(
-            dotenv_path, env_key
-        )  # Returns None if key not found
-        current_display = ""
-        current_name = None
-        if current_value_id:
-            # Find the name corresponding to the current ID
-            current_tag = next(
-                (t for t in all_tags if t.get("id") == current_value_id), None
-            )
-            if current_tag:
-                current_name = current_tag.get("name", "[i]Unknown Name[/i]")
-                current_display = f" (Current: '[cyan]{current_name}[/cyan]')"
-            else:
-                # ID exists in .env but not in fetched tags (maybe deleted in Habitica?)
-                current_display = f" (Current ID: [magenta]{current_value_id}[/magenta] - [yellow]Tag not found in API list![/yellow])"
+    for group_name, tags_in_group in TAG_CONFIG_GROUPS.items():
+        console.print(Rule(f"[highlight]Configure {group_name} Tags[/]", style="rp_overlay"))
+        # Ask to configure this group
+        if not Confirm.ask(f"set up tags for '{group_name}' feature?", default=True):
+            console.print(f"⏭️ Skipping configuration for {group_name} tags.", style="info")
+            # Mark existing keys in this group for potential removal
+            for env_key in tags_in_group.values():
+                if get_key(dotenv_path_str, env_key) is not None:
+                    keys_to_unset.add(env_key)
+                selected_ids[env_key] = None  # Mark as not configured in this run
+            continue  # Skip to next group
 
-        # Inner loop to handle retries on invalid input for a single tag type
-        while True:
-            try:
-                # Build prompt text dynamically based on available options
-                prompt_options = ""
-                valid_choices = [
-                    str(i) for i in range(num_tags_selectable + 1)
-                ]  # 0 to N
-                if num_tags_selectable > 0:
-                    prompt_options += f"1-{num_tags_selectable} Select Existing, "
-                prompt_options += "0 Create New"
-                if current_value_id:
-                    prompt_options += ", -1 Keep Current"
-                    valid_choices.append("-1")
-
-                prompt_text = f"Enter number for '[bold]{tag_description}[/bold]'\n({prompt_options}){current_display}: "
-
-                # Use IntPrompt, allowing negative numbers only if 'Keep Current' is an option
-                choice = IntPrompt.ask(
-                    prompt_text, choices=valid_choices, show_choices=False
-                )
-
-                # --- Handle different choices ---
-                if choice == -1:
-                    if current_value_id:
-                        # User wants to keep the current value
-                        selected_ids[env_key] = current_value_id
-                        console.print(
-                            f"  Keeping current value '[cyan]{current_name or current_value_id}[/cyan]' for {tag_description}."
-                        )
-                        break  # Exit inner loop, proceed to next tag type
-                    else:
-                        console.print(
-                            "[prompt.invalid]Cannot keep current value as none is set. Please select or create.[/]"
-                        )
-                        # Continue inner loop to re-prompt
-
-                elif 1 <= choice <= num_tags_selectable:
-                    # Existing tag selected - use the valid_tags_for_selection list
-                    selected_index = choice - 1
-                    selected_tag = valid_tags_for_selection[
-                        selected_index
-                    ]  # Get from the filtered list
-                    tag_id = selected_tag.get("id")
-                    tag_name = selected_tag.get("name", "[i]No Name[/i]")
-                    if tag_id:
-                        selected_ids[env_key] = tag_id
-                        console.print(
-                            f"  Selected '[cyan]{tag_name}[/cyan]' ([magenta]{tag_id}[/magenta]) for {tag_description}."
-                        )
-                        break  # Exit inner loop
-                    else:  # Should not happen if valid_tags_for_selection is built correctly
-                        console.print(
-                            "[error]Internal Error:[/error] Selected tag has no ID. Please report this."
-                        )
-
-                elif choice == 0:
-                    # User wants to create a new tag
-                    if Confirm.ask(
-                        f"Create a new Habitica tag for '[bold]{tag_description}[/bold]'?"
-                    ):
-                        # Suggest a default name based on the description
-                        default_name = (
-                            tag_description.split("(")[0]
-                            .strip()
-                            .replace("/", "_")
-                            .replace(" ", "_")
-                        )
-                        new_name = Prompt.ask(
-                            "Enter name for the new tag", default=default_name
-                        )
-
-                        if new_name:
-                            try:
-                                console.print(
-                                    f"Creating tag '[cyan]{new_name}[/cyan]' via API..."
-                                )
-                                # Call the API to create the tag
-                                created_tag_data = api_client.create_tag(new_name)
-                                if created_tag_data and created_tag_data.get("id"):
-                                    new_id = created_tag_data["id"]
-                                    new_name_from_api = created_tag_data.get(
-                                        "name", new_name
-                                    )  # Use name from API response
-                                    console.print(
-                                        f"[bold green]Successfully created tag '[cyan]{new_name_from_api}[/cyan]' with ID: [magenta]{new_id}[/magenta][/]"
-                                    )
-                                    selected_ids[env_key] = new_id
-
-                                    # Add to local lists to make it selectable *if* needed later in this same run
-                                    # (Note: the displayed table doesn't update dynamically)
-                                    all_tags.append(created_tag_data)
-                                    valid_tags_for_selection.append(created_tag_data)
-                                    num_tags_selectable = len(
-                                        valid_tags_for_selection
-                                    )  # Update count
-
-                                    break  # Tag created and selected, exit inner loop
-                                else:
-                                    console.print(
-                                        f"[error]API Error:[/error] Did not return valid data for created tag '{new_name}'. Please select an existing tag or try again."
-                                    )
-                            except Exception as create_err:
-                                console.print(
-                                    f"[error]Error creating tag '{new_name}': {create_err}[/]"
-                                )
-                                # Allow user to retry or select existing by continuing loop
-                        else:
-                            console.print("Tag creation cancelled (no name entered).")
-                            # Continue inner loop
-                    else:
-                        console.print("Tag creation cancelled.")
-                        # Continue inner loop
-                else:
-                    # Invalid number entered (should be caught by IntPrompt choices, but maybe not)
-                    console.print(
-                        f"[prompt.invalid]Invalid choice.[/] Please use options: {prompt_options}."
-                    )
-                    # Continue inner loop
-
-            except (
-                ValueError
-            ):  # Catches non-integer input if IntPrompt fails validation
-                console.print(
-                    f"[prompt.invalid]Please enter a valid number ({prompt_options}).[/]"
-                )
-                # Continue inner loop
-            except NotImplementedError:  # From DummyIntPrompt if Rich unavailable
-                console.print(
-                    "[error]Error:[/error] Rich library components are required for interaction."
-                )
-                return  # Exit function if interaction isn't possible
-
-        # --- End of inner while True loop ---
-    # --- End of for tag_description... loop ---
-
-    # --- 5. Confirm before saving ---
-    console.print("\n" + "=" * 60)
-    console.print("[bold yellow]Review Final Selections:[/]")
-    all_selections_valid = True
-    for desc, key in TAG_CONFIG_KEYS.items():
-        tag_id = selected_ids.get(key)
-        if tag_id:
-            # Find the name again for confirmation display (including potentially newly created ones)
-            tag_info = next((t for t in all_tags if t.get("id") == tag_id), None)
-            tag_name = (
-                tag_info.get("name", "[i]Unknown Name[/i]")
-                if tag_info
-                else "[yellow]MISSING TAG[/yellow]"
-            )
+        # Configure tags within this group
+        for tag_description, env_key in tags_in_group.items():
             console.print(
-                f"  [field]{desc:<45}[/field]: '[cyan]{tag_name}[/cyan]' ([magenta]{tag_id}[/magenta])"
+                f"\n-- Tag: [highlight]{tag_description}[/] ([dim]Variable: {env_key}[/]) --"
             )
-        else:
-            console.print(f"  [field]{desc:<45}[/field]: [error]** Not Set **[/error]")
-            all_selections_valid = False  # Mark if any tag is missing
-    console.print("=" * 60)
+            current_value_id = get_key(dotenv_path_str, env_key)
+            current_display_name = "[dim i]Not Set[/dim i]"
+            current_tag_name = None  # Store name if found
+            if current_value_id:
+                current_tag = next(
+                    (
+                        t
+                        for t in all_tags
+                        if isinstance(t, dict) and t.get("id") == current_value_id
+                    ),
+                    None,
+                )
+                if current_tag:
+                    current_tag_name = current_tag.get("name", "[dim]Unknown[/dim]")
+                    current_display_name = (
+                        f" '[rp_foam]{current_tag_name}[/]' ([rp_rose]{current_value_id}[/])"
+                    )
+                else:
+                    current_display_name = f" ID [rp_rose]{current_value_id}[/] ([warning]Tag no longer exists![/warning])"
 
-    if not all_selections_valid:
+            tag_configured_successfully = False
+            while not tag_configured_successfully:
+                try:
+                    # --- Build Prompt ---
+                    prompt_options_list = []
+                    valid_choices_numeric = []
+                    if num_tags_selectable > 0:
+                        prompt_options_list.append(
+                            f"[bold]1[/]-[bold]{num_tags_selectable}[/] Select"
+                        )
+                        valid_choices_numeric.extend(range(1, num_tags_selectable + 1))
+                    prompt_options_list.append("[bold]0[/] Create")
+                    valid_choices_numeric.append(0)
+                    if current_value_id:
+                        prompt_options_list.append("[bold]-1[/] Keep Current")
+                        valid_choices_numeric.append(-1)
+                    prompt_options_list.append("[bold]S[/] Skip/Unset")
+                    valid_choices_str = [str(n) for n in valid_choices_numeric] + ["s", "S"]
+
+                    prompt_text = (
+                        f"Action for '[highlight]{tag_description}[/]':\n"
+                        f"[dim]Options: {', '.join(prompt_options_list)} | Current: {current_display_name}[/dim]\n"
+                        f"Enter choice: "
+                    )
+
+                    choice_str = Prompt.ask(
+                        prompt_text, choices=valid_choices_str, show_choices=False
+                    ).strip()
+
+                    # --- Handle Choice ---
+                    if choice_str.lower() == "s":
+                        selected_ids[env_key] = None  # Explicitly mark as not set
+                        if current_value_id:
+                            keys_to_unset.add(env_key)  # Mark for removal
+                        console.print(f"  ⏭️ Skipping/Unsetting '{tag_description}'.", style="info")
+                        tag_configured_successfully = True
+                    elif choice_str == "-1" and current_value_id:
+                        selected_ids[env_key] = current_value_id  # Keep existing value
+                        if env_key in keys_to_unset:
+                            keys_to_unset.remove(env_key)  # Don't unset if kept
+                        console.print(
+                            f"  ➡️ Keeping current value {current_display_name}.", style="info"
+                        )
+                        tag_configured_successfully = True
+                    elif choice_str.isdigit() or (
+                        choice_str.startswith("-") and choice_str[1:].isdigit()
+                    ):
+                        choice = int(choice_str)
+                        if 1 <= choice <= num_tags_selectable:
+                            selected_tag = valid_tags_for_selection[choice - 1]
+                            tag_id = selected_tag.get("id")
+                            tag_name = selected_tag.get("name", "[dim]N/A[/dim]")
+                            if tag_id:
+                                selected_ids[env_key] = tag_id
+                                if env_key in keys_to_unset:
+                                    keys_to_unset.remove(env_key)
+                                console.print(
+                                    f"  ✅ Selected '[rp_foam]{tag_name}[/]' ([rp_rose]{tag_id}[/]).",
+                                    style="success",
+                                )
+                                tag_configured_successfully = True
+                            else:
+                                console.print(
+                                    "❌ Internal Error: Selected tag missing ID.", style="error"
+                                )
+                        elif choice == 0:  # Create New Tag
+                            default_name = (
+                                tag_description.split("(")[0]
+                                .strip()
+                                .replace(" ", "_")
+                                .replace("/", "-")
+                            )
+                            new_name = Prompt.ask(
+                                f"Enter name for new '{tag_description}' tag:",
+                                default=default_name,
+                            ).strip()
+                            if not new_name:
+                                console.print("⚠️ Creation cancelled (no name).", style="warning")
+                                continue  # Re-prompt for this tag
+                            if Confirm.ask(
+                                f"Create new Habitica tag named '[rp_foam]{new_name}[/]'?"
+                            ):
+                                try:
+                                    console.print(
+                                        f"  ⏳ Creating tag '[rp_foam]{new_name}[/]' via API...",
+                                        style="info",
+                                    )
+                                    created_tag = api_client.create_tag(
+                                        new_name
+                                    )  # Returns dict or None
+                                    if (
+                                        created_tag
+                                        and isinstance(created_tag, dict)
+                                        and created_tag.get("id")
+                                    ):
+                                        new_id = created_tag["id"]
+                                        new_name_api = created_tag.get("name", new_name)
+                                        console.print(
+                                            f"  ✅ Created '[rp_foam]{new_name_api}[/]' ID: [rp_rose]{new_id}[/]",
+                                            style="success",
+                                        )
+                                        selected_ids[env_key] = new_id
+                                        # Add to lists for potential use later in this run
+                                        all_tags.append(created_tag)
+                                        valid_tags_for_selection.append(created_tag)
+                                        num_tags_selectable = len(valid_tags_for_selection)
+                                        if env_key in keys_to_unset:
+                                            keys_to_unset.remove(env_key)
+                                        tag_configured_successfully = True
+                                    else:
+                                        console.print(
+                                            f"❌ API Error: Failed to create tag '{new_name}' or invalid response.",
+                                            style="error",
+                                        )
+                                except (
+                                    requests.exceptions.RequestException,
+                                    Exception,
+                                ) as create_err:
+                                    console.print(
+                                        f"❌ Error creating tag '{new_name}': {create_err}",
+                                        style="error",
+                                    )
+                            else:
+                                console.print("  Creation cancelled.", style="info")
+                        else:
+                            console.print("❌ Invalid number choice.", style="error")
+                    else:
+                        console.print(
+                            "❌ Invalid input. Please enter a valid number or 'S'.", style="error"
+                        )
+
+                except (ValueError, TypeError):
+                    console.print("❌ Invalid input. Please enter a number or 'S'.", style="error")
+                except Exception as e:  # Catch unexpected errors during prompt/handling
+                    console.print(
+                        f"❌ Unexpected error configuring '{tag_description}': {e}", style="error"
+                    )
+                    console.print_exception(show_locals=False)
+                    # Decide whether to break or continue loop on unexpected error
+                    break  # Break inner loop on unexpected error
+
+        # --- End of loop for tags within group ---
+    # --- End of loop for groups ---
+
+    # --- Step 4. Confirm Selections Before Saving ---
+    console.print(Rule("[highlight]Review Final Tag Selections[/]", style="rp_overlay"))
+    # active_selections = {k: v for k, v in selected_ids.items() if v is not None}
+    review_table = Table(
+        show_header=True,
+        header_style="keyword",
+        show_lines=True,
+        box=box.ROUNDED,
+        border_style="rp_surface",
+    )
+    review_table.add_column("Configuration Role", style="info", min_width=40)
+    review_table.add_column("Selected Tag Name", style="rp_text")
+    review_table.add_column("Selected Tag ID / Status", style="info")
+
+    for desc, key in ALL_TAG_CONFIG_KEYS.items():
+        tag_id = selected_ids.get(key)  # Could be None if skipped group or individual tag
+        if tag_id is not None:  # Value was set or kept
+            tag_info = next(
+                (t for t in all_tags if isinstance(t, dict) and t.get("id") == tag_id), None
+            )
+            tag_name = (
+                f"'[rp_foam]{tag_info.get('name', '[dim]Unknown[/dim]')}[/]'"
+                if tag_info
+                else "[warning]MISSING TAG[/warning]"
+            )
+            tag_id_display = f"[rp_rose]{tag_id}[/]"
+            review_table.add_row(desc, tag_name, tag_id_display)
+        elif key in keys_to_unset:  # Value existed but was explicitly unset
+            review_table.add_row(desc, "[dim i]Will be Unset/Removed[/dim i]", "[dim]---[/dim]")
+        else:  # Value was not set and didn't exist before
+            review_table.add_row(desc, "[dim i]Not Set[/dim i]", "[dim]---[/dim]")
+
+    console.print(review_table)
+    if keys_to_unset:
         console.print(
-            "[error]Warning:[/error] Not all required tags have been assigned. Saving is incomplete."
+            f"⚠️ [warning]Will remove {len(keys_to_unset)} existing setting(s) marked as 'Unset'.[/warning]"
         )
-        if not Confirm.ask(
-            "Some tags are missing. Continue saving the assigned tags anyway?",
-            default=False,
-        ):
-            console.print("Operation cancelled. No changes saved.")
-            return
-        else:
-            console.print("Proceeding to save assigned tags...")
+    console.print(Rule(style="rp_overlay"))
 
+    # --- Step 5. Save to .env File ---
     if not Confirm.ask(
-        f"\nSave these selections to [cyan]'{os.path.basename(dotenv_path)}'[/cyan]?",
+        f"\n💾 Apply these changes to [file]'{os.path.basename(dotenv_path_str)}'[/]?",
         default=True,
     ):
-        console.print("Operation cancelled. No changes saved.")
+        console.print("🚫 Operation cancelled. No changes saved.", style="info")
         return
 
-    # --- 6. Write to .env file ---
     try:
-        console.print(f"Updating '[cyan]{dotenv_path}[/cyan]'...")
-        num_updated = 0
+        console.print(f"⏳ Updating '[file]{dotenv_path_str}[/]'...", style="info")
+        num_set, num_unset_actual = 0, 0
+        # set new/kept values (only if not None)
         for key, value in selected_ids.items():
-            # set_key returns True if value was changed, False otherwise (or raises error)
-            updated = set_key(dotenv_path, key, value, quote_mode="always")
-            if updated:
-                num_updated += 1  # Count only actual changes/additions
+            if value is not None:
+                if set_key(dotenv_path_str, key, value, quote_mode="always"):
+                    num_set += 1  # Count if set_key reports change or addition
+        # Unset skipped values that previously existed
+        for key in keys_to_unset:
+            if unset_key(dotenv_path_str, key):
+                num_unset_actual += 1  # Count if unset_key reports success
+
         console.print(
-            f"[bold green]:heavy_check_mark: Successfully set/updated {len(selected_ids)} key(s) in [cyan]{os.path.basename(dotenv_path)}[/cyan]! ({num_updated} actually changed)[/]"
+            f"✅ Successfully updated optional tag configurations: "
+            f"{num_set} set/updated, {num_unset_actual} unset/removed "
+            f"in [file]{os.path.basename(dotenv_path_str)}[/]!",
+            style="success",
         )
-        console.print("Restart the application if needed for changes to take effect.")
-    except IOError as e:
-        console.print(f"[error]Error writing to .env file at '{dotenv_path}': {e}[/]")
-    except Exception as e:  # Catch potential errors from set_key itself
-        console.print(f"[error]Unexpected error saving to .env file: {e}[/]")
+        console.print(
+            "ℹ️ Restart the application if running for changes to take effect.", style="info"
+        )
+
+    except OSError as e:
+        console.print(f"❌ Error writing to .env file '{dotenv_path_str}': {e}", style="error")
+    except Exception as e:
+        console.print(f"❌ Unexpected error saving to .env file: {e}", style="error")
 
 
-# --- End of interactive_tag_setup ---
-
-
-# MARK: - EXAMPLE CALLER FUNCTION
+# MARK: - CALLER FUNCTION (for CLI integration)
 # & - def configure_tags() -> None:
 def configure_tags() -> None:
-    """
-    Runs the interactive tag setup process.
+    """Wrapper to initialize API client and run the interactive tag setup."""
+    console.print("\n🚀 Starting interactive optional tag configuration...", style="info")
+    dotenv_path_str = find_dotenv(raise_error_if_not_found=False, usecwd=True)
+    if not dotenv_path_str:
+        # Attempt to find/create it relative to this file's project structure
+        try:
+            project_root = Path(__file__).resolve().parent.parent
+            dotenv_path_candidate = project_root / ".env"
+            if not dotenv_path_candidate.exists():
+                # If it truly doesn't exist, user needs to run main setup first
+                console.print(
+                    f"❌ '.env' file not found at expected location: [file]{dotenv_path_candidate}[/].",
+                    style="error",
+                )
+                console.print(
+                    "   Please run the main application first to set up mandatory credentials."
+                )
+                return
+            dotenv_path_str = str(dotenv_path_candidate)
+        except Exception as e:
+            console.print(f"❌ Error determining .env path: {e}", style="error")
+            return
 
-    Initializes the HabiticaAPI client (assuming configuration allows it)
-    and then calls `interactive_tag_setup`. Handles potential initialization errors.
-    This function is suitable for calling from a CLI command.
-
-    Returns:
-        None
-    """
-    console.print("[bold blue]Starting interactive tag configuration...[/]")
+    api: Optional[HabiticaAPI] = None
     try:
-        # Need an API client instance first. This assumes the basic
-        # USER_ID and API_TOKEN might already be in .env or config.
         api = HabiticaAPI()
+        console.print("🔑 Habitica API client initialized successfully.", style="success")
     except ValueError as e:
-        console.print(f"[error]API Initialization Error:[/error] {e}")
-        console.print("Cannot proceed without valid API credentials.")
+        console.print(f"❌ API Initialization Error: {e}", style="error")
+        console.print("   Cannot configure tags without valid API credentials in .env.")
         return
     except Exception as e:
-        console.print(f"[error]Unexpected Error initializing API: {e}[/]")
+        console.print(f"❌ Unexpected Error initializing API: {e}", style="error")
         return
 
-    # Run the interactive setup using the initialized API client
-    try:
-        interactive_tag_setup(api)
-    except Exception as e:
-        # Catch errors from the setup process itself
-        console.print(f"[error]Error during tag configuration: {e}[/]")
+    if api and dotenv_path_str:
+        try:
+            interactive_tag_setup(api, dotenv_path_str)
+        except Exception as e:
+            console.print(f"\n❌ Error during interactive tag configuration: {e}", style="error")
+            console.print_exception(show_locals=False)  # Show traceback for setup errors
+    else:
+        console.print("❌ Could not proceed: Missing API client or .env path.", style="error")
 
-    console.print("[bold blue]Tag configuration finished.[/]")
+    console.print("\n🏁 Optional Tag configuration process finished.", style="info")
 
 
-# Example of direct execution (less common for setup utilities)
-# if __name__ == "__main__":
-#     configure_tags()
+# --- End of file ---

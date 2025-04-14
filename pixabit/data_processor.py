@@ -1,1118 +1,661 @@
-# pixabit/processing.py
+# pixabit/data_processor.py
+# MARK: - MODULE DOCSTRING
+"""Processes raw Habitica data (Tasks, User, Party, Content) into structured formats,
+categorizes tasks, calculates derived stats (like effective CON), and computes
+potential daily damage. Includes functions to get combined user statistics.
+"""
 
-# --- Standard Imports ---
+# MARK: - IMPORTS
 import json
 import math
-import os
-import time  # Potentially needed if adding delays or logging timestamps
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# --- Third-party Imports ---
 import emoji_data_python
 
+# Local Imports
 from .api import HabiticaAPI
 from .utils.dates import convert_to_local_time, is_date_passed
-from .utils.display import console, print
-from .utils.save_json import save_json
+from .utils.display import console  # Use themed display
+from .utils.save_json import save_json  # Keep for saving processed data if needed
+
+# MARK: - CONSTANTS
+CACHE_FILE_CONTENT = "content_cache.json"  # Cache file for game content
 
 
-# ==============================================================================
-# Task Processor Class
-# ==============================================================================
+# MARK: - TaskProcessor Class
 class TaskProcessor:
+    """Processes raw task data, user data, and game content from Habitica.
+
+    Fetches data if not provided, calculates derived stats, processes tasks,
+    calculates potential damage, and categorizes tasks.
     """
-    Processes raw task data fetched from the Habitica API into a structured
-    format and categorizes tasks based on type and status.
 
-    Also handles fetching and utilizing tag information for enrichment.
-    """
-
-    # --- Initialization ---
-    def __init__(self, api_client: HabiticaAPI):
-        """
-        Initializes the TaskProcessor.
-
-        Fetches user tags upon initialization to create a lookup table used
-        for processing task tag names efficiently.
+    # MARK: - Initialization
+    # & - def __init__(...)
+    def __init__(
+        self,
+        api_client: HabiticaAPI,
+        user_data: Optional[Dict[str, Any]] = None,
+        party_data: Optional[Dict[str, Any]] = None,
+        all_tags_list: Optional[List[Dict[str, Any]]] = None,
+        content_data: Optional[Dict[str, Any]] = None,
+    ):
+        """Initializes TaskProcessor. Fetches required data only if not provided.
 
         Args:
-            api_client: An authenticated instance of the HabiticaAPI client.
+            api_client: Authenticated HabiticaAPI client.
+            user_data: Optional pre-fetched user data.
+            party_data: Optional pre-fetched party data.
+            all_tags_list: Optional pre-fetched list of all tags.
+            content_data: Optional pre-fetched game content.
         """
-        # --- START OF METHOD --- (Level 0 Indent)
-        # console.log("--- TaskProcessor __init__ START ---")  # Your debug line
-
-        # --- Level 1 Indent (Inside __init__) ---
-        # console.print("Initializing TaskProcessor...") # Original print, can be removed if using log
-        CACHE_FILE_CONTENT = "content_cache.json"
-
-        self.console = console
         self.api_client = api_client
-        console.log("Fetching tags for lookup...", style="info")
-        self.tags_lookup = self._fetch_and_prepare_tags()
-        if not self.tags_lookup:
-            console.log(
-                "Warning: Tag lookup is empty. Tag names may not be processed correctly.",
-                style="warning",
-            )
-        else:
-            console.log(f"Fetched {len(self.tags_lookup)} tags.", style="success")
+        self.console = console
+        self.console.log("Initializing TaskProcessor...", style="info")
 
-        # Initialize attributes
-        self.user_data: Dict[str, Any] = {}
-        self.party_data: Dict[str, Any] = {}
-        self.game_content: Dict[str, Any] = {}
-        self.gear_stats_lookup: Dict[str, Dict] = {}
-        self.user_con: int = 0
+        # Store or Fetch Required Data (Reduces API calls if data passed in)
+        self.user_data = user_data if user_data is not None else self._fetch_user_data()
+        self.party_data = party_data if party_data is not None else self._fetch_party_data()
+        _tags_list = all_tags_list if all_tags_list is not None else self._fetch_tags_list()
+        self.tags_lookup = self._prepare_tags_lookup(_tags_list)
+        self.game_content = (
+            content_data if content_data is not None else self._fetch_or_load_content()
+        )
+        self.gear_stats_lookup = self.game_content.get("gear", {}).get("flat", {})
+        if not self.gear_stats_lookup:
+            self.console.log("Could not find gear data in game content.", style="warning")
+
+        # Initialize Derived Stats
+        self.user_con: float = 0.0
         self.user_stealth: int = 0
         self.is_sleeping: bool = False
         self.is_on_boss_quest: bool = False
         self.boss_str: float = 0.0
 
-        # --- Fetch/Load Game Content (with Caching) ---
-        self.console.log("Fetching game content (for gear stats)...", style="info")
-        # --- Fetch Game Content (ONCE) ---
+        # Calculate context from the fetched/provided data
+        self._calculate_user_context()
+        self.console.log("TaskProcessor Initialized.", style="info")
 
-        # The /content endpoint response is usually NOT wrapped in {success, data}
-        # --- Fetch/Load Game Content (with Caching) ---
+    # MARK: - Private Data Fetching Helpers
+    # & - def _fetch_user_data(self) -> Dict[str, Any]:
+    def _fetch_user_data(self) -> Dict[str, Any]:
+        """Fetches user data. Returns {} on failure."""
+        self.console.log("Fetching user data for TaskProcessor context...", style="info")
+        try:
+            data = self.api_client.get_user_data()
+            return data if data else {}
+        except Exception as e:
+            self.console.log(f"Exception fetching user data: {e}", style="error")
+            return {}
+
+    # & - def _fetch_party_data(self) -> Dict[str, Any]:
+    def _fetch_party_data(self) -> Dict[str, Any]:
+        """Fetches party data. Returns {} on failure or if not in party."""
+        self.console.log("Fetching party data for TaskProcessor context...", style="info")
+        try:
+            data = self.api_client.get_party_data()
+            return data if data else {}
+        except Exception as e:
+            self.console.log(f"Exception fetching party data: {e}", style="error")
+            return {}
+
+    # & - def _fetch_tags_list(self) -> List[Dict[str, Any]]:
+    def _fetch_tags_list(self) -> List[Dict[str, Any]]:
+        """Fetches all tags. Returns [] on failure."""
+        self.console.log("Fetching all tags for lookup...", style="info")
+        try:
+            return self.api_client.get_tags()  # Returns list or []
+        except Exception as e:
+            self.console.log(f"Exception fetching tags list: {e}", style="error")
+            return []
+
+    # & - def _fetch_or_load_content(self) -> Dict[str, Any]:
+    def _fetch_or_load_content(self) -> Dict[str, Any]:
+        """Fetches game content from API or loads from cache. Returns {} on failure."""
+        self.console.log("Fetching/Loading game content...", style="info")
         raw_content = None
-
-        # 1. Try loading from cache first (Level 1 Indent)
-        if os.path.exists(CACHE_FILE_CONTENT):
+        # --- 1. Try Cache ---
+        if Path(CACHE_FILE_CONTENT).exists():
             self.console.log(
-                f"Found cache file: '{CACHE_FILE_CONTENT}'. Attempting to load..."
+                f"Attempting load from cache: '{CACHE_FILE_CONTENT}'...", style="subtle"
             )
             try:
-                with open(CACHE_FILE_CONTENT, "r", encoding="utf-8") as f:
+                with open(CACHE_FILE_CONTENT, encoding="utf-8") as f:
                     raw_content = json.load(f)
+                if isinstance(raw_content, dict) and raw_content:
+                    self.console.log("Successfully loaded content from cache.", style="success")
+                else:
+                    self.console.log(
+                        f"Cache file '{CACHE_FILE_CONTENT}' invalid. Refetching.", style="warning"
+                    )
+                    raw_content = None
+            except (OSError, json.JSONDecodeError, Exception) as e:
                 self.console.log(
-                    "Successfully loaded game content from cache.", style="success"
-                )
-            except (json.JSONDecodeError, IOError, Exception) as e:
-                self.console.log(
-                    f"[Warning] Failed to load or parse cache file '{CACHE_FILE_CONTENT}': {e}. Will fetch from API.",
+                    f"Failed load/parse cache '{CACHE_FILE_CONTENT}': {e}. Refetching.",
                     style="warning",
                 )
-                raw_content = None  # Ensure raw_content is None so we fetch fresh
-
-        # 2. If cache didn't load, fetch from API and save to cache
+                raw_content = None
+        # --- 2. Fetch API if Needed ---
         if raw_content is None:
-            self.console.log(
-                "Cache not found or failed to load. Fetching game content from API...",
-                style="warning",
-            )
+            self.console.log("Fetching game content from API...")
             try:
-                # The /content endpoint response is usually NOT wrapped in {success, data}
-                raw_content = self.api_client.get("/content")  # Use basic GET
-                if (
-                    isinstance(raw_content, dict) and raw_content
-                ):  # Check if fetch was successful
-                    self.console.log(
-                        "Successfully fetched game content from API.", style="success"
-                    )
-                    # Save the fetched content to the cache file
+                raw_content = self.api_client.get_content()  # Returns dict or None
+                if isinstance(raw_content, dict) and raw_content:
+                    self.console.log("Successfully fetched content from API.", style="success")
+                    # --- 3. Save to Cache ---
                     try:
                         with open(CACHE_FILE_CONTENT, "w", encoding="utf-8") as f:
-                            json.dump(
-                                raw_content, f, ensure_ascii=False
-                            )  # No indent for smaller file size maybe? Or indent=4
+                            json.dump(raw_content, f, ensure_ascii=False, indent=2)
                         self.console.log(
-                            f"Saved fetched game content to cache file: '{CACHE_FILE_CONTENT}'",
-                            style="success",
+                            f"Saved content to cache: '{CACHE_FILE_CONTENT}'", style="info"
                         )
-                    except (IOError, Exception) as e:
+                    except (OSError, Exception) as e_save:
                         self.console.log(
-                            f"[Warning] Failed to save game content to cache file '{CACHE_FILE_CONTENT}': {e}",
+                            f"Failed to save content cache '{CACHE_FILE_CONTENT}': {e_save}",
                             style="warning",
                         )
                 else:
-                    self.console.log(
-                        "[Warning] Failed to fetch valid game content from API.",
-                        style="warning",
-                    )
-                    raw_content = {}  # Use empty dict to prevent errors later
+                    self.console.log("Failed to fetch valid content from API.", style="error")
+                    raw_content = {}
+            except Exception as e_fetch:
+                self.console.log(f"Exception fetching content: {e_fetch}", style="error")
+                raw_content = {}
+        return raw_content if isinstance(raw_content, dict) else {}
 
-            except Exception as e:
-                self.console.log(
-                    f"[Warning] Error during API fetch for game content: {e}",
-                    style="warning",
-                )
-                raw_content = {}  # Use empty dict on error
+    # MARK: - Private Calculation & Preparation Helpers
+    # & - def _prepare_tags_lookup(...)
+    def _prepare_tags_lookup(self, tags_list: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Creates tag ID -> name lookup dict."""
+        if not tags_list:
+            self.console.log("Tag list empty. Tag lookup will be empty.", style="warning")
+            return {}
+        lookup = {
+            tag["id"]: tag.get("name", f"Unnamed_{tag['id'][:6]}")  # More descriptive fallback
+            for tag in tags_list
+            if isinstance(tag, dict) and "id" in tag
+        }
+        self.console.log(f"Prepared lookup for {len(lookup)} tags.", style="info")
+        return lookup
 
-        # 3. Process the raw_content (whether from cache or API)
-        if isinstance(raw_content, dict):
-            self.game_content = raw_content
-            # Create a direct lookup for gear stats: gear_key -> {con: X, str: Y ...}
-            self.gear_stats_lookup = self.game_content.get("gear", {}).get("flat", {})
-            if not self.gear_stats_lookup:
-                self.console.log(
-                    "[Warning] Could not find gear data in game content.",
-                    style="warning",
-                )
-        else:
-            self.console.log(
-                "[Warning] Game content is not a valid dictionary.", style="warning"
-            )
-            self.game_content = {}
-            self.gear_stats_lookup = {}
+    # & - def _calculate_user_context(self) -> None:
+    def _calculate_user_context(self) -> None:
+        """Calculates effective CON, stealth, sleep, quest status from instance data."""
+        self.console.log("Calculating user context (CON, Stealth, etc.)...", style="info")
+        if not self.user_data:
+            self.console.log("Cannot calculate context: User data missing.", style="warning")
+            return
 
-        # --- Fetch User/Party Data and Calculate CON --- (Level 1 Indent)
-        # This is the outer 'try' block where the error likely originated
-        try:  # <<<<< Level 1 Indent
-            # Level 2 Indent
-            self.console.log("Fetching full user data for context...", style="info")
-            self.user_data = self.api_client.get_user_data()
-            if not self.user_data:
-                raise ValueError("Failed to fetch user data", style="error")
-            # -----------------------
+        try:
+            # --- Calculate Effective CON ---
+            stats = self.user_data.get("stats", {})
+            level = stats.get("lvl", 0)
+            user_class = stats.get("class")
+            buffs = stats.get("buffs", {})
+            equipped_gear = self.user_data.get("items", {}).get("gear", {}).get("equipped", {})
 
-            # --- Calculate EFFECTIVE CON (Using Content Lookup) ---
-            base_stats = self.user_data.get("stats", {})
-            level = self.user_data.get("stats", {}).get("lvl", 0)
-            user_class = self.user_data.get("stats", {}).get(
-                "class"
-            )  # Get user's class
-            buffs = base_stats.get("buffs", {})
-            equipped_gear_keys = (
-                self.user_data.get("items", {}).get("gear", {}).get("equipped", {})
-            )
-            # Component 1: Level Bonus
-            level_bonus = min(50, math.floor(level / 2))
+            level_bonus = min(50.0, math.floor(level / 2.0))
+            alloc_con = float(stats.get("con", 0.0))
+            buff_con = float(buffs.get("con", 0.0))
+            gear_con = 0.0
+            class_bonus_con = 0.0
 
-            # Component 2: Allocated Points (Assuming this is base_con from API)
-            allocated_points_con = base_stats.get("con", 0)
-
-            # Component 3: Buff CON
-            buff_con = buffs.get("con", 0)
-
-            # Components 4 & 5: Base Gear CON + Class Equip Bonus
-            total_base_gear_con = 0  # Initialize accumulator
-            total_class_equip_bonus = 0  # Initialize accumulator
-
-            if isinstance(equipped_gear_keys, dict) and self.gear_stats_lookup:
-                for gear_key in equipped_gear_keys.values():
-                    if not gear_key:
+            if isinstance(equipped_gear, dict) and self.gear_stats_lookup:
+                for key in equipped_gear.values():
+                    if not key:
                         continue
-                    gear_item_stats = self.gear_stats_lookup.get(gear_key)
-                    if isinstance(gear_item_stats, dict):
-                        # Get THIS item's base CON
-                        item_base_con = gear_item_stats.get("con", 0)
-                        # Add to total base gear CON
-                        total_base_gear_con += item_base_con
+                    item_stats = self.gear_stats_lookup.get(key)
+                    if isinstance(item_stats, dict):
+                        item_base_con = float(item_stats.get("con", 0.0))
+                        gear_con += item_base_con
+                        if item_stats.get("klass") == user_class:
+                            class_bonus_con += item_base_con * 0.5
 
-                        # Check for class bonus
-                        gear_item_class = gear_item_stats.get(
-                            "klass", None
-                        )  # Habitica uses 'klass' in content data
-                        if gear_item_class == user_class:
-                            item_class_bonus = item_base_con * 0.5
-                            total_class_equip_bonus += item_class_bonus
+            self.user_con = level_bonus + alloc_con + gear_con + class_bonus_con + buff_con
 
-            # ---------------------------------------------------------
-
-            # Calculate final effective CON using all 5 components
-            self.user_con = (
-                allocated_points_con
-                + level_bonus
-                + total_base_gear_con
-                + total_class_equip_bonus
-                + buff_con  # Component 4 (Allocated)  # Component 1 (Level)  # Component 2 (Equipment Base)  # Component 3 (Class Bonus)  # Component 5 (Buffs)
-            )
-            # --------------------------------------------------
-
-            # --- Get other relevant context from user data ---
-            self.user_stealth = buffs.get("stealth", 0)
+            # --- Other Context ---
+            self.user_stealth = int(buffs.get("stealth", 0))
             self.is_sleeping = self.user_data.get("preferences", {}).get("sleep", False)
-            # -----------------------------------------------
-
             self.console.log(
-                f"User Context: Effective CON={self.user_con}, Stealth={self.user_stealth}, Sleeping={self.is_sleeping}"
+                f"User Context: CON={self.user_con:.2f}, Stealth={self.user_stealth}, Sleeping={self.is_sleeping}",
+                style="success",
             )
 
-            self.console.log("Fetching party data for context...")
-            self.party_data = self.api_client.get_party_data()  # Use API client method
-            quest_info = self.party_data.get("quest", {})
+        except (ValueError, TypeError, KeyError, AttributeError) as e:
+            self.console.log(
+                f"Error calculating user stats context: {e}. Using defaults.", style="warning"
+            )
+            self.user_con, self.user_stealth, self.is_sleeping = 0.0, 0, False
 
-            if quest_info and quest_info.get("active"):
-                boss_info = quest_info.get("content", {}).get("boss")
-                if isinstance(boss_info, dict) and boss_info.get("str") is not None:
+        # --- Party Context ---
+        if not self.party_data:
+            self.console.log(
+                "Cannot calculate party context: Party data missing.", style="warning"
+            )
+            self.is_on_boss_quest, self.boss_str = False, 0.0
+            return
+
+        try:
+            quest = self.party_data.get("quest", {})
+            if isinstance(quest, dict) and quest.get("active"):
+                boss = quest.get("boss")  # V3 API structure
+                if isinstance(boss, dict) and boss.get("str") is not None:
                     self.is_on_boss_quest = True
                     try:
-                        self.boss_str = float(boss_info.get("str", 0.0))
+                        self.boss_str = float(boss.get("str", 0.0))
                     except (ValueError, TypeError):
-                        self.boss_str = 0.0
+                        self.boss_str = 0.0  # Default if conversion fails
                     self.console.log(
-                        f"Party Context: On active boss quest (Str={self.boss_str}).",
+                        f"Party Context: On active BOSS quest (Str={self.boss_str:.2f}).",
                         style="info",
                     )
-                else:
+                else:  # Active quest, but not a boss or no boss strength
+                    self.is_on_boss_quest, self.boss_str = False, 0.0
+                    quest_key = quest.get("key", "Unknown")
                     self.console.log(
-                        "Party Context: On active quest (not boss or no str).",
+                        f"Party Context: On active quest '{quest_key}' (not boss/no str).",
                         style="info",
                     )
-            else:
+            else:  # Not on an active quest
+                self.is_on_boss_quest, self.boss_str = False, 0.0
                 self.console.log("Party Context: Not on active quest.", style="info")
-
         except Exception as e:
             self.console.log(
-                f"[Warning] Couldn't fetch all context for TaskProcessor: {e}",
-                style="warning",
+                f"Error calculating party context: {e}. Assuming no active boss.", style="warning"
             )
-            # Ensure defaults if fetches failed
-            self.user_data = self.user_data or {}
-            self.party_data = self.party_data or {}
-            self.user_con = self.user_con or 0
-            self.user_stealth = self.user_stealth or 0
-            self.is_sleeping = self.is_sleeping or False
-            self.is_on_boss_quest = self.is_on_boss_quest or False
-            self.boss_str = self.boss_str or 0.0
-        # ------------------------------------------------------------
-        self.console.log("TaskProcessor Initialized.", style="info")
+            self.is_on_boss_quest, self.boss_str = False, 0.0
 
-    # --- Private Helper Methods ---
-    # & -     def _fetch_and_prepare_tags(self) -> Dict[str, str]:
-    def _fetch_and_prepare_tags(self) -> Dict[str, str]:
-        """
-        Fetches all user tags from the Habitica API.
-
-        Creates and returns a dictionary mapping tag IDs to tag names for quick lookup.
-        If a tag doesn't have a name, its ID is used as the fallback name.
-        Includes error handling for the API call.
-
-        Returns:
-            Dict[str, str]: A dictionary where keys are tag IDs and values are tag names.
-                            Returns an empty dictionary if fetching fails.
-        """
-        try:
-            tags_list = self.api_client.get_tags()
-            # Ensure ID exists before adding to lookup
-            return {
-                tag["id"]: tag.get("name", tag["id"])
-                for tag in tags_list
-                if "id" in tag
-            }  # Use ID as fallback name  # Only include tags that have an ID
-        except Exception as e:
-            console.print(f"Error fetching or processing tags: {e}", style="error")
-            return {}
-
-    # & -     def _value_color(self, value: Optional[float]) -> str:
+    # & - def _value_color(self, value: Optional[float]) -> str: ... (Keep previous theme mapping)
     def _value_color(self, value: Optional[float]) -> str:
-        """
-        Determines a descriptive color string based on a numerical task value.
-
-        Used for categorizing task value intensity (e.g., for display).
-        Handles None values by returning 'neutral'.
-
-        Args:
-            value (Optional[float]): The numerical value of the task (can be positive, negative, or zero).
-
-        Returns:
-            str: A color category string ('best', 'better', 'good', 'neutral',
-                 'bad', 'worse', 'worst').
-        """
+        """Determines a semantic style name based on task value."""
         if value is None:
-            return "neutral"  # Default if value is missing
-
-        color: str
-        if value > 11:
-            color = "best"
-        elif value > 5:
-            color = "better"
-        elif value > 0:
-            color = "good"
-        elif value == 0:
-            color = "neutral"
+            return "neutral"
+        if value > 15:
+            return "rosewater"
+        elif value > 8:
+            return "flamingo"
+        elif value > 1:
+            return "peach"
+        elif value >= 0:
+            return "text"
         elif value > -9:
-            color = "bad"  # Value is negative
+            return "lavender"
         elif value > -16:
-            color = "worse"  # Value is more negative
+            return "rp_iris"
         else:
-            color = "worst"  # Value is -16 or lower
-        return color
+            return "red"
 
-    # & -     def _process_task_tags(self, task_data: Dict) -> List[str]:
+    # & - def _process_task_tags(...) (Keep previous implementation)
     def _process_task_tags(self, task_data: Dict) -> List[str]:
-        """
-        Retrieves the names of tags associated with a task using the pre-fetched lookup.
-
-        Args:
-            task_data (Dict): The raw dictionary for a single task.
-
-        Returns:
-            List[str]: A list of tag names corresponding to the tag IDs in the task data.
-                       Returns the tag ID itself if a name is not found in the lookup.
-                       Returns an empty list if 'tags' key is missing or not a list.
-        """
+        """Retrieves tag names using lookup."""
         tag_ids = task_data.get("tags", [])
         if not isinstance(tag_ids, list):
-            console.print(
-                f"Warning: Task {task_data.get('id', 'N/A')} has non-list tags: {tag_ids}",
+            task_id = task_data.get("id", "N/A")
+            self.console.log(
+                f"Task {task_id} has non-list tags: {tag_ids}. Processing as empty.",
                 style="warning",
             )
-            return []  # Handle unexpected type
-        # Use tags_lookup, fallback to tag_id if name not found
-        return [self.tags_lookup.get(tag_id, tag_id) for tag_id in tag_ids]
+            return []
+        return [self.tags_lookup.get(tag_id, f"ID:{tag_id}") for tag_id in tag_ids]
 
-    # --- Private Task Type Processors ---
-    # & -     def _process_habit(self, task_data: Dict) -> Dict[str, Any]:
-    def _process_habit(self, task_data: Dict) -> Dict[str, Any]:
-        """
-        Processes fields specific to Habit-type tasks.
-
-        Extracts direction (up/down/both), combines counters into a display string,
-        fetches frequency, and calculates value/value_color.
-
-        Args:
-            task_data (Dict): The raw dictionary for a single habit task.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing processed habit-specific fields:
-                            'direction', 'counter', 'frequency', 'value', 'value_color'.
-        """
-        processed = {}
-        task_up = task_data.get("up", False)
-        task_down = task_data.get("down", False)
-        counter_up = task_data.get("counterUp", 0)
-        counter_down = task_data.get("counterDown", 0)
-
-        if task_up and task_down:
-            processed["direction"] = "both"
-            processed["counter"] = f"⧾{counter_up}, -{counter_down}"
-        elif not task_up and not task_down:  # Should not happen often, but handle it
-            processed["direction"] = "none"
-            processed["counter"] = (
-                f"⧾{counter_up}, -{counter_down}"  # Still show counters?
+    # & - def _calculate_checklist_done(...) (Keep previous implementation)
+    def _calculate_checklist_done(self, checklist: Optional[List[Dict]]) -> float:
+        """Calculates proportion (0.0-1.0) of checklist items done."""
+        if not checklist or not isinstance(checklist, list) or len(checklist) == 0:
+            return 1.0
+        try:
+            completed = sum(
+                1 for item in checklist if isinstance(item, dict) and item.get("completed", False)
             )
-        elif task_up:
-            processed["direction"] = "up"
-            processed["counter"] = f"⧾{counter_up}"
-        else:  # Only down is true
-            processed["direction"] = "down"
-            processed["counter"] = f"-{counter_down}"
+            total = len(checklist)
+            return completed / total if total > 0 else 1.0
+        except Exception as e:
+            self.console.log(
+                f"Error calculating checklist progress: {e}. Defaulting to 1.0.", style="warning"
+            )
+            return 1.0
 
-        processed["frequency"] = task_data.get(
-            "frequency", "daily"
-        )  # Default if missing
-        task_value = task_data.get("value", 0.0)  # Default if missing
-        processed["value"] = task_value
-        processed["value_color"] = self._value_color(task_value)
+    # MARK: - Private Task Type Processors
+    # & - def _process_habit(...)
+    def _process_habit(self, task_data: Dict) -> Dict[str, Any]:
+        """Processes Habit-specific fields."""
+        processed = {}
+        up, down = task_data.get("up", False), task_data.get("down", False)
+        cup, cdown = task_data.get("counterUp", 0), task_data.get("counterDown", 0)
+        if up and down:
+            processed["direction"], processed["counter"] = (
+                "both",
+                f"[#A6E3A1]+{cup}[/] / [#F38BA8]-{cdown}[/]",
+            )
+        elif up:
+            processed["direction"], processed["counter"] = "up", f"[#A6E3A1]+{cup}[/]"
+        elif down:
+            processed["direction"], processed["counter"] = "down", f"[#F38BA8]-{cdown}[/]"
+        else:
+            processed["direction"], processed["counter"] = "none", "[dim]N/A[/]"
+        processed["frequency"] = task_data.get("frequency", "daily")
+        val = task_data.get("value", 0.0)
+        processed["value"], processed["value_color"] = val, self._value_color(val)
         return processed
 
-    # & -     def _process_todo(self, task_data: Dict) -> Dict[str, Any]:
+    # & - def _process_todo(...)
     def _process_todo(self, task_data: Dict) -> Dict[str, Any]:
-        """
-        Processes fields specific to To-Do type tasks.
-
-        Checks for a due date ('date'), determines if it's passed ('_status'),
-        extracts the checklist, and calculates value/value_color.
-
-        Args:
-            task_data (Dict): The raw dictionary for a single todo task.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing processed todo-specific fields:
-                            'is_due', 'date', '_status', 'checklist', 'value', 'value_color'.
-        """
+        """Processes To-Do-specific fields."""
         processed = {}
-        deadline_str = task_data.get("date")  # Can be None or empty string
-
-        if deadline_str:
-            processed["is_due"] = True
-            processed["date"] = deadline_str  # Store original string
+        deadline = task_data.get("date")
+        processed["is_due"], processed["date"] = bool(deadline), deadline or ""
+        if deadline:
             try:
-                if is_date_passed(deadline_str):
-                    processed["_status"] = "red"  # Past due
-                else:
-                    processed["_status"] = "due"  # Due in the future
+                processed["_status"] = "red" if is_date_passed(deadline) else "due"
             except Exception as e:
-                console.print(
-                    f"Error checking To-Do date ({deadline_str}) for task {task_data.get('id', 'N/A')}: {e}. Status set to 'grey'.",
+                self.console.log(
+                    f"Error checking To-Do date '{deadline}' for task {task_data.get('id', 'N/A')}: {e}. Status grey.",
                     style="error",
                 )
-                processed["_status"] = "grey"  # Fallback on date processing error
+                processed["_status"] = "grey"
         else:
-            processed["is_due"] = False
-            processed["_status"] = "grey"  # Not due
-            processed["date"] = ""  # Ensure empty string if no deadline
-
-        processed["checklist"] = task_data.get("checklist", [])  # Default to empty list
-        task_value = task_data.get("value", 0.0)
-        processed["value"] = task_value
-        processed["value_color"] = self._value_color(task_value)
-        return processed
-
-    # & -     def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
-    def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
-        """
-        Processes fields specific to Daily-type tasks.
-
-        Determines the status ('_status': done, due, grey) based on 'isDue' and 'completed'.
-        Extracts checklist, next due date ('date'), streak, and value/value_color.
-
-        Args:
-            task_data (Dict): The raw dictionary for a single daily task.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing processed daily-specific fields:
-                            '_status', 'checklist', 'date' (next due), 'is_due',
-                            'streak', 'value', 'value_color'.
-        """
-        processed = {}
-
-        is_due_flag = task_data.get("isDue", False)  # Default if missing
-        completed_flag = task_data.get("completed", False)  # Default if missing
-
-        # Determine status
-        if not is_due_flag:
-            status = "grey"  # Not due today (e.g., repeats on specific days)
-        elif completed_flag:
-            status = "done"  # Due today and completed
-        else:
-            status = "due"  # Due today but not completed
-
-        processed["_status"] = status
-
+            processed["_status"] = "grey"
         processed["checklist"] = task_data.get("checklist", [])
-        # Get nextDue safely, handle empty list or non-list
-        next_due_list = task_data.get("nextDue", [])
-        processed["date"] = (
-            next_due_list[0]
-            if isinstance(next_due_list, list) and len(next_due_list) > 0
-            else ""
-        )
-
-        processed["is_due"] = is_due_flag
-        processed["streak"] = task_data.get("streak", 0)  # Default if missing
-        task_value = task_data.get("value", 0.0)
-        processed["value"] = task_value
-        processed["value_color"] = self._value_color(task_value)
+        val = task_data.get("value", 0.0)
+        processed["value"], processed["value_color"] = val, self._value_color(val)
         return processed
 
-    # & -     def _process_reward(self, task_data: Dict) -> Dict[str, Any]:
-    def _process_reward(self, task_data: Dict) -> Dict[str, Any]:
-        """
-        Processes fields specific to Reward-type tasks.
-
-        Currently, only extracts the 'value' (cost) of the reward.
-
-        Args:
-            task_data (Dict): The raw dictionary for a single reward task.
-
-        Returns:
-            Dict[str, Any]: A dictionary containing processed reward-specific fields:
-                            'value'.
-        """
-        # Rewards primarily have a value (cost)
-        return {"value": task_data.get("value", 0)}  # Default cost to 0 if missing
-
-    # --- NEW HELPER METHOD ---
-    # & -     def _calculate_checklist_done(self, checklist: Optional[List[Dict]]) -> float:
-    def _calculate_checklist_done(self, checklist: Optional[List[Dict]]) -> float:
-        """Calculates the proportion (0.0 to 1.0) of checklist items done."""
-        if not checklist or not isinstance(checklist, list) or len(checklist) == 0:
-            # No checklist or empty = 100% "done" for damage reduction
-            return 1.0
-        completed_count = sum(1 for item in checklist if item.get("completed", False))
-        total_count = len(checklist)
-        return completed_count / total_count if total_count > 0 else 1.0
-
-    # --- MODIFIED _process_daily ---
-    # & -     def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
+    # & - def _process_daily(...)
     def _process_daily(self, task_data: Dict) -> Dict[str, Any]:
-        """Processes Daily specific fields, including per-task damage calculation."""
+        """Processes Daily-specific fields, including damage."""
         processed = {}
-        # Status calculation
-        is_due = task_data.get("isDue", False)
-        completed = task_data.get("completed", False)
-        status = "grey" if not is_due else ("done" if completed else "due")
-        processed["_status"] = status
+        is_due, completed = task_data.get("isDue", False), task_data.get("completed", False)
+        checklist = task_data.get("checklist", [])
+        next_due = task_data.get("nextDue", [])
+        val = task_data.get("value", 0.0)
 
-        # Other daily fields
-        checklist_items = task_data.get("checklist", [])
-        processed["checklist"] = checklist_items  # Keep raw items
-        next_due_list = task_data.get("nextDue", [])
-        processed["date"] = (
-            next_due_list[0]
-            if isinstance(next_due_list, list) and len(next_due_list) > 0
-            else ""
-        )
+        status = "grey"
+        if is_due:
+            status = "success" if completed else "due"  # Use 'success' for done
+        processed["_status"] = status
+        processed["checklist"] = checklist
+        processed["date"] = next_due[0] if isinstance(next_due, list) and next_due else ""
         processed["is_due"] = is_due
         processed["streak"] = task_data.get("streak", 0)
-        task_value = task_data.get("value", 0.0)
-        processed["value"] = task_value
-        processed["value_color"] = self._value_color(task_value)
+        processed["value"], processed["value_color"] = val, self._value_color(val)
 
-        # --- Damage Calculation Logic ---
-        damage_to_user = 0.0
-        damage_to_party = 0.0
-        # Note: We check current stealth but don't modify it here.
-        # If multiple tasks would be stealthed, this calculates damage as 0 for all,
-        # which might slightly underestimate total damage if stealth runs out.
-        # Accurate stealth accounting would require processing dailies in order.
+        # --- Damage Calculation ---
+        dmg_user, dmg_party = 0.0, 0.0
         if is_due and not completed and not self.is_sleeping and self.user_stealth <= 0:
-            # Value capping
-            value_min = -47.27
-            value_max = 21.27
-            curr_val = max(value_min, min(task_value, value_max))
+            try:
+                v_min, v_max = -47.27, 21.27
+                c_val = max(v_min, min(val, v_max))
+                delta = abs(math.pow(0.9747, float(c_val)))
 
-            # Base delta (~0-1, higher for more negative value)
-            delta = abs(math.pow(0.9747, curr_val))
+                if isinstance(checklist, list):
+                    check_ratio = self._calculate_checklist_done(checklist)
+                    eff_delta = delta * 1.0 - check_ratio
+                else:
+                    eff_delta = delta
 
-            # Checklist reduction (Full completion = 0 damage)
-            checklist_items = task_data.get(
-                "checklist"
-            )  # Get checklist, could be None or []
-            if isinstance(checklist_items, list) and checklist_items:
-
-                checklist_done_ratio = self._calculate_checklist_done(checklist_items)
-                delta *= 1.0 - checklist_done_ratio
-
-            # User Damage
-            con_bonus = max(0.1, 1.0 - (float(self.user_con) / 250.0))
-            priority = task_data.get("priority", 1.0)
-            try:  # Handle priority being string or number
-                prio_float = float(priority)
+                con_mult = max(0.1, 1.0 - (float(self.user_con) / 250.0))
+                prio = task_data.get("priority", 1.0)
                 prio_map = {0.1: 0.1, 1.0: 1.0, 1.5: 1.5, 2.0: 2.0}
-                priority_multiplier = prio_map.get(
-                    prio_float, 1.0
-                )  # Default to 1 if invalid
-            except (ValueError, TypeError):
-                priority_multiplier = 1.0
-
-            hp_mod = delta * con_bonus * priority_multiplier * 2.0
-            # damage_to_user = round(hp_mod, 2)  # Round
-            damage_to_user = round(hp_mod * 10) / 10  # New version (1 decimal)
-
-            # Party Damage (Boss Quests)
-            if self.is_on_boss_quest and self.boss_str > 0:
-                boss_delta = delta
-                if priority_multiplier < 1.0:
-                    boss_delta *= priority_multiplier  # Trivial adj
-                damage_to_party_unrounded = boss_delta * self.boss_str
-                damage_to_party = round(
-                    damage_to_party_unrounded, 1
-                )  # Round to 1 decimal
-            else:
-                damage_to_party = 0.0
-        # else: damage remains 0 (sleeping, completed, not due, or stealthed)
-
-        if damage_to_user != 0:
-            processed["damage_to_user"] = damage_to_user
-        if damage_to_party != 0:
-            processed["damage_to_party"] = damage_to_party
-        # -----------------------------
-
+                prio_mult = (
+                    prio_map.get(float(prio), 1.0) if isinstance(prio, (int, float)) else 1.0
+                )
+                hp_mod = delta * con_mult * prio_mult * 2.0
+                dmg_user = round(hp_mod * 10) / 10
+                if self.is_on_boss_quest and self.boss_str > 0:
+                    boss_delta = eff_delta * prio_mult if prio_mult < 1.0 else eff_delta
+                    dmg_party = round(boss_delta * self.boss_str, 1)
+            except Exception as e_dmg:
+                self.console.log(
+                    f"Error calculating damage for Daily {task_data.get('id', 'N/A')}: {e_dmg}",
+                    style="error",
+                )
+        if dmg_user > 0:
+            processed["damage_to_user"] = dmg_user
+        if dmg_party > 0:
+            processed["damage_to_party"] = dmg_party
         return processed
 
-    # --- Public Processing Methods ---
-    # & -     def process_single_task(self, task_data: Dict) -> Optional[Dict[str, Any]]:
+    # & - def _process_reward(...)
+    def _process_reward(self, task_data: Dict) -> Dict[str, Any]:
+        """Processes Reward-specific fields."""
+        return {"value": task_data.get("value", 0)}  # Cost
+
+    # MARK: - Public Processing Methods
+    # & - def process_single_task(...)
     def process_single_task(self, task_data: Dict) -> Optional[Dict[str, Any]]:
-        """
-        Processes a single raw task dictionary into a standardized, enriched format.
-
-        Extracts common fields (ID, type, text, notes, tags, challenge info, etc.),
-        replaces emoji codes, and calls the appropriate private processor
-        (_process_habit, _process_todo, etc.) to add type-specific fields.
-
-        Args:
-            task_data (Dict): The raw dictionary representing a single task from the API.
-
-        Returns:
-            Optional[Dict[str, Any]]: The processed task dictionary with standardized
-                                      and type-specific fields, or None if the input
-                                      task data is invalid (e.g., missing 'id').
-        """
+        """Processes a single raw task into standardized format."""
         if not isinstance(task_data, dict) or not task_data.get("id"):
-            console.print(
-                f"Warning: Skipping invalid task data (missing ID or not a dict): {task_data}",
-                style="warning",
-            )
+            self.console.log(f"Skipping invalid task data: {task_data}", style="warning")
             return None
-
-        task_id = task_data["id"]  # ID is confirmed to exist here
+        task_id = task_data["id"]
         task_type = task_data.get("type")
-
-        # --- Process common fields safely ---
-        challenge_info = task_data.get(
-            "challenge", {}
-        )  # Default to empty dict if missing
-        if not isinstance(challenge_info, dict):
-            console.print(
-                f"Warning: Task {task_id} has non-dict challenge info: {challenge_info}",
-                style="warning",
-            )
-            challenge_info = {}  # Ensure it's a dict
-
-        notes = task_data.get("notes", "")  # Default to empty string
-        text = task_data.get("text", "")  # Default to empty string
-
+        challenge = task_data.get("challenge", {})
+        if not isinstance(challenge, dict):
+            challenge = {}
+        notes = task_data.get("notes", "")
+        text = task_data.get("text", "")
         processed = {
-            "_type": task_type,
-            "attribute": task_data.get(
-                "attribute", "str"
-            ),  # Default attribute if missing? Habitica default is str
-            "challenge_id": challenge_info.get("id", ""),
-            "challenge_task_id": challenge_info.get("taskId", ""),
-            "challenge": emoji_data_python.replace_colons(
-                challenge_info.get("shortName", "")
-            ),
             "id": task_id,
-            "note": emoji_data_python.replace_colons(notes if notes else ""),
-            "priority": task_data.get("priority", 1),  # Habitica default is 1 (Medium)
-            "tag_id": task_data.get("tags", []),  # Keep original list of IDs
-            "tag_name": self._process_task_tags(task_data),  # Get list of names
-            "text": emoji_data_python.replace_colons(text if text else ""),
-            "created": task_data.get(
-                "createdAt", ""
-            ),  # Keep original ISO timestamp string
-            # "_raw": task_data # Optional: uncomment to include raw data for debugging
+            "_type": task_type,
+            "text": emoji_data_python.replace_colons(text or ""),
+            "note": emoji_data_python.replace_colons(notes or ""),
+            "priority": task_data.get("priority", 1.0),
+            "attribute": task_data.get("attribute", "str"),
+            "tags": task_data.get("tags", []),  # Keep raw IDs
+            "tag_names": self._process_task_tags(task_data),  # Add names
+            "created": task_data.get("createdAt", ""),
+            "challenge_id": challenge.get("id", ""),
+            "challenge_name": emoji_data_python.replace_colons(challenge.get("shortName", "")),
         }
 
-        # --- Add type-specific fields ---
-        type_specific_data = {}
-        if task_type == "habit":
-            type_specific_data = self._process_habit(task_data)
-        elif task_type == "todo":
-            type_specific_data = self._process_todo(task_data)
-        elif task_type == "daily":
-            type_specific_data = self._process_daily(task_data)
-        elif task_type == "reward":
-            type_specific_data = self._process_reward(task_data)
+        type_processor = getattr(self, f"_process_{task_type}", None)
+        if callable(type_processor):
+            processed.update(type_processor(task_data))
         else:
-            console.print(
-                f"Warning: Unknown task type '{task_type}' for task ID {task_id}"
+            self.console.log(
+                f"Unknown task type '{task_type}' for task {task_id}", style="warning"
             )
-            # Add minimal common fields if type is unknown?
-            processed["value"] = task_data.get("value", 0.0)
-            processed["value_color"] = self._value_color(processed["value"])
-
-        processed.update(type_specific_data)
+            val = task_data.get("value", 0.0)
+            processed.update({"value": val, "value_color": self._value_color(val)})
         return processed
 
-    # & -     def process_and_categorize_all(self) -> Dict[str, Dict]:
-    def process_and_categorize_all(self) -> Dict[str, Dict]:
-        """
-        Fetches all tasks using the API client, processes each task individually,
-        and categorizes them based on type and status.
-
-        Builds two main structures:
-        1. `data`: A dictionary mapping task IDs to their fully processed task dictionaries.
-        2. `cats`: A dictionary categorizing task IDs. Includes lists for habits/rewards,
-           status-based dictionaries for todos/dailies (due, grey, red/done),
-           a sorted list of unique tag IDs used across all tasks, a list of IDs for
-           tasks belonging to broken challenges, and a sorted list of unique IDs for
-           challenges the user is part of.
-
-        Includes error handling for the initial task fetch.
-
-        Returns:
-            Dict[str, Dict]: A dictionary containing two keys:
-                             'data': The dictionary of processed tasks (ID -> processed_task).
-                             'cats': The dictionary containing categorized task IDs and metadata.
-                             Returns a default empty structure if fetching tasks fails.
-        """
-        console.print("Fetching all tasks via API client...")
+    # & - def process_and_categorize_all(...)
+    def process_and_categorize_all(self) -> Dict[str, Any]:
+        """Fetches all tasks, processes, and categorizes them."""
+        self.console.print("Fetching all tasks...", style="info")
+        all_tasks_raw = []
         try:
-            all_tasks_raw = self.api_client.get_tasks()
+            all_tasks_raw = self.api_client.get_tasks()  # Returns list or []
+            if not isinstance(all_tasks_raw, list):
+                self.console.print(
+                    f"Failed fetch: Expected list, got {type(all_tasks_raw)}.", style="error"
+                )
+                all_tasks_raw = []
         except Exception as e:
-            console.print(f"Fatal Error: Could not fetch tasks: {e}", style="error")
-            # Return empty but valid structure to prevent downstream errors
-            return {
-                "data": {},
-                "cats": {
-                    "tasks": {
-                        "habits": [],
-                        "todos": {"due": [], "grey": [], "red": []},
-                        "dailys": {"done": [], "due": [], "grey": []},
-                        "rewards": [],
-                    },
-                    "tags": [],
-                    "broken": [],
-                    "challenge": [],
-                },
-            }
+            self.console.print(f"Fatal Error fetching tasks: {e}", style="error")
+            return {"data": {}, "cats": {"tasks": {}, "tags": [], "broken": [], "challenge": []}}
 
-        console.print(f"Processing {len(all_tasks_raw)} tasks...", style="info")
-        tasks_dict = {}  # Stores {task_id: processed_task_dict}
-        # Initialize categories structure fully
-        cats_dict = {
+        self.console.print(f"Processing {len(all_tasks_raw)} raw tasks...", style="info")
+        tasks_dict: Dict[str, Dict] = {}
+        cats_dict: Dict[str, Any] = {
             "tasks": {
                 "habits": [],
-                "todos": {"due": [], "grey": [], "red": []},  # Statuses for todos
-                "dailys": {"done": [], "due": [], "grey": []},  # Statuses for dailys
+                "todos": {"due": [], "grey": [], "red": []},
+                "dailys": {"success": [], "due": [], "grey": []},
                 "rewards": [],
             },
-            "tags": set(),  # Use set for efficient unique tracking of tag IDs
-            "broken": [],  # List of task IDs from broken challenges
-            "challenge": set(),  # Use set for unique joined challenge IDs
+            "tags": set(),
+            "broken": [],
+            "challenge": set(),
         }
 
         for task_data in all_tasks_raw:
-            processed_task = self.process_single_task(task_data)
-            if processed_task is None:
-                continue  # Skip if processing failed (e.g., missing ID, logged in process_single_task)
+            processed = self.process_single_task(task_data)
+            if not processed:
+                continue
+            task_id = processed["id"]
+            tasks_dict[task_id] = processed
+            cats_dict["tags"].update(processed.get("tags", []))
+            challenge = task_data.get("challenge", {})  # Use raw data for broken flag
+            if isinstance(challenge, dict):
+                if challenge.get("broken"):
+                    cats_dict["broken"].append(task_id)
+                if challenge.get("id"):
+                    cats_dict["challenge"].add(challenge.get("id"))
+            t_type, t_status = processed.get("_type"), processed.get("_status")
+            if t_type == "habit":
+                cats_dict["tasks"]["habits"].append(task_id)
+            elif t_type == "reward":
+                cats_dict["tasks"]["rewards"].append(task_id)
+            elif t_type == "todo":
+                cats_dict["tasks"]["todos"].setdefault(t_status or "grey", []).append(task_id)
+            elif t_type == "daily":
+                cats_dict["tasks"]["dailys"].setdefault(t_status or "grey", []).append(task_id)
 
-            task_id = processed_task["id"]
-            tasks_dict[task_id] = processed_task
-
-            # --- Categorization Logic ---
-            # Track unique tag IDs used
-            cats_dict["tags"].update(
-                processed_task.get("tag_id", [])
-            )  # Add all tag IDs from the task
-
-            # Check for broken challenges (using original task_data for direct access)
-            challenge_info = task_data.get("challenge", {})
-            if not isinstance(challenge_info, dict):
-                challenge_info = {}  # Ensure dict
-            if challenge_info.get("broken"):  # Check the 'broken' flag
-                cats_dict["broken"].append(task_id)
-            # Track unique challenge IDs joined
-            if challenge_info.get("id"):
-                cats_dict["challenge"].add(challenge_info["id"])
-
-            # Categorize by type and status
-            task_type = processed_task.get("_type")
-            if task_type in ["todo", "daily"]:
-                # Use status determined during processing (e.g., 'red', 'due', 'grey', 'done')
-                status = processed_task.get(
-                    "_status", "grey"
-                )  # Default to 'grey' if missing
-                type_key = task_type + "s"  # 'todos' or 'dailys'
-                # Ensure the structure exists before appending
-                if (
-                    type_key in cats_dict["tasks"]
-                    and status in cats_dict["tasks"][type_key]
-                ):
-                    cats_dict["tasks"][type_key][status].append(task_id)
-                else:
-                    # This should ideally not happen if _status is always set correctly
-                    console.print(
-                        f"Warning: Could not categorize task {task_id} - invalid type/status ({type_key}/{status})",
-                        style="warning",
-                    )
-                    # Optionally add to a general 'uncategorized' list or just log
-            elif task_type in ["habit", "reward"]:
-                type_key = task_type + "s"  # 'habits' or 'rewards'
-                if type_key in cats_dict["tasks"]:
-                    cats_dict["tasks"][type_key].append(task_id)
-            # else: handle unknown types if necessary, already logged in process_single_task
-
-        # Convert sets back to sorted lists for JSON compatibility/final structure
         cats_dict["tags"] = sorted(list(cats_dict["tags"]))
         cats_dict["challenge"] = sorted(list(cats_dict["challenge"]))
-
-        console.print("Processing complete.", style="success")
+        self.console.print("Task processing and categorization complete.", style="success")
         return {"data": tasks_dict, "cats": cats_dict}
 
-    # --- File Saving ---
-    # & -     def save_processed_data(self, processed_data: Dict):
-    def save_processed_data(self, processed_data: Dict):
-        """
-        Saves the processed task data and category dictionaries to separate files.
-
-        Uses the `save_json` utility function. Expects the input dictionary
-        to have 'data' and 'cats' keys.
-
-        Args:
-            processed_data (Dict): The dictionary returned by
-                                   `process_and_categorize_all`, containing
-                                   'data' and 'cats' keys.
-        """
+    # MARK: - File Saving (Optional)
+    # & - def save_processed_data(...)
+    def save_processed_data(
+        self, processed_results: Dict, base_filename: str = "processed_output"
+    ) -> None:
+        """Saves processed task data and categories to separate JSON files."""
         if (
-            not processed_data
-            or "data" not in processed_data
-            or "cats" not in processed_data
+            not isinstance(processed_results, dict)
+            or "data" not in processed_results
+            or "cats" not in processed_results
         ):
-            console.print(
-                "Error: No valid processed data provided to save.", style="error"
-            )
+            self.console.print("Invalid processed data provided to save.", style="error")
             return
         try:
-            console.print("Saving processed data...", style="info")
-            # Use the imported save_json function
-            # Save main task data (ID -> processed task)
-            save_json(
-                processed_data["data"], "tasks_data", "_processed"
-            )  # e.g., tasks_data_processed.json
-            # Save category data (lists/dicts of task IDs)
-            save_json(
-                processed_data["cats"], "tasks_cats", "_processed"
-            )  # e.g., tasks_cats_processed.json
-            console.print("Processed data saved successfully.", style="success")
+            self.console.print("Saving processed data...", style="info")
+            save_json(processed_results["data"], f"{base_filename}_data.json")
+            save_json(processed_results["cats"], f"{base_filename}_cats.json")
         except Exception as e:
-            console.print(f"Error saving processed files: {e}", style="error")
+            self.console.print(f"Error saving processed files: {e}", style="error")
 
 
-# ==============================================================================
-# Example Usage (Intended for main script/CLI)
-# ==============================================================================
-# from pixabit.api import HabiticaAPI
-# from pixabit.processing import TaskProcessor
-# # from pixabit.get_user_stats import get_user_stats # If separate
-#
-# if __name__ == "__main__": # Example guard
-#     try:
-#         console.print("--- Starting Pixabit Processing ---")
-#         # Assume API client is configured via environment variables or .env file
-#         api = HabiticaAPI()
-#         processor = TaskProcessor(api_client=api)
-#
-#         console.print("\nProcessing and categorizing all tasks...")
-#         processed_results = processor.process_and_categorize_all()
-#
-#         if processed_results:
-#             processor.save_processed_data(processed_results)
-#
-#             # Example: Calculate stats if needed (assuming get_user_stats exists)
-#             # if 'cats' in processed_results:
-#             #      user_stats = get_user_stats(api_client=api, cats_dict=processed_results['cats'])
-#             #      console.print("\n--- User Stats ---")
-#             #      import json
-#             #      console.print(json.dumps(user_stats, indent=2))
-#             #      # Save stats if needed
-#             #      # from pixabit.utils.save_json import save_json
-#             #      # save_json(user_stats, "user_stats", "_calculated")
-#             # else:
-#             #      console.print("Skipping user stats calculation: 'cats' data missing.")
-#         else:
-#              console.print("Processing failed, no results to save or analyze.")
-#
-#         console.print("\n--- Pixabit Processing Finished ---")
-#
-#     except Exception as e:
-#         console.print(f"\n--- An error occurred in the main processing script ---")
-#         console.print(f"{type(e).__name__}: {e}")
-#         # Optionally re-raise or log traceback for debugging
-#         # import traceback
-#         # traceback.print_exc()
-
-# User Stats ───────────────────────────────────────────────────────────────
-
-
-# & - def get_user_stats(
+# MARK: - User Stats Function
+# & - def get_user_stats(...)
 def get_user_stats(
-    api_client: HabiticaAPI, cats_dict: Dict[str, Any], processed_tasks_dict: Dict
+    api_client: HabiticaAPI,
+    cats_dict: Dict[str, Any],
+    processed_tasks_dict: Dict[str, Dict[str, Any]],
+    user_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """
-    Retrieves user stats from Habitica API and combines with task counts.
+    """Generates a dictionary of user statistics combined with task counts and potential damage.
 
-    Fetches the `/user` endpoint data, extracts relevant statistics (level,
-    hp, mp, gp, class, preferences, etc.), calculates task counts per category
-    and status from the provided `cats_dict`, and formats everything into a
-    single dictionary. Also saves the resulting stats dictionary to a JSON file
-    named `user_stats_processed.json`.
-
-    Args:
-        api_client (HabiticaAPI): An authenticated HabiticaAPI client instance.
-        cats_dict (Dict[str, Any]): The 'cats' dictionary generated by TaskProcessor
-                                    (or similar structure), containing categorized
-                                    task IDs (e.g., `cats['tasks']['todos']['due']`)
-                                    and other tracked info like `cats['broken']`,
-                                    `cats['tags']`, `cats['challenge']`.
+    Uses pre-fetched user data if provided, otherwise fetches it. Calculates task
+    counts from `cats_dict` and sums potential damage from `processed_tasks_dict`.
 
     Returns:
-        Dict[str, Any]: A dictionary containing combined user and task statistics.
-                        Keys include 'username', 'class', 'level', 'stats' (dict),
-                        'hp', 'mp', 'exp', 'gp', 'quest_active', 'sleeping',
-                        'day_start', 'last_login_local', 'task_counts' (dict),
-                        'broken_challenge_tasks', 'joined_challenges_count',
-                        'tags_in_use_count'. Returns an empty dictionary `{}`
-                        if fetching user data fails.
-
-    Raises:
-        requests.exceptions.RequestException: If the API call to fetch user data fails.
-        Exception: Catches and reports other unexpected errors during processing or saving.
+        Combined user/task statistics dict, or {} on critical error.
     """
-    console.print("Fetching user data for stats...")
-    output_stats: Dict[str, Any] = {}  # Initialize empty dict
-
-    try:
-        # Fetch user data including stats, party, preferences, auth timestamps
-        user_data = api_client.get_user_data()  # Fetches /user endpoint data
-        if not isinstance(user_data, dict) or not user_data:  # More robust check
-            console.print(
-                "[error]Error:[/error] Failed to fetch valid user data from API."
-            )
-            return {}  # Return empty dict on failure
-
-        # --- Safely extract data from nested dictionaries ---
-        stats: Dict[str, Any] = user_data.get("stats", {})
-        party: Dict[str, Any] = user_data.get("party", {})
-        balance = user_data.get("balance", 0.0)
-        gems_count = int(balance * 4)
-
-        preferences: Dict[str, Any] = user_data.get("preferences", {})
-        auth: Dict[str, Any] = user_data.get("auth", {})
-        timestamps: Dict[str, Any] = auth.get("timestamps", {})
-        local_auth: Dict[str, Any] = auth.get("local", {})  # Contains username
-
-    except Exception as e:
-        console.print(f"[error]Error fetching or parsing user data:[/error] {e}")
-        return {}  # Return empty dict on failure
-
-    # --- Process Raw Data ---
-    user_class: str = stats.get("class", "warrior")  # Default class if missing
-    if user_class == "wizard":  # Habitica API uses 'wizard', map to 'mage' if desired
-        user_class = "mage"
-
-    # Convert last login time
-    last_login_utc: Optional[str] = timestamps.get("loggedin")
-    last_login_local_str: str = "N/A"
-    if last_login_utc:
+    console.print("Calculating user stats...", style="info")
+    if user_data is None:
+        console.print("User data not provided to get_user_stats, fetching...", style="info")
         try:
-            # Use the imported utility function (or fallback)
-            last_login_local = convert_to_local_time(last_login_utc)
-            # Format consistently, e.g., ISO 8601
-            last_login_local_str = last_login_local.isoformat(
-                sep=" ", timespec="minutes"
-            )
+            user_data = api_client.get_user_data()
         except Exception as e:
-            console.print(
-                f"[yellow]Warning:[/yellow] Could not convert last login time '{last_login_utc}': {e}"
-            )
-            last_login_local_str = (
-                f"Error ({last_login_utc})"  # Indicate error but keep original
-            )
-
-    # --- Calculate task counts from cats_dict ---
-    task_numbers: Dict[str, Any] = {}
-    task_categories: Dict[str, Any] = cats_dict.get(
-        "tasks", {}
-    )  # Safely get tasks dict
-    if isinstance(task_categories, dict):
-        for category, cat_data in task_categories.items():
-            if isinstance(cat_data, dict):  # For todos/dailys with statuses
-                total_in_cat = 0
-                status_counts = {}
-                for status, id_list in cat_data.items():
-                    count = len(id_list) if isinstance(id_list, list) else 0
-                    status_counts[status] = count
-                    total_in_cat += count
-                # Store counts per status and optional total
-                task_numbers[category] = status_counts
-                task_numbers[category][
-                    "_total"
-                ] = total_in_cat  # Use underscore prefix for clarity
-            elif isinstance(cat_data, list):  # For habits/rewards (flat lists)
-                task_numbers[category] = len(cat_data)
-            else:
-                task_numbers[category] = (
-                    f"Unknown format ({type(cat_data)})"  # Handle unexpected format
-                )
-    else:
+            console.print(f"Failed to fetch user data for stats: {e}", style="error")
+            user_data = None
+    if not isinstance(user_data, dict) or not user_data:
+        console.print("Cannot calculate stats: Valid user data required.", style="error")
+        return {}
+    if not isinstance(cats_dict, dict) or not cats_dict:
+        console.print("Cannot calculate stats: Valid categories data required.", style="error")
+        return {}
+    if not isinstance(processed_tasks_dict, dict):
         console.print(
-            "[yellow]Warning:[/yellow] 'cats_dict' missing or has invalid 'tasks' structure. Task counts will be inaccurate."
+            "Cannot calculate stats: Valid processed tasks data required.", style="error"
         )
-        # Convert last login time (ensure this logic is present)
-    last_login_utc = timestamps.get("loggedin")
-    last_login_local_str = "N/A"
-    if last_login_utc:
-        try:
-            last_login_local = convert_to_local_time(last_login_utc)
-            last_login_local_str = last_login_local.isoformat()
-        except Exception as date_e:
-            console.print(
-                f"      - [Warning] Error converting last login time: {date_e}"
-            )
-            last_login_local_str = "(Time Error)"
+        return {}
 
-        # --- START: New Damage Calculation ---
-    total_potential_user_damage = 0.0
-    total_potential_party_damage = 0.0
-    console.print("      - Calculating potential daily damage...")
     try:
-        # Get IDs of dailies marked 'due' by TaskProcessor
-        # (Status reflects non-completion if task is due)
-        due_daily_ids = cats_dict.get("tasks", {}).get("dailys", {}).get("due", [])
+        # --- Extract Data Safely ---
+        stats = user_data.get("stats", {})
+        party = user_data.get("party", {})
+        prefs = user_data.get("preferences", {})
+        auth = user_data.get("auth", {})
+        ts = auth.get("timestamps", {})
+        local_auth = auth.get("local", {})
+        balance = user_data.get("balance", 0.0)
+        gems = int(balance * 4) if balance > 0 else 0
+        u_class_raw = stats.get("class", "warrior")
+        u_class = "mage" if u_class_raw == "wizard" else u_class_raw
+        last_login_utc = ts.get("loggedin")
+        last_login_local = "N/A"
+        if last_login_utc:
+            local_dt = convert_to_local_time(last_login_utc)
+            if local_dt:
+                last_login_local = local_dt.isoformat(sep=" ", timespec="minutes")
+            else:
+                last_login_local = f"Error ({last_login_utc})"
+        quest = party.get("quest", {})
 
-        for task_id in due_daily_ids:
-            processed_task = processed_tasks_dict.get(task_id)
-            if processed_task:
-                total_potential_user_damage += processed_task.get("damage_to_user", 0.0)
-                total_potential_party_damage += processed_task.get(
-                    "damage_to_party", 0.0
-                )
-    except Exception as sum_e:
-        console.print(f"Warning: Error summing damage from processed tasks: {sum_e}")
-    # ------------------------------------------
+        # --- Calculate Task Counts ---
+        task_counts: Dict[str, Any] = {}
+        task_cats_data = cats_dict.get("tasks", {})
+        if isinstance(task_cats_data, dict):
+            for cat, data in task_cats_data.items():
+                if isinstance(data, dict):  # dailys/todos
+                    total = sum(len(ids) for ids in data.values() if isinstance(ids, list))
+                    task_counts[cat] = {
+                        status: len(ids) for status, ids in data.items() if isinstance(ids, list)
+                    }
+                    task_counts[cat]["_total"] = total
+                elif isinstance(data, list):  # habits/rewards
+                    task_counts[cat] = len(data)
+        else:
+            console.print("Invalid 'tasks' structure in cats_dict.", style="warning")
 
-    # --- END: New Damage Calculation ---
-    # --- Prepare Final Stats Dictionary ---
-    # Use .get() with defaults for all fields to prevent KeyErrors
-    quest_info: Dict[str, Any] = party.get("quest", {})  # Safely get quest dict
+        # --- Calculate Damage ---
+        dmg_user, dmg_party = 0.0, 0.0
+        due_dailies = cats_dict.get("tasks", {}).get("dailys", {}).get("due", [])
+        for task_id in due_dailies:
+            task = processed_tasks_dict.get(task_id)
+            if isinstance(task, dict):
+                dmg_user += float(task.get("damage_to_user", 0.0))
+                dmg_party += float(task.get("damage_to_party", 0.0))
 
-    output_stats = {
-        "username": local_auth.get("username", "N/A"),
-        "class": user_class,
-        "level": stats.get("lvl", 0),
-        "stats": {  # Nested dictionary for core stats
-            "str": stats.get("str", 0),
-            "int": stats.get("int", 0),
-            "con": stats.get("con", 0),
-            "per": stats.get("per", 0),
-        },
-        "hp": stats.get("hp", 0.0),  # Use float for potential decimals
-        "maxHealth": stats.get("maxHealth", 0),
-        "mp": stats.get("mp", 0.0),  # Use float for potential decimals
-        "maxMP": stats.get("maxMP", 0),
-        "exp": stats.get("exp", 0.0),  # Use float for potential decimals
-        "toNextLevel": stats.get("toNextLevel", 0),
-        "gp": stats.get("gp", 0.0),  # Gold can have decimals
-        "gems": gems_count,
-        "quest_active": quest_info.get("active", False),
-        "quest_key": quest_info.get("key"),  # Will be None if no quest or not active
-        "sleeping": preferences.get("sleep", False),
-        "day_start": preferences.get("dayStart", 0),  # Custom Day Start hour
-        "last_login_local": last_login_local_str,
-        "task_counts": task_numbers,
-        "broken_challenge_tasks": len(
-            cats_dict.get("broken", [])
-        ),  # Count of broken task IDs
-        "joined_challenges_count": len(
-            cats_dict.get("challenge", [])
-        ),  # Count of unique challenge IDs tasks belong to
-        "tags_in_use_count": len(
-            cats_dict.get("tags", [])
-        ),  # Count of unique tag IDs used across tasks
-        "potential_daily_damage_user": round(total_potential_user_damage, 2),
-        "potential_daily_damage_party": round(
-            total_potential_party_damage, 2
-        ),  # Add any other relevant stats extracted from user_data if needed
-    }
+        # --- Assemble Final Dict ---
+        output = {
+            "username": local_auth.get("username", "N/A"),
+            "class": u_class,
+            "level": stats.get("lvl", 0),
+            "hp": float(stats.get("hp", 0.0)),
+            "maxHealth": stats.get("maxHealth", 50),
+            "mp": float(stats.get("mp", 0.0)),
+            "maxMP": stats.get("maxMP", 0),
+            "exp": float(stats.get("exp", 0.0)),
+            "toNextLevel": stats.get("toNextLevel", 0),
+            "gp": float(stats.get("gp", 0.0)),
+            "gems": gems,
+            "stats": {
+                "str": stats.get("str", 0),
+                "int": stats.get("int", 0),
+                "con": stats.get("con", 0),
+                "per": stats.get("per", 0),
+            },
+            "sleeping": prefs.get("sleep", False),
+            "day_start": prefs.get("dayStart", 0),
+            "last_login_local": last_login_local,
+            "quest_active": quest.get("active", False),
+            "quest_key": quest.get("key"),
+            "task_counts": task_counts,
+            "broken_challenge_tasks": len(cats_dict.get("broken", [])),
+            "joined_challenges_count": len(cats_dict.get("challenge", [])),
+            "tags_in_use_count": len(cats_dict.get("tags", [])),
+            "potential_daily_damage_user": round(dmg_user, 2),
+            "potential_daily_damage_party": round(dmg_party, 2),
+        }
+        console.print("User stats calculation complete.", style="success")
+        return output
 
-    return output_stats
-
-
-# MARK: - EXAMPLE USAGE (Commented out)
-# Example of how this function would be called from a main script or CLI app
-#
-# from pixabit.api import HabiticaAPI
-# from pixabit.processing import TaskProcessor # Assuming TaskProcessor is defined elsewhere
-# from pixabit.processing import get_user_stats # Import the function itself
-#
-# if __name__ == "__main__": # Example guard
-#     try:
-#         console.print("--- Running Example: Get User Stats ---")
-#         api = HabiticaAPI()
-#
-#         # First, run the task processor to get the 'cats' dictionary
-#         # This part needs the TaskProcessor class implementation
-#         # processor = TaskProcessor(api_client=api)
-#         # processed_results = processor.process_and_categorize_all()
-#
-#         # Placeholder for processed_results if TaskProcessor is not run here
-#         processed_results = {
-#             "data": {}, # Placeholder for processed task data
-#             "cats": { # Example 'cats' structure needed by get_user_stats
-#                 "tasks": {
-#                     "habits": [], "dailys": {"due":[], "notDue":[]},
-#                     "todos": {"due":[], "notDue":[]}, "rewards": []
-#                 },
-#                 "broken": [], "tags": [], "challenge": []
-#             }
-#         }
-#         console.print("Note: Using placeholder task categorization data for stats calculation.")
-#
-#         if processed_results and 'cats' in processed_results:
-#             # Call get_user_stats with the API client and the categories
-#             user_stats = get_user_stats(api_client=api, cats_dict=processed_results['cats'])
+    except Exception as e_stat:
+        console.print(f"Error calculating user stats: {e_stat}", style="error")
+        console.print_exception(show_locals=False)
+        return {}  # Return empty dict on failure

@@ -1,127 +1,121 @@
 # pixabit/config.py
-"""
-Loads configuration settings for the Pixabit application from a .env file. This module is responsible for:
-1.  Locating the `.env` file expected to be in the project's root directory (one level up from this script's parent directory).
-2.  Checking if the `.env` file exists and prompting the user to create it interactively using functions from `.auth_file` if it's missing.
-3.  Loading the environment variables from the `.env` file using `python-dotenv`.
-4.  Making key configuration values available as Python constants within the application, particularly Habitica credentials and various specific Tag IDs.
+# MARK: - MODULE DOCSTRING
+"""Loads configuration settings for the Pixabit application from a .env file.
+
+Locates `.env` (project root expected), ensures mandatory credentials exist
+(using `config_auth.check_env_file`), loads variables using `python-dotenv`,
+and makes settings available as constants. Exits if mandatory credentials
+are missing after the check/creation step.
+
 Constants Defined:
-    - HABITICA_USER_ID (str | None): The user's Habitica User ID.
-    - HABITICA_API_TOKEN (str | None): The user's Habitica API Token.
-    - CHALLENGE_TAG_ID (str | None): Tag ID for Challenge tasks.
-    - PERSONAL_TAG_ID (str | None): Tag ID for general Personal tasks.
-    - PSN_TAG_ID (str | None): Tag ID for PlayStation related tasks.
-    - NOT_PSN_TAG_ID (str | None): Tag ID for tasks explicitly not related to PlayStation.
-    - NO_ATTR_TAG_ID (str | None): Tag ID for tasks with no specific attribute assigned.
-    - ATTR_TAG_STR_ID (str | None): Tag ID for tasks assigned to Strength attribute.
-    - ATTR_TAG_INT_ID (str | None): Tag ID for tasks assigned to Intelligence attribute.
-    - ATTR_TAG_CON_ID (str | None): Tag ID for tasks assigned to Constitution attribute.
-    - ATTR_TAG_PER_ID (str | None): Tag ID for tasks assigned to Perception attribute.
-Usage:
-    Import required constants directly from this module:
-    >>> from pixabit import config
-    >>> user_id = config.HABITICA_USER_ID
-    >>> str_tag = config.ATTR_TAG_STR_ID
+    - HABITICA_USER_ID (str): Habitica User ID (Validated).
+    - HABITICA_API_TOKEN (str): Habitica API Token (Validated).
+    - Optional Tag IDs (Optional[str]): CHALLENGE_TAG_ID, PERSONAL_TAG_ID,
+      PSN_TAG_ID, NOT_PSN_TAG_ID, NO_ATTR_TAG_ID, ATTR_TAG_*_ID.
 """
 
+# MARK: - IMPORTS
 import os
+import sys  # For sys.exit
 from pathlib import Path
-from typing import Optional  # Use Optional for type hinting clarity
+from typing import Dict, Optional  # Added Dict for ATTR_TAG_MAP
 
 from dotenv import load_dotenv
 
-from .config_auth import check_env_file
-from .utils.display import console, print
-
-# >> .env File Path Calculate
-# Calculate the path to the .env file. Assumes this config.py is inside a subfolder (e.g., 'pixabit') and the .env file resides in the parent directory (project root).
-
+# Use themed display and auth check function
 try:
-    # Resolve ensures the path is absolute before going parent.parent
-    env_path = Path(__file__).resolve().parent.parent / ".env"
+    from .config_auth import check_env_file
+    from .utils.display import console, print
+except ImportError:
+    import builtins
 
+    print = builtins.print
+
+    # Define dummy components if run standalone or during setup issues
+    def check_env_file(env_path):
+        pass
+
+    class DummyConsole:
+        def print(self, *args, **kwargs):
+            builtins.print(*args)
+
+        def log(self, *args, **kwargs):
+            builtins.print(*args)
+
+    console = DummyConsole()
+    print("[Warning] Could not import Pixabit display/auth utils in config.py")
+
+
+# MARK: - PATH CALCULATION
+try:
+    ENV_FILE_PATH = Path(__file__).resolve().parent.parent / ".env"
 except NameError:
-    # Fallback if __file__ is not defined (e.g., interactive session)
-    env_path = Path(".").resolve() / ".env"  # Check in current working dir
+    ENV_FILE_PATH = Path(".").resolve() / ".env"
     console.log(
-        f"[warning]🚨 Warning: __file__ not defined, assuming .env is in current directory:[/] [file]{env_path}[/file]"
+        f"[warning]⚠️ `__file__` undefined. Assuming .env in CWD: [file]{ENV_FILE_PATH}[/]",
+        style="warning",  # Use direct style if console might be dummy
     )
 
-# >> Ensure .env File Exists
-# Check for the .env file and prompt for creation if it doesn't exist. This should happen *before* attempting to load it.
-check_env_file(filename=env_path)  # Pass the calculated Path object
+# MARK: - ENSURE .ENV EXISTS (calls config_auth.py)
+# This will prompt for creation or exit if skipped/failed
+check_env_file(env_path=ENV_FILE_PATH)
 
-# >> Load Environment Variables ---
-# Load variables from the specified .env file into the environment. If the file doesn't exist (e.g., user skipped creation), this will load nothing but won't raise an error. Subsequent getenv calls will return None.
-console.log(f"⌛ Loading environment variables from: [file]{env_path}[/]")
+# MARK: - LOAD ENVIRONMENT VARIABLES
+console.log(f"⌛ Loading environment variables from: [file]{ENV_FILE_PATH}[/]")
+loaded = load_dotenv(
+    dotenv_path=ENV_FILE_PATH, verbose=False, override=False
+)  # verbose=False is quieter
 
-# verbose=True logs which file is loaded by python-dotenv
+if not loaded and ENV_FILE_PATH.exists():
+    console.log("[warning]⚠️ .env found but `load_dotenv` failed (empty/malformed?).[/]")
+elif not ENV_FILE_PATH.exists():  # Should not happen if check_env_file worked
+    console.log(f"[error]❌ .env file still not found at [file]{ENV_FILE_PATH}[/]. Exiting.[/]")
+    sys.exit(1)
 
-loaded = load_dotenv(dotenv_path=env_path, verbose=True, override=False)
+# MARK: - APPLICATION CONSTANTS (Mandatory first)
 
-if not loaded:
-    console.log(
-        f"[warning]🚨 Warning:[/warning] .env file not found at {env_path} or is empty."
-    )
-
-# >> APPLICATION CONSTANTS
-# --- Habitica API Credentials ---
+# --- Habitica API Credentials (Checked for None after loading) ---
 HABITICA_USER_ID: Optional[str] = os.getenv("HABITICA_USER_ID")
 HABITICA_API_TOKEN: Optional[str] = os.getenv("HABITICA_API_TOKEN")
 
-# >> Specific Tag IDs ---
-# These should correspond to Tag UUIDs created within Habitica by the user.
-# General Task Tags
-CHALLENGE_TAG_ID: Optional[str] = os.getenv(
-    "CHALLENGE_TAG_ID"
-)  # For tasks originating from challenges
-PERSONAL_TAG_ID: Optional[str] = os.getenv(
-    "PERSONAL_TAG_ID"
-)  # For general personal tasks (if used)
-
-# Challenge Tags (Example: Poison)
-PSN_TAG_ID: Optional[str] = os.getenv("PSN_TAG_ID")  # Poison related tasks
-NOT_PSN_TAG_ID: Optional[str] = os.getenv(
-    "NOT_PSN_TAG_ID"
-)  # Tasks explicitly NOT PSN related
-
-# Attribute Assignment Tags (Used for assigning rewards/tasks to attributes)
-NO_ATTR_TAG_ID: Optional[str] = os.getenv(
-    "NO_ATTR_TAG_ID"
-)  # Task has no specific attribute target
-ATTR_TAG_STR_ID: Optional[str] = os.getenv(
-    "ATTR_TAG_STR_ID"
-)  # Task targets Strength (STR)
-ATTR_TAG_INT_ID: Optional[str] = os.getenv(
-    "ATTR_TAG_INT_ID"
-)  # Task targets Intelligence (INT)
-ATTR_TAG_CON_ID: Optional[str] = os.getenv(
-    "ATTR_TAG_CON_ID"
-)  # Task targets Constitution (CON)
-ATTR_TAG_PER_ID: Optional[str] = os.getenv(
-    "ATTR_TAG_PER_ID"
-)  # Task targets Perception (PER)
-
-
-# >> Validate Loaded Variables
-# Check if essential variables were loaded successfully
-
+# --- Validation of Mandatory Credentials ---
 if not HABITICA_USER_ID or not HABITICA_API_TOKEN:
-    console.log("\n" + "=" * 60)
-    console.log(
-        " [error]🚨 Error: HABITICA_USER_ID or HABITICA_API_TOKEN not found![/]"
-    )
-    console.log(f" Please ensure they are correctly set in the '{env_path.name}' file.")
-    console.log(f" Location checked: {env_path}")
-    console.log(
-        " You may need to run the setup script (e.g., auth_file creation) again."
-    )
-    console.log("=" * 60 + "\n")
+    console.print("\n" + "=" * 60, style="error")
+    console.print(" [error]❌ FATAL ERROR: Essential Configuration Missing![/error]")
+    if not HABITICA_USER_ID:
+        console.print("   - `HABITICA_USER_ID` not found or empty in `.env` file.")
+    if not HABITICA_API_TOKEN:
+        console.print("   - `HABITICA_API_TOKEN` not found or empty in `.env` file.")
+    console.print(f"   Location checked: [file]{ENV_FILE_PATH}[/]")
+    console.print("   Please run setup (`pixabit setup-auth`) or manually edit the `.env` file.")
+    console.print("   Application cannot continue without these credentials.")
+    console.print("=" * 60 + "\n", style="error")
+    sys.exit(1)  # Exit if mandatory credentials are not loaded
 
-    # Optionally raise an exception to halt execution if credentials are vital
-    # raise ValueError("Missing Habitica credentials in .env file.")
+# --- Optional Tag IDs ---
+CHALLENGE_TAG_ID: Optional[str] = os.getenv("CHALLENGE_TAG_ID")
+PERSONAL_TAG_ID: Optional[str] = os.getenv("PERSONAL_TAG_ID")
+PSN_TAG_ID: Optional[str] = os.getenv("PSN_TAG_ID")
+NOT_PSN_TAG_ID: Optional[str] = os.getenv("NOT_PSN_TAG_ID")
+NO_ATTR_TAG_ID: Optional[str] = os.getenv("NO_ATTR_TAG_ID")
+ATTR_TAG_STR_ID: Optional[str] = os.getenv("ATTR_TAG_STR_ID")
+ATTR_TAG_INT_ID: Optional[str] = os.getenv("ATTR_TAG_INT_ID")
+ATTR_TAG_CON_ID: Optional[str] = os.getenv("ATTR_TAG_CON_ID")
+ATTR_TAG_PER_ID: Optional[str] = os.getenv("ATTR_TAG_PER_ID")
 
-# Example of another potential config value (remains commented out)
-# DEFAULT_BACKUP_FOLDER = "hab_backups"
+# --- Derived Config: Attribute Tag Map (for convenience) ---
+# Useful for TagManager and potentially other parts of the app
+# Only includes tags that are actually configured in the .env
+ATTR_TAG_MAP: Dict[str, str] = {
+    tag_id: attr
+    for tag_id, attr in [
+        (ATTR_TAG_STR_ID, "str"),
+        (ATTR_TAG_INT_ID, "int"),
+        (ATTR_TAG_CON_ID, "con"),
+        (ATTR_TAG_PER_ID, "per"),
+    ]
+    if tag_id  # Only include if tag_id is not None or empty string
+}
 
-console.log("[success]✅ Configuration module loaded.[/]")
+# MARK: - MODULE LOAD COMPLETION
+console.log("[success]✅ Configuration module loaded successfully.[/success]")

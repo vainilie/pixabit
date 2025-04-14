@@ -2,165 +2,198 @@
 
 A personal command-line interface (CLI) tool written in Python to interact with the Habitica API (v3) for managing tasks, tags, challenges, stats, and performing various account actions. Uses the Rich library for enhanced terminal output.
 
-## Features
+## Features (Implemented/Refined)
 
-- **Data Refresh & Display:** Fetches and displays user stats, tags (all/unused), and broken tasks.
+- **Data Refresh & Display:** Fetches and displays user stats (Dashboard), tags (all/unused), and broken tasks. Optimized data fetching via central `refresh_data` passing data down to components. Caches game content data (`content_cache.json`).
 - **Tag Management:**
-  - Interactively configure special tags (.env).
-  - Sync challenge/personal tags based on task association.
-  - Sync attribute tags to task attributes.
-  - Ensure poison status tags are present.
-  - Interactively add/replace tags on tasks based on other tags.
-  - List and optionally delete unused tags.
+  - Interactively configure optional tags (`Configure Special Tags` menu option).
+  - Display all tags and unused tags.
+  - Interactively delete unused tags globally (requires confirmation).
+  - Interactively add/replace tags on tasks based on other existing tags.
+  - _Optional Feature Syncing (Conditional based on `.env` config):_
+    - Sync challenge vs. personal tags.
+    - Ensure poison status tags (poisoned/not poisoned).
+    - Sync attribute tags (STR/INT/CON/PER/None) with task's attribute field.
 - **Challenge Management:**
-  - Backup challenges (including associated tasks) to individual JSON files.
-  - (TODO: Import challenges from backup JSON).
-  - (TODO: List joined challenges).
-  - (TODO: Leave/Abandon challenges).
+  - Backup challenges (including associated, cleaned tasks) to individual JSON files.
+  - Leave a joined challenge (prompts for task handling, updates local cache).
 - **Task Management:**
-  - List tasks associated with broken challenges.
-  - Unlink tasks from broken challenges (optionally keeping them).
-  - (TODO: Unlink single task from challenge).
-  - (TODO: Pin/Unpin tasks by moving to top).
-  - (TODO: Full Task CRUD - Create, Read, Update, Delete via CLI).
-  - (TODO: Score tasks up/down).
-  - (TODO: Manage checklist items - add, score, edit, delete).
-  - (TODO: Sort tasks by various criteria).
+  - Handle broken tasks: View tasks grouped by broken challenge, unlink individually or in bulk per challenge (with keep/remove option).
+  - Replicate setup (attributes, tags, optionally position) from an old/broken challenge's tasks to a new challenge's tasks via fuzzy text matching.
 - **User Actions:**
-  - Toggle sleep status.
-  - (TODO: Set Custom Day Start).
+  - Toggle sleep status (Inn/Tavern).
 - **Data Export:**
-  - Save raw user data, raw tasks, processed tasks, or all tags to JSON.
-- **Banking (Simulation):**
-  - (TODO: "Deposit" gold via custom reward).
-  - (TODO: "Withdraw" gold via custom habit).
-- **(Other Implemented/Planned Features...)**
+  - Save raw user data (`/user` endpoint).
+  - Save raw tasks (`/tasks/user` endpoint, with emoji processing).
+  - Save processed tasks dictionary (from `TaskProcessor`).
+  - Save all tags (categorized by challenge/personal).
+- **Configuration:**
+  - Interactive setup for mandatory credentials (`.env` file creation/check).
+  - Interactive setup for optional Tag IDs.
+- **UI:**
+  - Rich-based themed console output (using Catppuccin/Rosé Pine inspired theme defined in `styles` file).
+  - Progress bars for lengthy operations (refresh, batch API calls).
+  - Clear menus, prompts, and confirmations.
 
 ## Requirements
 
-- Python 3.9+ (Recommended)
-- See `requirements.txt` for specific library dependencies (install using pip). Key libraries include:
+- Python 3.9+
+- Libraries listed in `requirements.txt`. Key dependencies:
   - `requests`
   - `rich`
   - `python-dotenv`
   - `python-dateutil`
-  - `pytz`
+  - `tzlocal`
+  - `emoji-data-python`
+  - `pathvalidate`
   - `timeago`
-  - `art` (Optional, for header)
+  - `art` (Optional, for potential future ASCII art headers)
 
 ## Installation & Setup
 
-1.  **Clone:** `git clone <your-repo-url>`
-2.  **Navigate:** `cd pixabit`
-3.  **Create Virtual Environment:** `python -m venv .venv`
-4.  **Activate Environment:**
-    - Windows: `.venv\Scripts\activate`
-    - Linux/macOS: `source .venv/bin/activate`
-5.  **Install Dependencies:** `pip install -r requirements.txt`
-6.  **Configure Credentials (.env):**
-    - Copy the `.env.example` file (create this!) to `.env`: `cp .env.example .env`
-    - Edit the `.env` file with your actual Habitica credentials:
-      - `HABITICA_USER_ID="YOUR_USER_ID_HERE"` (Find in Settings -> API)
-      - `HABITICA_API_TOKEN="YOUR_API_TOKEN_HERE"` (Find in Settings -> API)
-    - **Important:** Add `.env` to your `.gitignore` file to avoid committing secrets!
-7.  **Configure Special Tags (.env / Interactive):**
-    - You need to tell the app which of your Habitica tags correspond to specific functions (challenges, attributes, etc.).
-    - You can either:
-      - **Manually edit `.env`:** Add lines like `CHALLENGE_TAG_ID="your-challenge-tag-uuid"`, `PERSONAL_TAG_ID="your-personal-tag-uuid"`, etc. (List all required IDs based on `pixabit/config_utils.py`'s `TAG_CONFIG_KEYS`). Find tag IDs via API or browser dev tools.
-      - **Use Interactive Setup:** Run `python main.py configure tags` (assuming you add this command). This will fetch your tags and guide you through selecting the correct one for each required role, saving the IDs to `.env`.
+1.  **Clone Repository:**
+    ```bash
+    git clone <your-repository-url>
+    cd pixabit
+    ```
+2.  **Create & Activate Virtual Environment:**
+    ```bash
+    python -m venv .venv
+    # Windows:
+    # .venv\Scripts\activate
+    # macOS/Linux:
+    # source .venv/bin/activate
+    ```
+3.  **Install Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  **Initial Configuration (Mandatory Credentials):**
+    - Run the application once. It will detect if `.env` is missing.
+      ```bash
+      python main.py # Or however you plan to run the app
+      ```
+    - Follow the prompts to interactively create the `.env` file and enter your **Habitica User ID** and **API Token**.
+    - Alternatively, manually create a `.env` file in the project root with:
+      ```dotenv
+      HABITICA_USER_ID="YOUR_USER_ID_HERE"
+      HABITICA_API_TOKEN="YOUR_API_TOKEN_HERE"
+      ```
+    - **Security:** Ensure `.env` is added to your `.gitignore` file!
+5.  **Configure Optional Tags (Recommended):**
+    - Run the interactive tag setup via the application menu:
+      - Start the app: `python main.py`
+      - Navigate to: `Application` -> `Configure Special Tags`
+    - This will fetch your existing Habitica tags and guide you through assigning them to roles like "Challenge Tag", "Strength Attribute Tag", etc., saving the selections to your `.env` file. You can skip features you don't use.
 
 ## Usage
 
-1.  Ensure your virtual environment is active.
-2.  Run the main application from the project root directory:
+1.  Ensure your virtual environment is active (`source .venv/bin/activate` or equivalent).
+2.  Run the main application script from the project root directory:
     ```bash
     python main.py
     ```
-3.  Follow the interactive menu options.
-
-_(Add sections for specific commands if you implement a Typer/Click interface later)_
+    _(Replace `main.py` with your actual entry point script name if different)._
+3.  Use the number keys to navigate the menus and follow the on-screen prompts.
 
 ## `.env` Configuration Variables
 
-_(List the variables expected in `.env` and briefly explain their purpose)_
+- `HABITICA_USER_ID` **(Mandatory)**: Your Habitica User ID (from Settings -> API).
+- `HABITICA_API_TOKEN` **(Mandatory)**: Your Habitica API Token (from Settings -> API).
+- `CHALLENGE_TAG_ID` (Optional): Tag ID used by `TagManager` to identify challenge tasks.
+- `PERSONAL_TAG_ID` (Optional): Tag ID used by `TagManager` for non-challenge tasks.
+- `PSN_TAG_ID` (Optional): Tag ID for "Poisoned" status.
+- `NOT_PSN_TAG_ID` (Optional): Tag ID for "Not Poisoned" status.
+- `NO_ATTR_TAG_ID` (Optional): Tag ID for tasks with no specific attribute or conflicting attribute tags.
+- `ATTR_TAG_STR_ID` (Optional): Tag ID representing the Strength attribute.
+- `ATTR_TAG_INT_ID` (Optional): Tag ID representing the Intelligence attribute.
+- `ATTR_TAG_CON_ID` (Optional): Tag ID representing the Constitution attribute.
+- `ATTR_TAG_PER_ID` (Optional): Tag ID representing the Perception attribute.
 
-- `HABITICA_USER_ID`: Your Habitica User ID.
-- `HABITICA_API_TOKEN`: Your Habitica API Key.
-- `CHALLENGE_TAG_ID`: ID of the tag automatically applied to challenge tasks.
-- `PERSONAL_TAG_ID`: ID of the tag applied to non-challenge tasks.
-- `PSN_TAG_ID`: ID of the tag indicating "Poisoned" status (optional).
-- `NOT_PSN_TAG_ID`: ID of the tag indicating "Not Poisoned" status (optional).
-- `NO_ATTR_TAG_ID`: ID of the tag for tasks with conflicting/no attributes.
-- `ATTR_TAG_STR_ID`: ID of the tag representing the Strength attribute.
-- `ATTR_TAG_INT_ID`: ID of the tag representing the Intelligence attribute.
-- `ATTR_TAG_CON_ID`: ID of the tag representing the Constitution attribute.
-- `ATTR_TAG_PER_ID`: ID of the tag representing the Perception attribute.
-- (Add `DEPOSIT_REWARD_ID`, `WITHDRAW_HABIT_ID` if Bank feature implemented)
+_(Note: Optional Tag IDs are typically set via the interactive "Configure Special Tags" menu.)_
 
 ## License
 
-_(Optional: e.g., MIT License or "For Personal Use Only")_
+_(Choose a license - e.g., MIT License, Apache 2.0, or specify if it's for personal use only)_
+
+Example: MIT License
 
 ---
 
-# Consolidated TODO List for Pixabit (Updated)
+# Consolidated TODO List for Pixabit (Updated Based on Refinement)
 
-## Challenge Management
+_(Reflects current state after implementing code structure)_
 
-- [⏳ To Do] **Implement CLI action to unlink tasks by challenge:** Prompt for `challenge_id` and `keep` ('keep-all'/'remove-all'), call `unlink_all_challenge_tasks`. [cite: 1007, 1084]
-- [⏳ To Do] **Implement Challenge Import from JSON Backup files:** Read backup JSON, call `create_challenge`, then call API (likely POST `/tasks/challenge/{challengeId}`) to add tasks. [cite: 1029, 1084]
-- [⏳ To Do] **Implement CLI action to list joined challenges:** Fetch using `get_challenges` (use cached `self.all_challenges_cache`), display in a table with details (Guild?, Members, Created, Updated, Prize). [cite: 1021, 1084]
-- [🚧 Needs Testing] **Implement CLI action to leave/abandon selected challenge:** Display list (use cache, filter out owned), fetch tasks for selected, prompt for action (unlink keep/remove or just leave), call `leave_challenge` API method. _(Code implemented in `_leave_challenge_action`)_. [cite: 1021, 1084]
+## Core API & Processing
 
-## Tag Management
+- [✅ Done] Optimize `refresh_data` to fetch data centrally and pass down.
+- [✅ Done] Implement content caching (`_get_content_cached`).
+- [✅ Done] Implement challenge caching (`_fetch_challenges_cached`).
+- [✅ Done] Calculate potential daily damage in `TaskProcessor`.
+- [✅ Done] Calculate effective CON in `TaskProcessor`.
+- [✅ Done] Implement `get_user_stats` using processed/fetched data.
 
-- [⏳ To Do] **Implement CLI actions calling existing TagManager methods:** Add menu options in `CliApp` that call:
-  - `tag_manager.sync_challenge_personal_tags(self.processed_tasks)` [cite: 1016, 1084]
-  - `tag_manager.ensure_poison_status_tags(self.processed_tasks)` [cite: 1017, 1084]
-  - `tag_manager.sync_attributes_to_tags(self.processed_tasks)` [cite: 1018, 1084]
-  - `tag_manager.delete_unused_tags_interactive(self.all_tags, used_tag_ids)` (List & Delete Unused). [cite: 1016, 1084]
-- [⏳ To Do] **Implement other Mass Tag Actions:** Create new `TagManager` methods and corresponding `CliApp` actions for flexible tagging (e.g., "add tag X to tasks with tag Y", "remove tag X based on filter Z"). [cite: 1030, 1084]
-- [⏳ To Do] **Modify poison tag logic:** Update `TagManager.ensure_poison_status_tags` to check if `self.psn_tag` and `self.not_psn_tag` are configured before executing (make optional based on config). [cite: 1011, 1017, 1084]
+## Tag Management (`TagManager`)
 
-## Task Management & Interaction
+- [✅ Done] Implement `sync_challenge_personal_tags` (conditional on config).
+- [✅ Done] Implement `ensure_poison_status_tags` (conditional on config).
+- [✅ Done] Implement `sync_attributes_to_tags` (conditional on config).
+- [✅ Done] Implement `find_unused_tags`.
+- [✅ Done] Implement `delete_unused_tags_interactive` (uses hypothetical `delete_tag_global` action).
+- [✅ Done] Implement `add_or_replace_tag_based_on_other`.
+- [✅ Done] Add logging for configured tag features in `__init__`.
 
-- [🚧 Needs Integration] **Implement logic to replicate tags/attributes/position:** (Complex) Add CLI action & `_execute_action` entry; handler (`_replicate_monthly_setup_action`) prompts for Old/New challenges (select Old from broken tasks data, New from active cache), fetches tasks (old from processed, new from API), fuzzy matches, replicates attributes (`set_attribute`) & tags (`add_tag`), optionally replicates position (`move_task_to_position`), optionally cleans up old challenge tasks (`unlink_all_challenge_tasks`). _(Code implemented, needs menu integration)_. [cite: 1009, 1010, 1085]
-- [🚧 Needs Integration] **Implement CLI action to handle broken tasks (unlink single task):** Add CLI action & `_execute_action` entry; handler (`_handle_broken_tasks_action`) displays broken tasks grouped by challenge, offers bulk unlink per challenge (`unlink_all_challenge_tasks`) or individual unlink (`unlink_task_from_challenge`), prompts keep/remove. _(Code implemented, needs menu integration)_. [cite: 1011, 1085]
-- [⏳ To Do] **Implement Task CRUD features via CLI:** (Major Feature) Requires new `CliApp` actions & UI prompts: [cite: 1012-1014, 1085]
-  - Display detailed task info (fetch task by ID, show text, notes, checklist).
-  - Score tasks (+/-) using `score_task`.
-  - Complete/uncomplete dailies/todos (also uses `score_task`).
-  - Edit tasks (text, notes, dates, etc.) using `update_task`.
-  - Create tasks using `create_task`.
-  - **Sub-feature:** Select Task Difficulty/Priority (`priority` field) during create/edit. [cite: 1070-1074, 1086]
-  - Manage checklist items (`add_checklist_item`, `score_checklist_item`, etc.).
-  - (Optional) Batch editing capabilities.
-- [⏳ To Do] **Implement Task Sorting/Reordering via CLI:** Add CLI action; handler fetches tasks (`self.processed_tasks`), sorts locally (alpha, tags, due date), determines target positions, calls `move_task_to_position` repeatedly (rate limits!). Potentially save/restore original order. [cite: 1015, 1016, 1085]
-- [⏳ To Do] **Implement "Pin/Unpin Task" feature:** Add CLI action; handler lists tasks, prompts for selection, calls `move_task_to_position(task_id, 0)`. [cite: 1063-1069, 1086]
+## Challenge Management (`ChallengeBackupper`, `CliApp`)
 
-## Damage / Stats / User Info
+- [✅ Done] Implement challenge backup (`ChallengeBackupper`, `CliApp` action).
+- [✅ Done] Implement "Leave Challenge" feature (`CliApp._leave_challenge_action`, uses `api.leave_challenge`, updates cache).
+- [⏳ To Do] **Implement Challenge Import:** Create `ChallengeImporter` class? Needs logic to parse backup JSON, call `api.create_challenge`, then iterate through `_tasks` in JSON and call `api.create_task` (potentially linking them via challenge parameters if API supports). Add CLI action.
+- [⏳ To Do] **List Joined Challenges:** Add CLI action. Fetch using `api.get_challenges(member_only=True)` (can use cache `self.all_challenges_cache`), filter out _owned_ challenges (check `challenge['leader']['_id'] == self.user_id`), display results in a `rich.Table`.
 
-- [⏳ To Do] **Implement Damage Mitigation strategy:** Add CLI action; handler prompts for confirmation, scores down a pre-configured negative Habit task ID (`config.py`, use `score_task(id, 'down')`). Optionally check off item on dummy task/checklist (`score_checklist_item`). [cite: 1022, 1042-1048, 1087]
-- [✅ Done] **Add Gems count display:** Fetched balance, calculated Gems (`balance * 4`) in `get_user_stats`, displayed in `_display_stats`. [cite: 1059-1063, 1087]
+## Task Management (`CliApp`, `api.py`)
 
-## User/App Settings
+- [✅ Done] Implement "Handle Broken Tasks" (bulk/individual unlink) (`CliApp._handle_broken_tasks_action`).
+- [✅ Done] Implement "Replicate Monthly Setup" (`CliApp._replicate_monthly_setup_action`).
+- [⏳ To Do] **Implement Task CRUD via CLI:** (Major Feature)
+  - **Display Task Details:** Add action to select task (maybe from filtered list), fetch full task data `api.get_task(task_id)` (needs adding to `api.py` -> `GET /tasks/{taskId}`), display nicely.
+  - **Score Task:** Add action, prompt task selection, prompt direction ('up'/'down'), call `api.score_task`.
+  - **Edit Task:** Add action, prompt task selection, prompt field(s) to edit (text, notes, priority, due date?), call `api.update_task`.
+  - **Create Task:** Add action, prompt for text, type, notes, priority, etc., call `api.create_task`.
+  - **Delete Task:** Add action, prompt task selection, confirm, call `api.delete_task`.
+- [⏳ To Do] **Manage Checklist Items via CLI:** Add actions within Task viewing/editing:
+  - Add item: Prompt text, call `api.add_checklist_item`.
+  - Score item (toggle): Prompt item selection, call `api.score_checklist_item`.
+  - Edit item text: Prompt item selection, prompt new text, call `api.update_checklist_item`.
+  - Delete item: Prompt item selection, call `api.delete_checklist_item`.
+- [⏳ To Do] **Implement "Pin/Unpin Task" feature:** Add CLI action. List tasks (e.g., Todos), prompt selection, call `api.move_task_to_position(task_id, 0)` to pin (move to top). Unpin might move to bottom (`-1`) or require more complex position tracking.
 
-- [⏳ To Do] **Implement CLI action to set Custom Day Start (CDS):** Add CLI action; handler prompts for hour (0-23), calls `set_custom_day_start(hour)`. [cite: 1024, 1025, 1087]
+## User Actions (`CliApp`, `api.py`)
 
-## Inbox Features
+- [✅ Done] Implement "Toggle Sleep Status".
+- [⏳ To Do] **Set Custom Day Start:** Add CLI action. Prompt for hour (0-23), call `api.set_custom_day_start`.
 
-- [⏳ To Do] **Implement CLI action to display Inbox messages:** Add CLI action; handler calls `get_inbox_messages` (maybe paginated), displays messages using Rich (e.g., `Panel` or `Table`). [cite: 1018, 1019, 1088]
-- [⏳ To Do] **(Optional) Implement CLI action to send messages/reply:** More complex. Would need UI prompts for recipient/message, call `POST /members/send-private-message` (check `api.py` if method exists or use `post`). [cite: 1018, 1019, 1088]
+## Inbox Features (`CliApp`, `api.py`)
 
-## Banking Simulation
+- [⏳ To Do] **Display Inbox:** Add CLI action. Call `api.get_inbox_messages` (handle pagination - maybe show first page or prompt for page?), display messages.
+- [⏳ To Do] **Send Private Message:** Add CLI action. Prompt recipient username/ID, prompt message text, call `POST /members/send-private-message` (needs adding to `api.py`).
 
-- [⏳ To Do] **Implement "Deposit Gold" CLI action:** Add CLI action; handler prompts for amount/times, calls `score_task(DEPOSIT_REWARD_ID, 'up')` repeatedly. Requires `DEPOSIT_REWARD_ID` in config. [cite: 1052-1057, 1089]
-- [⏳ To Do] **Implement "Withdraw Gold" CLI action:** Add CLI action; handler prompts for amount/times, calls `score_task(WITHDRAW_HABIT_ID, 'up')` repeatedly. Requires `WITHDRAW_HABIT_ID` in config. [cite: 1052-1057, 1089]
+## Banking Simulation (Requires Config)
 
-## Export Features
+- [⏳ To Do] **Implement Deposit/Withdraw:** Add CLI actions. Requires `DEPOSIT_REWARD_ID` and `WITHDRAW_HABIT_ID` in `.env`. Prompt for amount/times, call `api.score_task` repeatedly for the appropriate ID.
 
-- [⏳ To Do] **Review/Refine Tasker/KLWP Export:** Check if the current format saved by `save_processed_tasks_into_json` is suitable for Tasker/KLWP, or if a new export function is needed to transform `self.processed_tasks` into a specific structure. [cite: 1031-1033, 1089]
+## Export Features (`exports.py`, `CliApp`)
 
-## Project Setup & Documentation
+- [✅ Done] Implement exports for raw user data, raw tasks, processed tasks, categorized tags.
+- [⏳ To Do] **Review/Refine Tasker/KLWP Export:** Evaluate if `tasks_processed.json` is suitable. If not, create a new function in `exports.py` that transforms `self.processed_tasks` into the desired flat list/JSON structure for Tasker/KLWP. Add a corresponding `CliApp` action.
 
-- [🚧 Likely Done] Create/Maintain `README.md`, `requirements.txt`, `.gitignore`, `.env.example`. [cite: 1090, 1091]
+## Project & Code Quality
+
+- [✅ Done] Use `Path` objects for file paths.
+- [✅ Done] Standardize docstrings and type hinting.
+- [✅ Done] Integrate themed Rich components (`display.py`).
+- [✅ Done] Centralize JSON saving (`save_json.py`).
+- [✅ Done] Improve error handling and user feedback.
+- [✅ Done] Add comment anchors (`# MARK:`, `# & -`) for navigation.
+- [⏳ To Do] **Add Unit/Integration Tests:** Crucial for reliability, especially for API interactions and data processing logic.
+- [⏳ To Do] **Refactor Large Methods:** Some methods in `CliApp` (`_replicate_monthly_setup_action`, `_handle_broken_tasks_action`) are quite long. Consider breaking them into smaller helper methods for readability and testing.
+- [⏳ To Do] **Implement Debug Mode:** Add a global flag (e.g., environment variable `PIXABIT_DEBUG=true` checked in `config.py`) that enables more verbose logging (e.g., uncommenting `console.log` calls in `api.py`, potentially showing more traceback info).

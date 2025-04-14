@@ -1,0 +1,83 @@
+# pyproject.toml
+
+[tool.black]
+# Black is very opinionated, less config needed.
+line-length = 99  # Or 88 (Black's default), or 100. Let's go with 99 for a bit more space.
+
+[tool.ruff]
+# Same line length as black
+line-length = 99
+
+# Tell Ruff it's in the src directory (adjust if your structure differs)
+src = ["pixabit"]
+
+# Exclude virtual environment folders
+exclude = [
+    ".venv",
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+    "_challenge_backups", # Add project-specific outputs
+    "_exports",
+    "content_cache.json",
+    ]
+# Optional: Configure specific rules if needed
+
+
+
+[tool.ruff.lint.pydocstyle]
+# Choose a docstring convention (google, numpy, or pep257)
+# 'google' is common and readable.
+convention = "google"
+
+# [tool.ruff.mccabe]
+# max-complexity = 12 # Increase complexity limit slightly if needed
+
+
+
+# Optional: Use Ruff's built-in formatter (instead of or alongside Black)
+# [tool.ruff.format]
+# Use black-compatible formatting if desired
+# preview = true # Enable preview features for formatter if desired
+# docstring-code-format = true # Format code examples in docstrings
+
+[tool.ruff.lint]
+# Specify source type if needed (usually auto-detected)
+# source-type = "module"
+
+
+# Select the rule sets you want to enable. Start broad, then refine.
+# F = Pyflakes (Error detection)
+# E = pycodestyle Errors
+# W = pycodestyle Warnings
+# I = isort (Import sorting - Ruff implements this directly)
+# UP = pyupgrade (Suggests modern syntax)
+# B = flake8-bugbear (Finds likely bugs)
+# C90 = McCabe complexity checks (helps keep functions simple)
+# D = pydocstyle (Enforces docstring conventions - Highly Recommended!)
+select = ["F", "E", "W", "I", "UP", "B", "C90", "D"]
+
+# Rules to ignore (examples - adjust as needed):
+# E501: Line too long (Handled by formatter, but Ruff checks *before* format sometimes)
+# W503: Line break before binary operator (Black handles this style)
+# D100, D101, D102, D103, D104, D105, D106, D107: Missing docstrings (Enable gradually, might be noisy initially)
+# C901: Function too complex (Adjust threshold if needed, default 10)
+ignore = [
+    "E501",
+    "D102",
+    "D101",
+    "D205",
+    "D103",
+    "C901",
+    # Add specific D rules here if needed, e.g.:
+    # "D100", # Missing docstring in public module
+    # "D101", # Missing docstring in public class
+    # "D102", # Missing docstring in public method
+    # "D103", # Missing docstring in public function
+    # "D104", # Missing docstring in public package
+    # "D105", # Missing docstring in magic method
+    # "D106", # Missing docstring in public nested class
+    # "D107", # Missing docstring in __init__
+]

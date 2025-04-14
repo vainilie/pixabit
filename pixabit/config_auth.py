@@ -1,171 +1,217 @@
-# pixabit/auth_file.py
+# pixabit/config_auth.py
+# MARK: - MODULE DOCSTRING
+"""Manages the creation and verification of the application's .env configuration file
+specifically for MANDATORY credentials (Habitica User ID, API Token).
+
+Provides functions to interactively create a `.env` file using prompts and
+confirmations from the Rich library (via the `utils.display` helper module).
+Includes `check_env_file` to verify existence and trigger creation if missing.
 """
-Manages the creation and verification of the application's .env configuration file. This module provides functions to interactively create a `.env` file containing essential credentials and settings (like Habitica User ID, API Token, and specific Tag IDs) using prompts and confirmations from the Rich library (via the `utils.display` helper module). It also includes a function to check if the `.env` file exists and trigger its creation if it's missing.
-Functions:
-    check_env_file(filename): Checks for the existence of the env file and prompts for creation if missing.
-    create_env_file(filename): Interactively creates or overwrites the env file.
-Constants:
-    DEFAULT_ENV_FILE (str): The default filename ".env".
-"""
-import os.path
 
-from .utils.display import Confirm, Prompt, console, print
+# MARK: - IMPORTS
+import datetime
+import sys
+from pathlib import Path
 
-DEFAULT_ENV_FILE = ".env"  # Default name for the environment configuration file
+# Use themed display components
+try:
+    from .utils.display import Confirm, Prompt, console, print
+except ImportError:  # Fallback for potential direct script execution or import issues
+    import builtins
+
+    print = builtins.print
+
+    # Define dummy components if Rich is not available
+    def Prompt_ask(prompt, **kwargs):
+        return input(prompt)
+
+    def Confirm_ask(prompt, **kwargs):
+        return input(f"{prompt} [y/N]: ").lower() == "y"
+
+    class DummyConsole:
+        def print(self, *args, **kwargs):
+            builtins.print(*args)
+
+        def log(self, *args, **kwargs):
+            builtins.print(*args)
+
+    console = DummyConsole()
+    Prompt = type("DummyPrompt", (), {"ask": staticmethod(Prompt_ask)})()
+    Confirm = type("DummyConfirm", (), {"ask": staticmethod(Confirm_ask)})()
+
+# MARK: - CONSTANTS
+# (No specific constants needed here, path is passed in)
+
+# MARK: - CORE FUNCTIONS
 
 
-# % ── Core Functions ───────────────────────────────────────────────────────────
+# & - def create_env_file(env_path: Path) -> bool:
+def create_env_file(env_path: Path) -> bool:
+    """Interactively creates or overwrites mandatory credentials in a .env file.
 
-
-# >> CREATE ENV FILE
-def create_env_file(filename: str = DEFAULT_ENV_FILE) -> None:
-    """
-    Interactively creates or overwrites a .env file with credentials and settings. Prompts the user for Habitica User ID, API Token (hidden input), and specific Tag IDs using Rich prompts. Confirms before overwriting an existing file. If the user declines interactive help, it creates a file with placeholder values.
-
-    The resulting file will have the format:
-        HABITICA_USER_ID="value"
-        HABITICA_API_TOKEN="value"
-        CHALLENGE_TAG_ID="value"
-        OWNED_TAG_ID="value"
+    Prompts for Habitica User ID and API Token. Confirms overwrite.
+    Creates file with placeholders if interactive help is declined.
 
     Args:
-        filename (str): The path/name of the .env file to create or overwrite. Defaults to DEFAULT_ENV_FILE (".env").
+        env_path: The Path object for the .env file.
 
     Returns:
-        None
-
-    Raises:
-        IOError: If there's an error writing the file to disk.
-        ImportError: (Implicitly) If Rich components cannot be imported.
+        bool: True if the file was created/updated successfully, False otherwise.
     """
+    filename_display = f"[file]{env_path.name}[/]"
+    filepath_display = f"[file]{env_path}[/]"
+    interactive_mode = False  # Track if user actively provided credentials
 
-    # Check for existing file and confirm overwrite
-    if os.path.exists(filename):
+    # --- 1. Check overwrite ---
+    if env_path.exists():
+        console.print(f"[warning]File {filename_display} exists.[/warning]")
         if not Confirm.ask(
-            f"The file [b file u]{filename}[/] already exists. Overwrite it?",
+            f"Overwrite MANDATORY credentials (User ID, API Token) in {filename_display}?",
             default=False,
         ):
-            console.log(
-                f"Operation cancelled. Keeping existing file [file u]{filename}[/]."
+            console.print(
+                f"[info]ℹ️ Keeping existing mandatory credentials in {filename_display}. Optional tags can be configured separately.[/info]"
             )
-            return  # Exit function, do not overwrite
+            return True  # File exists and user chose not to modify essentials
 
-    console.log(f"Preparing to create/update [file u]{filename}[/]...")
-
-    # Ask if user wants interactive help filling the file
-    if Confirm.ask(
-        "\nDo you want help filling the configuration file interactively?", default=True
-    ):
-
-        console.log(
-            "Please provide the following details (find them in Habitica's Settings > API):"
+    # --- 2. Get User Input ---
+    console.print(f"\n⚙️ Setting up MANDATORY credentials in {filename_display}.")
+    if Confirm.ask("Provide credentials now? (Choose No to create placeholders)", default=True):
+        interactive_mode = True  # User chose interactive setup
+        console.print(
+            "\n[bold yellow]🔑 Enter Habitica API Credentials[/bold yellow]"
+            "\n[dim](Find at: https://habitica.com/user/settings/api)[/dim]"
         )
+        input_userid = ""
+        while not input_userid or input_userid == "YOUR_HABITICA_USER_ID_HERE":
+            input_userid = Prompt.ask(
+                "  Enter your [info]Habitica User ID[/info]", default="YOUR_HABITICA_USER_ID_HERE"
+            )
+            if not input_userid or input_userid == "YOUR_HABITICA_USER_ID_HERE":
+                console.print("[error]User ID cannot be empty or the placeholder.[/error]")
+                if not Confirm.ask("Try again?", default=True):
+                    input_userid = "YOUR_HABITICA_USER_ID_HERE"  # Reset to placeholder
+                    console.print("[warning]Creating file with placeholder User ID.[/warning]")
+                    interactive_mode = False  # Switched to placeholder mode
+                    break  # Exit loop, use placeholder
 
-        input_userid = Prompt.ask(
-            "  Enter your [keyword]Habitica User ID[/]",
-            default="YOUR_HABITICA_USER_ID_HERE",
-        )
+        input_apitoken = ""
+        # Only ask for token if we successfully got a real User ID in interactive mode
+        if interactive_mode and input_userid != "YOUR_HABITICA_USER_ID_HERE":
+            while not input_apitoken or input_apitoken == "YOUR_API_TOKEN_HERE":
+                input_apitoken = Prompt.ask(
+                    "  Enter your [info]Habitica API Token[/info]",
+                    default="YOUR_API_TOKEN_HERE",
+                    password=True,
+                )
+                if not input_apitoken or input_apitoken == "YOUR_API_TOKEN_HERE":
+                    console.print("[error]API Token cannot be empty or the placeholder.[/error]")
+                    if not Confirm.ask("Try again?", default=True):
+                        input_apitoken = "YOUR_API_TOKEN_HERE"  # Reset to placeholder
+                        console.print(
+                            "[warning]Creating file with placeholder API Token.[/warning]"
+                        )
+                        interactive_mode = False  # Switched to placeholder mode
+                        break  # Exit loop, use placeholder
 
-        input_apitoken = Prompt.ask(
-            "  Enter your [keyword]Habitica API Token[/]",
-            default="YOUR_API_TOKEN_HERE",
-            password=True,  # Hide the token input
-        )
+        elif interactive_mode:  # User ID is placeholder, so token must be too
+            input_apitoken = "YOUR_API_TOKEN_HERE"
+            interactive_mode = False  # No longer truly interactive
 
-        # Note: The following prompts for Tag IDs are commented out for now.
-        # console.log(
-        #     "\nPlease provide the following Tag IDs (create tags in Habitica if needed, then find their IDs):"
-        # )
-        # console.log(
-        #     "You can often find a Tag's ID in the URL when viewing/editing it on the Habitica website."
-        # )
-        # input_challenge_tag = Prompt.ask(
-        #     "  Enter the [keyword]Tag ID[/] for marking 'Challenge Tasks'",
-        #     default="YOUR_CHALLENGE_TAG_ID_HERE",
-        # )
-        # input_owned_tag = Prompt.ask(
-        #     "  Enter the [keyword]Tag ID[/] for marking 'Owned Tasks'",
-        #     default="YOUR_OWNED_TAG_ID_HERE",
-        # )
-
-    else:
-        # If they decline help, create the file with placeholders for manual editing
-        console.log(
-            "\nOkay, creating file with placeholder values for you to edit manually."
-        )
+    else:  # User chose No for interactive help initially
+        console.print("\nCreating file with placeholder values for manual editing.")
         input_userid = "YOUR_HABITICA_USER_ID_HERE"
         input_apitoken = "YOUR_API_TOKEN_HERE"
-        # input_challenge_tag = "YOUR_CHALLENGE_TAG_ID_HERE"
-        # input_owned_tag = "YOUR_OWNED_TAG_ID_HERE"
+        interactive_mode = False
 
-    # >> ── Build The Content Of The Env File ────────────────────────────────
-    # Using quotes ensures values with spaces (unlikely here, but good practice) are handled.
-    env_content = f"""# Habitica Credentials and Settings
-    # Generated by pixabit setup script on {__import__('datetime').datetime.now().isoformat()}
-    HABITICA_USER_ID="{input_userid}"
-    HABITICA_API_TOKEN="{input_apitoken}"
-    """.strip()  # .strip() removes leading/trailing whitespace from the multiline string
+    # --- 3. Build Content ---
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    env_content = f"""# Habitica Credentials (MANDATORY)
+# Generated by pixabit setup script on {timestamp}
+# Find these values at: https://habitica.com/user/settings/api
 
-    # --- Write the content to the .env file ---
+HABITICA_USER_ID="{input_userid}"
+HABITICA_API_TOKEN="{input_apitoken}"
+
+# --- Optional Tag IDs (Configure via 'pixabit setup-tags' or manually) ---
+# CHALLENGE_TAG_ID=""
+# PERSONAL_TAG_ID=""
+# PSN_TAG_ID=""
+# NOT_PSN_TAG_ID=""
+# NO_ATTR_TAG_ID=""
+# ATTR_TAG_STR_ID=""
+# ATTR_TAG_INT_ID=""
+# ATTR_TAG_CON_ID=""
+# ATTR_TAG_PER_ID=""
+""".strip()
+
+    # --- 4. Write File ---
     try:
-        with open(filename, "w", encoding="utf-8") as envfile:
-            envfile.write(
-                env_content + "\n"
-            )  # Add a trailing newline for POSIX compatibility
-        console.log(
-            f"\n[b #8ccf7e]✅ File [file]{filename}[/] created/updated successfully."
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        with env_path.open("w", encoding="utf-8") as envfile:
+            envfile.write(env_content + "\n")
+
+        console.print(
+            f"\n[success]✅ Mandatory credentials saved/updated in {filepath_display}.[/success]"
         )
-        console.log(
-            f"[keyword]⚠️ IMPORTANT:[/] Ensure [file]{filename}[/] is in your [b].gitignore[/] to avoid committing secrets!"
-        )
-
-    except IOError as e:
-        console.log(f"[error]❌ Error writing file '{filename}': {e}[/]")
-        # Consider re-raising or exiting if this error is critical
-        # raise # Or sys.exit(1)
-
-
-# >> ── Helper Entry Functions ───────────────────────────────────────────────────
-
-
-# >> CHECK ENV FILE
-def check_env_file(filename: str = DEFAULT_ENV_FILE) -> None:
-    """
-    Checks if the specified .env configuration file exists and prompts to create it if not. This function serves as a preliminary check, typically run at the start of scripts that depend on the .env file. If the file is missing, it calls `create_env_file` to guide the user through creation.
-
-    Args:
-        filename (str): The path/name of the .env file to check. Defaults to DEFAULT_ENV_FILE (".env").
-
-    Returns:
-        None
-    """
-
-    console.log(f"⌛ Checking for configuration file: [file]{filename}[/]")
-    if not os.path.exists(filename):
-        console.log(f"⚠️ Warning: File [file]{filename}[/] not found.")
-
-        # Offer to create it
-        if Confirm.ask(
-            f"Do you want to create the [file]{filename}[/] configuration file now?",
-            default=True,
+        # Use the interactive_mode flag to give appropriate next steps
+        if (
+            not interactive_mode
+            or input_userid == "YOUR_HABITICA_USER_ID_HERE"
+            or input_apitoken == "YOUR_API_TOKEN_HERE"
         ):
-            create_env_file(filename)
-
+            console.print(
+                f"[warning]⚠️ Remember to manually edit {filename_display} and replace placeholder values if needed.[/warning]"
+            )
         else:
-            console.log(
-                "Skipping .env file creation. Application might not run correctly without it."
+            console.print(
+                "[info]ℹ️ You can now configure optional tags if desired (e.g., `pixabit setup-tags`).[/info]"
             )
 
+        console.print(
+            f"[warning]🔒 IMPORTANT:[/warning] Ensure {filename_display} is in `.gitignore`!"
+        )
+        return True  # File written successfully
+
+    except OSError as e:
+        console.print(f"[error]❌ Error writing file {filepath_display}: {e}[/error]")
+        return False
+    except Exception as e:
+        console.print(f"[error]❌ Unexpected error writing {filepath_display}: {e}[/error]")
+        return False
+
+
+# MARK: - HELPER ENTRY FUNCTION
+
+
+# & - def check_env_file(env_path: Path) -> None:
+def check_env_file(env_path: Path) -> None:
+    """Checks if the .env file exists and prompts for creation if missing. Exits if creation fails or is skipped.
+
+    Args:
+        env_path: Path object for the .env file.
+    """
+    filename_display = f"[file]{env_path.name}[/]"
+    filepath_display = f"[file]{env_path}[/]"
+
+    console.log(f"⌛ Checking for configuration file: {filepath_display}")
+    if not env_path.exists():
+        console.print(f"[warning]⚠️ File {filename_display} not found.[/warning]")
+        if Confirm.ask(
+            f"\nCreate the {filename_display} configuration file now? (Needed for credentials)",
+            default=True,
+        ):
+            if not create_env_file(env_path):  # Call creation function
+                console.print(
+                    "[error]❌ Failed to create .env file. Application cannot continue.[/error]"
+                )
+                sys.exit(1)  # Exit if creation failed
+        else:
+            console.print(
+                f"[error]❌ Skipping {filename_display} creation. Application requires credentials and cannot continue.[/error]"
+            )
+            sys.exit(1)  # Exit if user skips creation
     else:
-        console.log(f"[success]✅ Configuration file [file]{filename}[/] found.")
-
-
-# % ── Example Usage ────────────────────────────────────────────────────────────
-
-# Typically, you would call check_env_file() from your main script
-# or configuration loading module before trying to load environment variables.
-
-# if __name__ == "__main__":
-#     console.log("[bold blue]Running .env file check and creation utility...[/]")
-#     check_env_file()
-#     console.log("[bold blue]Utility finished.[/]")
+        console.print(
+            f"[success]✅ Configuration file {filename_display} found at {filepath_display}.[/success]"
+        )
