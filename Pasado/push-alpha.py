@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 
 import argparse
@@ -13,6 +14,7 @@ class Debug(argparse.Action):
         import pdb
 
         pdb.set_trace()
+
 
 
 # MAIN
@@ -37,13 +39,15 @@ parser.add_argument(
 parser.add_argument(
     "-u",
     "--user-id",
-    help="From https://habitica.com/#/options/settings/api\n \
+    help="From https://habitica.com/
+#/options/settings/api\n \
                     default: environment variable HAB_API_USER",
 )
 parser.add_argument(
     "-k",
     "--api-token",
-    help="From https://habitica.com/#/options/settings/api\n \
+    help="From https://habitica.com/
+#/options/settings/api\n \
                     default: environment variable HAB_API_TOKEN",
 )
 parser.add_argument(
@@ -99,7 +103,9 @@ def sortFunction(value):
 
 
 sortedtasks = sorted(tasks, key=sortFunction)
+
 # print(sortedtasks)
+
 # Push todos_with_duedates to the top
 for count, tasq in enumerate(sortedtasks):
     requests.post(args.baseurl + "tasks/" + tasq["id"] + "/move/to/-1", headers=headers)

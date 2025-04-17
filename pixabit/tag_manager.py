@@ -1,4 +1,5 @@
 # pixabit/tag_manager.py
+
 # MARK: - MODULE DOCSTRING
 """Provides TagManager class for managing Habitica tags and task attributes.
 
@@ -7,6 +8,7 @@ Enforces consistency rules (challenge vs. personal), ensures status tags
 unused tags. Relies on tag IDs from config and uses API client for modifications.
 Checks config to enable/disable optional features gracefully.
 """
+
 
 # MARK: - IMPORTS
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -17,7 +19,8 @@ import requests
 from .api import HabiticaAPI
 
 # Import specific, configured tag IDs directly from config
-from .config import (  # Use the generated map
+from .config import (
+    # Use the generated map
     ATTR_TAG_MAP,
     CHALLENGE_TAG_ID,
     NO_ATTR_TAG_ID,
@@ -36,7 +39,8 @@ from .utils.display import (
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
-    box,  # No track needed if using Progress
+    box,
+    # No track needed if using Progress
     console,
 )
 
@@ -56,7 +60,8 @@ class TagManager:
             raise TypeError("`api_client` must be an instance of HabiticaAPI")
 
         self.api_client: HabiticaAPI = api_client
-        self.console = console  # Use themed console
+        self.console = console
+        # Use themed console
 
         # --- Load Optional Tag IDs from Config ---
         self.challenge_tag: Optional[str] = CHALLENGE_TAG_ID
@@ -76,6 +81,7 @@ class TagManager:
     def _log_config_status(self):
         """Logs the status of optional tag configurations."""
         status = []
+
         # Check if BOTH required tags for a feature are set
         status.append(
             f"Challenge/Personal: {'✅ Configured' if self.challenge_tag and self.personal_tag else '❌ Off'}"
@@ -83,6 +89,7 @@ class TagManager:
         status.append(
             f"Poison Status: {'✅ Configured' if self.psn_tag and self.not_psn_tag else '❌ Off'}"
         )
+
         # For attributes, check the map AND the no_attr tag
         status.append(
             f"Attributes: {'✅ Configured' if self.attr_tag_map and self.no_attr_tag else '❌ Off'}"
@@ -90,6 +97,7 @@ class TagManager:
         self.console.log(f"Tag Feature Status - {', '.join(status)}", style="subtle")
 
     # MARK: - Action Execution Helper
+
     # & - def _confirm_and_execute_actions(...)
     def _confirm_and_execute_actions(
         self, actions: List[Tuple[str, str, str]], description: str
@@ -108,9 +116,8 @@ class TagManager:
             )
             return False
 
-        est_seconds = fix_count * (
-            self.api_client.request_interval + 0.1
-        )  # Use API client interval
+        est_seconds = fix_count * (self.api_client.request_interval + 0.1)
+        # Use API client interval
         est_time_str = (
             f"{est_seconds / 60:.1f} minutes"
             if est_seconds > 120
@@ -126,7 +133,8 @@ class TagManager:
 
         # --- Execute with Progress Bar ---
         error_count = 0
-        progress_cols = [  # Use theme styles for progress
+        progress_cols = [
+            # Use theme styles for progress
             TextColumn("[progress.description]{task.description}"),
             BarColumn(style="rp_surface", complete_style="rp_foam"),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%", style="rp_foam"),
@@ -148,8 +156,10 @@ class TagManager:
                     elif action == "set_attribute":
                         self.api_client.set_attribute(task_id=item_id, attribute=target)
                     elif action == "delete_tag_global":
+
                         # CRITICAL: Assumes global delete implemented in API client
-                        self.api_client.delete_tag(item_id)  # Calls DELETE /tags/{tagId}
+                        self.api_client.delete_tag(item_id)
+                    # Calls DELETE /tags/{tagId}
                     else:
                         progress.console.print(
                             f"\n[warning]⚠️ Unknown action '{action}' for item {item_id}. Skipping.[/]"
@@ -167,7 +177,9 @@ class TagManager:
                     error_count += 1
                 finally:
                     progress.update(batch_task_id, advance=1)
-                    # time.sleep(0.05) # Small delay optional
+
+        # time.sleep(0.05)
+        # Small delay optional
 
         # --- End Progress ---
         self.console.rule(style="rp_overlay")
@@ -178,9 +190,12 @@ class TagManager:
                 f"[warning]⚠️ {description}: Completed with {error_count} error(s).[/warning]"
             )
         self.console.rule(style="rp_overlay")
-        return True  # Changes were attempted
+        return True
+
+    # Changes were attempted
 
     # MARK: - Tag Consistency Methods
+
     # & - def sync_challenge_personal_tags(...)
     def sync_challenge_personal_tags(self, processed_tasks: Dict[str, Dict[str, Any]]) -> bool:
         """Ensures tasks have mutually exclusive challenge/personal tags."""
@@ -196,17 +211,22 @@ class TagManager:
         for task_id, task_data in processed_tasks.items():
             if not isinstance(task_data, dict):
                 continue
-            tags = set(task_data.get("tags", []))  # Use raw tags list from processed data
+            tags = set(task_data.get("tags", []))
+            # Use raw tags list from processed data
             is_challenge = bool(task_data.get("challenge_id"))
+
             # Rule 1a: Challenge task MUST have challenge_tag
             if is_challenge and self.challenge_tag not in tags:
                 actions.append(("add_tag", task_id, self.challenge_tag))
+
             # Rule 1b: Challenge task MUST NOT have personal_tag
             if is_challenge and self.personal_tag in tags:
                 actions.append(("delete_tag", task_id, self.personal_tag))
+
             # Rule 2a: Personal task MUST have personal_tag
             if not is_challenge and self.personal_tag not in tags:
                 actions.append(("add_tag", task_id, self.personal_tag))
+
             # Rule 2b: Personal task MUST NOT have challenge_tag
             if not is_challenge and self.challenge_tag in tags:
                 actions.append(("delete_tag", task_id, self.challenge_tag))
@@ -230,11 +250,14 @@ class TagManager:
                 continue
             tags = set(task_data.get("tags", []))
             has_psn, has_not_psn = self.psn_tag in tags, self.not_psn_tag in tags
+
             # Add default NOT_PSN if neither is present
             if not has_psn and not has_not_psn:
                 actions.append(("add_tag", task_id, self.not_psn_tag))
-            # Optional: If both present, remove NOT_PSN (assume PSN takes priority)
-            # elif has_psn and has_not_psn: actions.append(("delete_tag", task_id, self.not_psn_tag))
+
+        # Optional: If both present, remove NOT_PSN (assume PSN takes priority)
+
+        # elif has_psn and has_not_psn: actions.append(("delete_tag", task_id, self.not_psn_tag))
 
         return self._confirm_and_execute_actions(actions, description)
 
@@ -263,24 +286,29 @@ class TagManager:
             num_present = len(present_attr_tags)
             has_no_attr_tag = self.no_attr_tag in tags
 
-            if num_present > 1:  # Conflict -> Apply NO_ATTR
+            if num_present > 1:
+                # Conflict -> Apply NO_ATTR
                 if not has_no_attr_tag:
                     actions.append(("add_tag", task_id, self.no_attr_tag))
                 for tag in present_attr_tags:
                     actions.append(("delete_tag", task_id, tag))
+
                 # Reset attribute field to default 'str' if it had a specific one
                 if current_attribute and current_attribute != "str":
                     actions.append(("set_attribute", task_id, "str"))
-            elif num_present == 1:  # Single ATTR tag -> Ensure field matches, remove NO_ATTR
+            elif num_present == 1:
+                # Single ATTR tag -> Ensure field matches, remove NO_ATTR
                 attr_tag = present_attr_tags.pop()
                 correct_attribute = self.attr_tag_map[attr_tag]
                 if has_no_attr_tag:
                     actions.append(("delete_tag", task_id, self.no_attr_tag))
                 if current_attribute != correct_attribute:
                     actions.append(("set_attribute", task_id, correct_attribute))
-            else:  # No ATTR tags -> Ensure NO_ATTR tag, ensure field is 'str' (default)
+            else:
+                # No ATTR tags -> Ensure NO_ATTR tag, ensure field is 'str' (default)
                 if not has_no_attr_tag:
                     actions.append(("add_tag", task_id, self.no_attr_tag))
+
                 # If attribute field currently has a non-default value without a tag, reset it
                 if current_attribute and current_attribute != "str":
                     actions.append(("set_attribute", task_id, "str"))
@@ -288,6 +316,7 @@ class TagManager:
         return self._confirm_and_execute_actions(actions, description)
 
     # MARK: - Utility / Other Tag Methods
+
     # & - def add_or_replace_tag_based_on_other(...)
     def add_or_replace_tag_based_on_other(
         self,
@@ -308,6 +337,7 @@ class TagManager:
 
         actions: List[Tuple[str, str, str]] = []
         mode = "Replacing" if remove_original else "Adding"
+
         # Use styles for tag IDs in description
         action_desc = f"{mode} tag '[rp_foam]{add_tag_id}[/]' based on '[rp_rose]{find_tag_id}[/]'"
 
@@ -385,6 +415,7 @@ class TagManager:
             "[warning]⚠️ This action is IRREVERSIBLE and deletes the tag globally, not just from tasks![/]",
             default=False,
         ):
+
             # Prepare actions using 'delete_tag_global' type
             actions = [("delete_tag_global", tag["id"], tag["id"]) for tag in unused]
             if actions:
@@ -394,10 +425,14 @@ class TagManager:
                 self.console.print(
                     f"[warning]⚠️ {description}: No delete actions prepared.[/warning]"
                 )
-                return False  # No action attempted
+                return False
+        # No action attempted
         else:
             self.console.print(f"[warning]❌ {description}: No tags were deleted.[/warning]")
-            return False  # User cancelled
+            return False
+
+
+# User cancelled
 
 
 # --- End of TagManager class ---

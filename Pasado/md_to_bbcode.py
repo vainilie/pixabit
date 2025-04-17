@@ -45,9 +45,18 @@ def markdown_to_bbcode(s):
     s = re.sub(r"(?m)^    (.*)$", "~[code]\\1[/code]", s)
     s = re.sub(r"(?m)^(\S.*)\n=+\s*$", translate("~[size=200][b]%s[/b][/size]"), s)
     s = re.sub(r"(?m)^(\S.*)\n-+\s*$", translate("~[size=100][b]%s[/b][/size]"), s)
-    s = re.sub(r"(?m)^#\s+(.*?)\s*#*$", translate("~[size=200][b]%s[/b][/size]"), s)
-    s = re.sub(r"(?m)^##\s+(.*?)\s*#*$", translate("~[size=100][b]%s[/b][/size]"), s)
-    s = re.sub(r"(?m)^###\s+(.*?)\s*#*$", translate("~[b]%s[/b]"), s)
+    s = re.sub(r"(?m)^
+#\s+(.*?)\s*
+#*$", translate("~[size=200][b]%s[/b][/size]"), s)
+    s = re.sub(r"(?m)^
+#
+#\s+(.*?)\s*
+#*$", translate("~[size=100][b]%s[/b][/size]"), s)
+    s = re.sub(r"(?m)^
+#
+#
+#\s+(.*?)\s*
+#*$", translate("~[b]%s[/b]"), s)
     s = re.sub(r"(?m)^> (.*)$", translate("~[quote]%s[/quote]"), s)
     s = re.sub(r"(?m)^((?!~).*)$", translate(), s)
     s = re.sub(r"(?m)^~\[", "[", s)

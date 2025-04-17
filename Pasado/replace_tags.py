@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 
 import argparse
@@ -13,16 +14,19 @@ class Debug(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         import pdb; pdb.set_trace()
 
+
 # MAIN
 parser = argparse.ArgumentParser(description="Dumps your tasks to a file user-tasks.json in the current directory")
 parser.add_argument('-o', '--outfile',
                     type=argparse.FileType('w'), default="user-tasks.json",
                     help='JSON data file (default: user-tasks.json)')
 parser.add_argument('-u', '--user-id',
-                    help='From https://habitica.com/#/options/settings/api\n \
+                    help='From https://habitica.com/
+#/options/settings/api\n \
                     default: environment variable HAB_API_USER')
 parser.add_argument('-k', '--api-token',
-                    help='From https://habitica.com/#/options/settings/api\n \
+                    help='From https://habitica.com/
+#/options/settings/api\n \
                     default: environment variable HAB_API_TOKEN')
 parser.add_argument('--baseurl',
                     type=str, default="https://habitica.com",
@@ -57,7 +61,9 @@ except KeyError:
 
 headers = {"x-api-user": args.user_id, "x-api-key": args.api_token, "Content-Type": "application/json"}
 req = requests.get(args.baseurl + "tasks/user", headers=headers)
+
 # with open(args.outfile, 'w') as f:
+
 #json.dump(req.json(), args.outfile, separators=(',', ':'), sort_keys=True)
 allTasks= req.json()['data']
 pTag="0465135b-7652-4aac-8a15-9db5fc9af803"
@@ -65,7 +71,7 @@ cTag="48924274-1ba1-49ba-8dc5-48b0ff225d25"
 cDelTag = []
 cHasTag = []
 cTasks = []
-cToTag = [] 
+cToTag = []
 pDelTag = []
 pHasTag= []
 pTasks = []
@@ -93,9 +99,11 @@ def getList(theTasks,tag_e):
                 list.append(task['id'])
             else:
                 continue
-    return list 
+    return list
+
 
 # Python code t get difference of two lists
+
 # Using set()
 def Diff(li1, li2):
     return list(set(li1) - set(li2)) + list(set(li2) - set(li1))
@@ -105,11 +113,11 @@ def Differ(dict,list):
     for item in dict:
         if item['id'] not in list:
             newlist.append(item['id'])
-        else: 
+        else:
             continue
     return(newlist)
 
-        
+
 if args.task_id:
     if args.add_tag:
         print("Adding the tag on the task.")
@@ -121,7 +129,7 @@ if args.task_id:
         print("Done")
     if args.delete_tag is None and args.add_tag is None:
         print("Add with the -/--add-tag or -d/--delete-tag the tag ID you want to add, delete or both to replace.")
-     
+
 else:
     if args.add_tag and args.delete_tag:
         print("Custom action: replace tags in all tasks")
@@ -183,4 +191,4 @@ else:
         print("Deleting wrong tag in personal tasks...")
         DeleteTag(pDelTag,cTag)
         print("Done")
-    
+

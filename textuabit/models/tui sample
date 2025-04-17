@@ -1,0 +1,192 @@
+# pixabit/cli/app.py
+# ... (imports) ...
+from pixabit.data_store import PixabitDataStore # Import the store
+from pixabit.models.user import User # Import User model if using it for user_data
+from pixabit.models.user_timing import UserStats # Import UserStats model
+
+class PixabitTUIApp(App):
+    # ... (CSS, BINDINGS, reactive vars) ...
+
+    # & - def __init__(self, **kwargs):
+    def __init__(self, **kwargs):
+        """Initialize App, API client, managers, state, and data store."""
+        super().__init__(**kwargs)
+        self.api_client = HabiticaAPI()
+        self.tag_manager = TagManager(self.api_client) # Init managers
+        self.backupper = ChallengeBackupper(self.api_client)
+        self.processor: Optional[TaskProcessor] = None # Init later
+
+        # --- Application State (Using Data Models) ---
+        self.user_data: Optional[Dict[str, Any]] = None # Keep raw dict for now, or use User model
+        self.user_stats_obj: Optional[UserStats] = None # Store the UserStats object
+        self.party_data: Dict[str, Any] = {}
+        self.content_data: Dict[str, Any] = {}
+        self.all_tags: List[Tag] = [] # Store Tag objects
+        self.processed_tasks: Dict[str, Task] = {} # Store Task objects
+        self.cats_data: Dict[str, Any] = {}
+        self.unused_tags: List[Tag] = [] # Store Tag objects
+        self.all_challenges_cache: Optional[List[Challenge]] = None # Store Challenge objects
+
+        # --- Initialize Data Store ---
+        # Pass self (the app instance) to the store
+        self.data_store = PixabitDataStore(self)
+
+    # & - async def refresh_data(self) -> None: - MODIFIED
+    async def refresh_data(self) -> None:
+        """Fetches/processes data asynchronously, updating app state."""
+        self.set_status("🔄 Refreshing data...")
+        self.log("Starting async data refresh...")
+        start_time = time.monotonic()
+        refresh_ok = True
+
+        fetched_user_data_dict = None
+        fetched_content_data = None
+        fetched_tags_list = None
+        fetched_party_data = None
+        fetched_challenges_list = None
+
+        try:
+            # --- Step 1: Fetch data concurrently ---
+            self.log("Fetching API data concurrently...")
+            results = await asyncio.gather(
+                self.api_client.get_user_data(),        # Fetches Dict or None
+                self._get_content_cached_async(),       # Fetches Dict or {}
+                self.api_client.get_tags(),             # Fetches List[Dict] or []
+                self.api_client.get_party_data(),       # Fetches Dict or None
+                self._fetch_challenges_cached_async(),  # Fetches List[Dict] or []
+                return_exceptions=True
+            )
+            fetched_user_data_dict, fetched_content_data, fetched_tags_list, fetched_party_data, fetched_challenges_list = results
+
+            # --- Step 2: Process results, populate state with Data Model instances ---
+            # Check critical failures
+            if isinstance(fetched_user_data_dict, Exception) or not fetched_user_data_dict:
+                raise fetched_user_data_dict or ValueError("User data fetch failed critically.")
+            if isinstance(fetched_content_data, Exception) or not fetched_content_data:
+                 raise fetched_content_data or ValueError("Content data fetch failed critically.")
+
+            # Populate state attributes
+            self.user_data = fetched_user_data_dict # Keep raw user dict for now
+
+            self.content_data = fetched_content_data # Should be dict
+            if isinstance(self.content_data, Exception): self.content_data = {} # Default
+
+            # Convert raw tag dicts to Tag objects (assuming Tag model exists)
+            self.all_tags = [Tag(t) for t in fetched_tags_list if isinstance(t, dict)] if isinstance(fetched_tags_list, list) else []
+            if isinstance(fetched_tags_list, Exception): self.log(f"Error fetching tags: {fetched_tags_list}", style="warning")
+
+            self.party_data = fetched_party_data if isinstance(fetched_party_data, dict) else {}
+            if isinstance(fetched_party_data, Exception): self.log(f"Error fetching party data: {fetched_party_data}", style="warning")
+
+            # Convert raw challenge dicts to Challenge objects (assuming Challenge model exists)
+            self.all_challenges_cache = [Challenge(c) for c in fetched_challenges_list if isinstance(c, dict)] if isinstance(fetched_challenges_list, list) else []
+            if isinstance(fetched_challenges_list, Exception): self.log(f"Error fetching challenges: {fetched_challenges_list}", style="warning")
+
+            # --- Step 3: Process Tasks (Instantiate Task objects) ---
+            self.log("Processing tasks...")
+            if not self._process_tasks_step(): # This now populates self.processed_tasks with Task objects
+                 refresh_ok = False
+            else:
+                 self.log("Task processing complete.")
+                 # Link challenges to their tasks now that both are processed
+                 self._link_challenges_to_tasks()
+
+            # --- Step 4: Calculate Stats & Unused (Using new models/data) ---
+            self.log("Calculating stats and unused tags...")
+            self._calculate_stats_unused_step() # This now populates self.user_stats_obj and self.unused_tags
+            self.log("Stats/Unused calculation complete.")
+
+        # ... (rest of refresh_data: except, finally, update_ui_after_refresh call) ...
+
+    # & - def _process_tasks_step(self) -> bool: - MODIFIED
+    def _process_tasks_step(self) -> bool:
+        """Processes raw tasks into Task objects and categorizes them."""
+        try:
+            if not self.user_data or not self.content_data:
+                 self.log("Skipping task processing: Missing user/content data.", style="warning"); return False
+
+            # Processor needs API client for context calculations now done internally
+            self.processor = TaskProcessor(
+                api_client=self.api_client,
+                user_data=self.user_data, party_data=self.party_data,
+                all_tags_list=self.all_tags, content_data=self.content_data # Pass objects/dicts
+            )
+            # Run the processing method - it fetches raw tasks internally now
+            processed_results = self.processor.process_and_categorize_all() # Returns {'data': {id: Task}, 'cats':{}}
+
+            self.processed_tasks = processed_results.get("data", {}) # Already Task objects
+            self.cats_data = processed_results.get("cats", {})
+            if not self.processed_tasks: self.log("No tasks found or processed.", style="info")
+            return True
+        except Exception as e:
+            self.log(f"Error during task processing step: {e}", style="error")
+            self.console.print_exception(show_locals=False)
+            self.processed_tasks, self.cats_data = {}, {} # Reset
+            return False
+
+    # & - def _calculate_stats_unused_step(self): - MODIFIED
+    def _calculate_stats_unused_step(self):
+        """Calculates user stats object and unused tags list."""
+        # Calculate User Stats Object
+        try:
+            if self.cats_data and self.processed_tasks and self.user_data:
+                # Pass raw user data dict to get_user_stats
+                stats_dict = get_user_stats(
+                    api_client=self.api_client, cats_dict=self.cats_data,
+                    processed_tasks_dict=self.processed_tasks, # Pass Task objects dict
+                    user_data=self.user_data,
+                )
+                # Instantiate UserStats object
+                self.user_stats_obj = UserStats(stats_dict) if stats_dict else None
+            else:
+                self.log("Skipping stats calculation: missing data.", style="warning")
+                self.user_stats_obj = None
+        except Exception as e:
+            self.log(f"Error calculating user stats: {e}.", style="warning")
+            self.user_stats_obj = None
+
+        # Calculate Unused Tags (as Tag objects)
+        try:
+            if isinstance(self.all_tags, list) and self.cats_data.get("tags") is not None:
+                used_ids: Set[str] = set(self.cats_data.get("tags", []))
+                # find_unused_tags returns List[Dict], convert to Tag objects
+                unused_dicts = self.tag_manager.find_unused_tags(self.all_tags, used_ids) # Pass Tag objects or expect dicts? Assume finds dicts
+                self.unused_tags = [Tag(t) for t in unused_dicts if isinstance(t,dict)] # Convert to Tag objects
+            else:
+                self.log("Skipping unused tags: missing data.", style="warning")
+                self.unused_tags = []
+        except Exception as e:
+            self.log(f"Error calculating unused tags: {e}", style="warning")
+            self.unused_tags = []
+
+    # & - def _link_challenges_to_tasks(self):
+    def _link_challenges_to_tasks(self):
+         """Adds Task object references to their corresponding Challenge objects."""
+         if not self.all_challenges_cache or not self.processed_tasks:
+             return # Nothing to link
+
+         tasks_by_challenge_id: Dict[str, List[Task]] = defaultdict(list)
+         for task in self.processed_tasks.values():
+             if task.challenge_id:
+                 tasks_by_challenge_id[task.challenge_id].append(task)
+
+         for challenge in self.all_challenges_cache:
+             if challenge.id in tasks_by_challenge_id:
+                 challenge.add_tasks(tasks_by_challenge_id[challenge.id])
+
+
+    # --- Modified example action using the data store ---
+    # & - async def action_show_todos(self): # Example action
+    async def action_show_todos(self):
+        """Example action to show To-Do tasks using the data store."""
+        try:
+            list_widget = self.query_one("#task-list-viewer", ListViewer) # Assumes this widget exists
+            # Use the data store to fetch filtered tasks
+            # The fetcher passed to ListViewer now uses data_store
+            await list_widget.set_filter(task_type="todo") # Trigger ListViewer update
+            self.set_status("Showing To-Dos")
+        except Exception as e:
+            self.log(f"Error showing To-Dos: {e}")
+
+
+    # ... (rest of App class: compose, update_ui methods, _execute_action modified to use data_store) ...

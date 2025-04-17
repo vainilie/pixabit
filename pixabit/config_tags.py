@@ -1,4 +1,5 @@
 # pixabit/config_tags.py
+
 # MARK: - MODULE DOCSTRING
 """Provides functionality for interactively setting up OPTIONAL Tag IDs in the .env file.
 
@@ -7,13 +8,16 @@ users to select, create, keep existing, or skip/unset tags for predefined roles.
 Saves changes back to the .env file using python-dotenv utilities.
 """
 
+
 # MARK: - IMPORTS
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union  # Added set
+from typing import Any, Dict, List, Optional, Set, Union
 
-import requests  # For API exceptions
+# Added set
+import requests
 
+# For API exceptions
 # Use specific dotenv functions
 from dotenv import find_dotenv, get_key, set_key, unset_key
 
@@ -27,10 +31,12 @@ from .utils.display import (
     Rule,
     Table,
     box,
-    console,  # Added Rule
+    console,
+    # Added Rule
 )
 
 # MARK: - CONSTANTS
+
 # Group tag configurations logically for prompting
 TAG_CONFIG_GROUPS: Dict[str, Dict[str, str]] = {
     "Challenge/Personal": {
@@ -51,6 +57,7 @@ TAG_CONFIG_GROUPS: Dict[str, Dict[str, str]] = {
     # Add other logical groups here if needed
 }
 
+
 # Flattened map for easier lookup later
 ALL_TAG_CONFIG_KEYS: Dict[str, str] = {
     desc: key for group in TAG_CONFIG_GROUPS.values() for desc, key in group.items()
@@ -58,6 +65,8 @@ ALL_TAG_CONFIG_KEYS: Dict[str, str] = {
 
 
 # MARK: - CORE FUNCTION
+
+
 # & - def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]) -> None:
 def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]) -> None:
     """Interactively configures OPTIONAL tag IDs in the .env file, grouped by feature.
@@ -74,7 +83,8 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
     )
     console.print(f"Using configuration file: [file]'{dotenv_path}'[/]", style="info")
 
-    dotenv_path_str = str(dotenv_path)  # Ensure string for dotenv functions
+    dotenv_path_str = str(dotenv_path)
+    # Ensure string for dotenv functions
 
     # --- Step 1: Fetch existing tags ---
     all_tags: List[Dict[str, Any]] = []
@@ -117,20 +127,26 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
         )
 
     # --- Step 3: Prompt User for Each Tag GROUP ---
-    selected_ids: Dict[str, Optional[str]] = {}  # Store {env_key: tag_id or None}
-    keys_to_unset: Set[str] = set()  # Track keys currently in .env that user skips
+    selected_ids: Dict[str, Optional[str]] = {}
+    # Store {env_key: tag_id or None}
+    keys_to_unset: Set[str] = set()
+    # Track keys currently in .env that user skips
 
     for group_name, tags_in_group in TAG_CONFIG_GROUPS.items():
         console.print(Rule(f"[highlight]Configure {group_name} Tags[/]", style="rp_overlay"))
+
         # Ask to configure this group
         if not Confirm.ask(f"set up tags for '{group_name}' feature?", default=True):
             console.print(f"⏭️ Skipping configuration for {group_name} tags.", style="info")
+
             # Mark existing keys in this group for potential removal
             for env_key in tags_in_group.values():
                 if get_key(dotenv_path_str, env_key) is not None:
                     keys_to_unset.add(env_key)
-                selected_ids[env_key] = None  # Mark as not configured in this run
-            continue  # Skip to next group
+                selected_ids[env_key] = None
+            # Mark as not configured in this run
+            continue
+        # Skip to next group
 
         # Configure tags within this group
         for tag_description, env_key in tags_in_group.items():
@@ -139,7 +155,8 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
             )
             current_value_id = get_key(dotenv_path_str, env_key)
             current_display_name = "[dim i]Not Set[/dim i]"
-            current_tag_name = None  # Store name if found
+            current_tag_name = None
+            # Store name if found
             if current_value_id:
                 current_tag = next(
                     (
@@ -160,6 +177,7 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
             tag_configured_successfully = False
             while not tag_configured_successfully:
                 try:
+
                     # --- Build Prompt ---
                     prompt_options_list = []
                     valid_choices_numeric = []
@@ -188,15 +206,19 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
 
                     # --- Handle Choice ---
                     if choice_str.lower() == "s":
-                        selected_ids[env_key] = None  # Explicitly mark as not set
+                        selected_ids[env_key] = None
+                        # Explicitly mark as not set
                         if current_value_id:
-                            keys_to_unset.add(env_key)  # Mark for removal
+                            keys_to_unset.add(env_key)
+                        # Mark for removal
                         console.print(f"  ⏭️ Skipping/Unsetting '{tag_description}'.", style="info")
                         tag_configured_successfully = True
                     elif choice_str == "-1" and current_value_id:
-                        selected_ids[env_key] = current_value_id  # Keep existing value
+                        selected_ids[env_key] = current_value_id
+                        # Keep existing value
                         if env_key in keys_to_unset:
-                            keys_to_unset.remove(env_key)  # Don't unset if kept
+                            keys_to_unset.remove(env_key)
+                        # Don't unset if kept
                         console.print(
                             f"  ➡️ Keeping current value {current_display_name}.", style="info"
                         )
@@ -222,7 +244,8 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
                                 console.print(
                                     "❌ Internal Error: Selected tag missing ID.", style="error"
                                 )
-                        elif choice == 0:  # Create New Tag
+                        elif choice == 0:
+                            # Create New Tag
                             default_name = (
                                 tag_description.split("(")[0]
                                 .strip()
@@ -235,7 +258,8 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
                             ).strip()
                             if not new_name:
                                 console.print("⚠️ Creation cancelled (no name).", style="warning")
-                                continue  # Re-prompt for this tag
+                                continue
+                            # Re-prompt for this tag
                             if Confirm.ask(
                                 f"Create new Habitica tag named '[rp_foam]{new_name}[/]'?"
                             ):
@@ -244,9 +268,8 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
                                         f"  ⏳ Creating tag '[rp_foam]{new_name}[/]' via API...",
                                         style="info",
                                     )
-                                    created_tag = api_client.create_tag(
-                                        new_name
-                                    )  # Returns dict or None
+                                    created_tag = api_client.create_tag(new_name)
+                                    # Returns dict or None
                                     if (
                                         created_tag
                                         and isinstance(created_tag, dict)
@@ -259,6 +282,7 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
                                             style="success",
                                         )
                                         selected_ids[env_key] = new_id
+
                                         # Add to lists for potential use later in this run
                                         all_tags.append(created_tag)
                                         valid_tags_for_selection.append(created_tag)
@@ -290,19 +314,24 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
 
                 except (ValueError, TypeError):
                     console.print("❌ Invalid input. Please enter a number or 'S'.", style="error")
-                except Exception as e:  # Catch unexpected errors during prompt/handling
+                except Exception as e:
+                    # Catch unexpected errors during prompt/handling
                     console.print(
                         f"❌ Unexpected error configuring '{tag_description}': {e}", style="error"
                     )
                     console.print_exception(show_locals=False)
-                    # Decide whether to break or continue loop on unexpected error
-                    break  # Break inner loop on unexpected error
 
-        # --- End of loop for tags within group ---
+                    # Decide whether to break or continue loop on unexpected error
+                    break
+    # Break inner loop on unexpected error
+
+    # --- End of loop for tags within group ---
+
     # --- End of loop for groups ---
 
     # --- Step 4. Confirm Selections Before Saving ---
     console.print(Rule("[highlight]Review Final Tag Selections[/]", style="rp_overlay"))
+
     # active_selections = {k: v for k, v in selected_ids.items() if v is not None}
     review_table = Table(
         show_header=True,
@@ -316,8 +345,10 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
     review_table.add_column("Selected Tag ID / Status", style="info")
 
     for desc, key in ALL_TAG_CONFIG_KEYS.items():
-        tag_id = selected_ids.get(key)  # Could be None if skipped group or individual tag
-        if tag_id is not None:  # Value was set or kept
+        tag_id = selected_ids.get(key)
+        # Could be None if skipped group or individual tag
+        if tag_id is not None:
+            # Value was set or kept
             tag_info = next(
                 (t for t in all_tags if isinstance(t, dict) and t.get("id") == tag_id), None
             )
@@ -328,9 +359,11 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
             )
             tag_id_display = f"[rp_rose]{tag_id}[/]"
             review_table.add_row(desc, tag_name, tag_id_display)
-        elif key in keys_to_unset:  # Value existed but was explicitly unset
+        elif key in keys_to_unset:
+            # Value existed but was explicitly unset
             review_table.add_row(desc, "[dim i]Will be Unset/Removed[/dim i]", "[dim]---[/dim]")
-        else:  # Value was not set and didn't exist before
+        else:
+            # Value was not set and didn't exist before
             review_table.add_row(desc, "[dim i]Not Set[/dim i]", "[dim]---[/dim]")
 
     console.print(review_table)
@@ -351,15 +384,19 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
     try:
         console.print(f"⏳ Updating '[file]{dotenv_path_str}[/]'...", style="info")
         num_set, num_unset_actual = 0, 0
+
         # set new/kept values (only if not None)
         for key, value in selected_ids.items():
             if value is not None:
                 if set_key(dotenv_path_str, key, value, quote_mode="always"):
-                    num_set += 1  # Count if set_key reports change or addition
+                    num_set += 1
+        # Count if set_key reports change or addition
+
         # Unset skipped values that previously existed
         for key in keys_to_unset:
             if unset_key(dotenv_path_str, key):
-                num_unset_actual += 1  # Count if unset_key reports success
+                num_unset_actual += 1
+        # Count if unset_key reports success
 
         console.print(
             f"✅ Successfully updated optional tag configurations: "
@@ -378,17 +415,21 @@ def interactive_tag_setup(api_client: HabiticaAPI, dotenv_path: Union[str, Path]
 
 
 # MARK: - CALLER FUNCTION (for CLI integration)
+
+
 # & - def configure_tags() -> None:
 def configure_tags() -> None:
     """Wrapper to initialize API client and run the interactive tag setup."""
     console.print("\n🚀 Starting interactive optional tag configuration...", style="info")
     dotenv_path_str = find_dotenv(raise_error_if_not_found=False, usecwd=True)
     if not dotenv_path_str:
+
         # Attempt to find/create it relative to this file's project structure
         try:
             project_root = Path(__file__).resolve().parent.parent
             dotenv_path_candidate = project_root / ".env"
             if not dotenv_path_candidate.exists():
+
                 # If it truly doesn't exist, user needs to run main setup first
                 console.print(
                     f"❌ '.env' file not found at expected location: [file]{dotenv_path_candidate}[/].",
@@ -420,7 +461,8 @@ def configure_tags() -> None:
             interactive_tag_setup(api, dotenv_path_str)
         except Exception as e:
             console.print(f"\n❌ Error during interactive tag configuration: {e}", style="error")
-            console.print_exception(show_locals=False)  # Show traceback for setup errors
+            console.print_exception(show_locals=False)
+    # Show traceback for setup errors
     else:
         console.print("❌ Could not proceed: Missing API client or .env path.", style="error")
 

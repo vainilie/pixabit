@@ -1,4 +1,5 @@
 # pixabit/challenge_backupper.py
+
 # MARK: - MODULE DOCSTRING
 """Provides the ChallengeBackupper class for backing up Habitica challenges.
 
@@ -7,18 +8,26 @@ and saves each challenge with its tasks as an individual JSON file using
 sanitized filenames.
 """
 
+
 # MARK: - IMPORTS
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 import emoji_data_python
-import requests  # For specific API error handling
-from pathvalidate import sanitize_filename  # For creating safe filenames
+import requests
 
+# For specific API error handling
+from pathvalidate import sanitize_filename
+
+# For creating safe filenames
 # Local Imports
 from .api import HabiticaAPI
-from .utils.display import console  # Use themed display
-from .utils.save_json import save_json  # Use shared save utility
+from .utils.display import console
+
+# Use themed display
+from .utils.save_json import save_json
+
+# Use shared save utility
 
 
 # MARK: - CLASS DEFINITION
@@ -46,10 +55,12 @@ class ChallengeBackupper:
         if not isinstance(api_client, HabiticaAPI):
             raise TypeError("`api_client` must be an instance of HabiticaAPI")
         self.api_client: HabiticaAPI = api_client
-        self.console = console  # Use themed console
+        self.console = console
+        # Use themed console
         self.console.log("ChallengeBackupper initialized.", style="info")
 
     # --- Public Method ---
+
     # & - def create_backups(...)
     def create_backups(self, output_folder: Union[str, Path] = "_challenge_backups") -> None:
         """Executes the full challenge backup process."""
@@ -58,10 +69,12 @@ class ChallengeBackupper:
         output_path = Path(output_folder)
 
         try:
+
             # --- Fetch Data ---
             self.console.print("⏳ Fetching challenges and tasks from Habitica API...")
             tasks, challenges = self._fetch_data()
-            if challenges is None or tasks is None:  # Check for fetch failure
+            if challenges is None or tasks is None:
+                # Check for fetch failure
                 self.console.print("❌ Halting backup due to errors fetching data.", style="error")
                 return
             if not challenges:
@@ -94,7 +107,8 @@ class ChallengeBackupper:
             for index, challenge_data in enumerate(sorted_challenges):
                 challenge_id = challenge_data.get("id")
                 original_name = challenge_data.get("name", "Unnamed_Challenge")
-                short_name = challenge_data.get("shortName") or original_name  # Fallback
+                short_name = challenge_data.get("shortName") or original_name
+                # Fallback
 
                 progress_prefix = f"({index + 1}/{total_challenges})"
                 self.console.print(
@@ -117,7 +131,8 @@ class ChallengeBackupper:
                 safe_base = sanitize_filename(str(short_name))
                 if not safe_base:
                     safe_base = (
-                        f"challenge_{challenge_id}"  # Fallback if name was all invalid chars
+                        f"challenge_{challenge_id}"
+                        # Fallback if name was all invalid chars
                     )
                 filename = f"{safe_base}.json"
                 filepath = output_path / filename
@@ -126,7 +141,8 @@ class ChallengeBackupper:
                 if save_json(data=processed_backup, filepath=filepath):
                     saved_count += 1
                 else:
-                    failed_count += 1  # save_json already prints errors
+                    failed_count += 1
+            # save_json already prints errors
 
             # --- Final Summary ---
             self.console.rule(style="rp_overlay")
@@ -144,9 +160,12 @@ class ChallengeBackupper:
             self.console.print(
                 f"\n[error]❌ Unexpected error during challenge backup: {e}[/error]"
             )
-            # self.console.print_exception(show_locals=False) # Optional traceback
+
+    # self.console.print_exception(show_locals=False)
+    # Optional traceback
 
     # --- Internal Helper Methods ---
+
     # & - def _fetch_data(...)
     def _fetch_data(self) -> Tuple[Optional[List[Dict]], Optional[List[Dict]]]:
         """Fetches all user tasks and member challenges. Returns (tasks, challenges) or (None, None) on error."""
@@ -158,7 +177,8 @@ class ChallengeBackupper:
                 self.console.print(
                     f"API Error: Expected list of tasks, got {type(tasks)}.", style="error"
                 )
-                tasks = None  # Signal error
+                tasks = None
+            # Signal error
             else:
                 self.console.print(f"  Fetched {len(tasks)} tasks.")
 
@@ -169,7 +189,8 @@ class ChallengeBackupper:
                     f"API Error: Expected list of challenges, got {type(challenges)}.",
                     style="error",
                 )
-                challenges = None  # Signal error
+                challenges = None
+            # Signal error
             else:
                 self.console.print(f"  Fetched {len(challenges)} challenges.")
 
@@ -221,6 +242,7 @@ class ChallengeBackupper:
             cleaned["text"] = emoji_data_python.replace_colons(str(cleaned.get("text", "")))
         if "notes" in cleaned:
             cleaned["notes"] = emoji_data_python.replace_colons(str(cleaned.get("notes", "")))
+
         # Clean checklist items too
         if "checklist" in cleaned and isinstance(cleaned["checklist"], list):
             for item in cleaned["checklist"]:
@@ -232,9 +254,9 @@ class ChallengeBackupper:
     def _process_single_challenge(self, challenge_data: Dict, tasks_raw: List[Dict]) -> Dict:
         """Processes a single challenge and its tasks into backup format."""
         backup = challenge_data.copy()
-        backup["_tasks"] = [
-            self._clean_task_for_backup(task) for task in tasks_raw
-        ]  # Embed cleaned tasks
+        backup["_tasks"] = [self._clean_task_for_backup(task) for task in tasks_raw]
+        # Embed cleaned tasks
+
         # Process text fields
         name = backup.pop("name", "Unnamed")
         desc = backup.pop("description", "")

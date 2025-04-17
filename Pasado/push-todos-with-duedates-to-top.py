@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 
 import argparse
@@ -13,6 +14,7 @@ class Debug(argparse.Action):
         import pdb
 
         pdb.set_trace()
+
 
 
 # MAIN
@@ -37,13 +39,15 @@ parser.add_argument(
 parser.add_argument(
     "-u",
     "--user-id",
-    help="From https://habitica.com/#/options/settings/api\n \
+    help="From https://habitica.com/
+#/options/settings/api\n \
                     default: environment variable HAB_API_USER",
 )
 parser.add_argument(
     "-k",
     "--api-token",
-    help="From https://habitica.com/#/options/settings/api\n \
+    help="From https://habitica.com/
+#/options/settings/api\n \
                     default: environment variable HAB_API_TOKEN",
 )
 parser.add_argument(
@@ -96,6 +100,7 @@ for todo in [t for t in req.json()["data"] if ("date" in t and t["date"])]:
 todos_with_duedates.sort(key=lambda k: (k["date"][:10], k["createdAt"]), reverse=True)
 
 print(len(todos_with_duedates))
+
 # Push todos_with_duedates to the top
 for count, todo in enumerate(todos_with_duedates):
     requests.post(args.baseurl + "tasks/" + todo["id"] + "/move/to/0", headers=headers)

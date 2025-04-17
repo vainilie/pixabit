@@ -1,29 +1,37 @@
 # pixabit/utils/save_json.py
+
 # MARK: - MODULE DOCSTRING
 """Provides a utility function for saving Python data structures (dictionaries or lists)
 into JSON files with pretty printing and proper encoding. Includes directory
 creation and error handling.
 """
 
+
 # MARK: - IMPORTS
-import builtins  # For fallback print
+import builtins
+
+# For fallback print
 import json
 from pathlib import Path
 from typing import Any, List, Union
 
 # Import console/print if needed for messages, assuming from .display
 try:
+
     # Use the themed console instance if available
     from .display import console, print
 
-    LOG_FUNC = console.print  # Prioritize themed console.print
+    LOG_FUNC = console.print
+# Prioritize themed console.print
 except ImportError:
+
     # Fallback if display utils are missing or run standalone
     builtins.print(
         "Warning: Console/theme not found, using standard print for save_json messages."
     )
     LOG_FUNC = builtins.print
-    console = None  # Indicate console is not available
+    console = None
+# Indicate console is not available
 
 
 # MARK: - SAVE JSON FUNCTION
@@ -46,9 +54,11 @@ def save_json(data: Union[dict[str, Any], List[Any]], filepath: Union[str, Path]
         bool: True if saving was successful, False otherwise.
     """
     if not isinstance(filepath, Path):
-        filepath = Path(filepath)  # Convert string path to Path object
+        filepath = Path(filepath)
+    # Convert string path to Path object
 
     try:
+
         # Create parent directory(ies) if they don't exist
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
@@ -58,6 +68,7 @@ def save_json(data: Union[dict[str, Any], List[Any]], filepath: Union[str, Path]
 
         # Use LOG_FUNC (either console.print or builtins.print)
         if console:
+
             # Use theme style 'success' and 'file'
             LOG_FUNC(f"[success]Successfully saved data to:[/success] [file]'{filepath}'[/]")
         else:
@@ -65,6 +76,7 @@ def save_json(data: Union[dict[str, Any], List[Any]], filepath: Union[str, Path]
         return True
 
     except TypeError as e:
+
         # Handle non-serializable data
         msg = f"Data structure not JSON serializable for '{filepath}'. {e}"
         if console:
@@ -74,6 +86,7 @@ def save_json(data: Union[dict[str, Any], List[Any]], filepath: Union[str, Path]
         return False
 
     except OSError as e:
+
         # Handle file system errors
         msg = f"Could not write file '{filepath}': {e}"
         if console:
@@ -83,12 +96,15 @@ def save_json(data: Union[dict[str, Any], List[Any]], filepath: Union[str, Path]
         return False
 
     except Exception as e:
+
         # Catch any other unexpected errors
         msg = f"An unexpected error occurred saving to '{filepath}': {e}"
         if console:
             LOG_FUNC(f"[error]Error:[/error] {msg}", style="error")
-            # Optional: Print traceback for unexpected errors if console exists
-            # console.print_exception(show_locals=False)
+
+        # Optional: Print traceback for unexpected errors if console exists
+
+        # console.print_exception(show_locals=False)
         else:
             LOG_FUNC(f"ERROR: {msg}")
         return False

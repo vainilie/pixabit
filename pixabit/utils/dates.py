@@ -1,4 +1,5 @@
 # pixabit/utils/dates.py
+
 # MARK: - MODULE DOCSTRING
 
 """Provides utility functions for date and time manipulation.
@@ -9,18 +10,23 @@ Includes functions for converting timestamps to UTC or local time, and checking
 if a timestamp represents a date/time in the past. Requires dateutil and tzlocal.
 """
 
+
 # MARK: - IMPORTS
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 # Third-party libraries
 import dateutil.parser
-from tzlocal import get_localzone  # Gets local system timezone
+from tzlocal import get_localzone
+
+# Gets local system timezone
+
 
 # Use themed console/print if available
 try:
     from .display import console, print
-except ImportError:  # Fallback
+except ImportError:
+    # Fallback
     import builtins
 
     print = builtins.print
@@ -34,6 +40,7 @@ except ImportError:  # Fallback
             builtins.print(*args)
 
     console = DummyConsole()
+
 
 # MARK: - FUNCTIONS
 
@@ -52,6 +59,7 @@ def convert_timestamp_to_utc(timestamp: Optional[str]) -> Optional[datetime]:
         return None
     try:
         dt_object = dateutil.parser.isoparse(timestamp)
+
         # Ensure timezone-aware and converted to UTC
         return dt_object.astimezone(timezone.utc)
     except (ValueError, TypeError) as e:
@@ -74,7 +82,8 @@ def is_date_passed(timestamp: Optional[str]) -> Optional[bool]:
         return None
     utc_time = convert_timestamp_to_utc(timestamp)
     if utc_time is None:
-        return None  # Invalid timestamp
+        return None
+    # Invalid timestamp
 
     now_utc = datetime.now(timezone.utc)
     return utc_time < now_utc
@@ -95,6 +104,7 @@ def convert_to_local_time(utc_dt_str: Optional[str]) -> Optional[datetime]:
     try:
         utc_time = dateutil.parser.isoparse(utc_dt_str)
         if utc_time.tzinfo is None:
+
             # If naive, assume UTC
             utc_time = utc_time.replace(tzinfo=timezone.utc)
 
@@ -113,7 +123,8 @@ def format_timedelta(delta: timedelta) -> str:
     """Formats a timedelta into a human-readable string (e.g., "in 2d 03:15:30" or "1d 10:05:00 ago")."""
     is_past = delta.total_seconds() < 0
     if is_past:
-        delta = -delta  # Work with positive duration
+        delta = -delta
+        # Work with positive duration
         suffix = "ago"
     else:
         suffix = "in"
@@ -126,10 +137,12 @@ def format_timedelta(delta: timedelta) -> str:
     parts = []
     if days > 0:
         parts.append(f"{days}d")
+
     # Always show H:M:S for consistency, even if days > 0
     parts.append(f"{hours:02}:{minutes:02}:{seconds:02}")
 
-    if not parts:  # Should not happen with H:M:S always present
+    if not parts:
+        # Should not happen with H:M:S always present
         return "now"
 
     if is_past:
@@ -152,7 +165,8 @@ def convert_and_check_timestamp(timestamp: Optional[str]) -> Optional[str]:
         return None
     local_time = convert_to_local_time(timestamp)
     if local_time is None:
-        return f"Invalid Timestamp ({timestamp})"  # Return indication of error
+        return f"Invalid Timestamp ({timestamp})"
+    # Return indication of error
 
     now_local = datetime.now(get_localzone()).replace(microsecond=0)
     time_difference = local_time - now_local

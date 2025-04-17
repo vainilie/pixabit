@@ -1,10 +1,10 @@
-from core import habitica_api
 import json
+
+from core import habitica_api
 
 
 def create_challenge_from_json(json_path):
-    """
-    Create a challenge in Habitica based on data from a JSON file.
+    """Create a challenge in Habitica based on data from a JSON file.
 
     Args:
         json_path (str): The path to the JSON file containing challenge data.
@@ -12,7 +12,7 @@ def create_challenge_from_json(json_path):
     Returns:
         None
     """
-    with open(json_path, "r") as json_file:
+    with open(json_path) as json_file:
         data = json.load(json_file)
 
         challenge_data = {

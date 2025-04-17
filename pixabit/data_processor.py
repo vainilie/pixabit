@@ -1,9 +1,11 @@
 # pixabit/data_processor.py
+
 # MARK: - MODULE DOCSTRING
 """Processes raw Habitica data (Tasks, User, Party, Content) into structured formats,
 categorizes tasks, calculates derived stats (like effective CON), and computes
 potential daily damage. Includes functions to get combined user statistics.
 """
+
 
 # MARK: - IMPORTS
 import json
@@ -16,11 +18,17 @@ import emoji_data_python
 # Local Imports
 from .api import HabiticaAPI
 from .utils.dates import convert_to_local_time, is_date_passed
-from .utils.display import console  # Use themed display
-from .utils.save_json import save_json  # Keep for saving processed data if needed
+from .utils.display import console
+
+# Use themed display
+from .utils.save_json import save_json
+
+# Keep for saving processed data if needed
+
 
 # MARK: - CONSTANTS
-CACHE_FILE_CONTENT = "content_cache.json"  # Cache file for game content
+CACHE_FILE_CONTENT = "content_cache.json"
+# Cache file for game content
 
 
 # MARK: - TaskProcessor Class
@@ -32,6 +40,7 @@ class TaskProcessor:
     """
 
     # MARK: - Initialization
+
     # & - def __init__(...)
     def __init__(
         self,
@@ -78,6 +87,7 @@ class TaskProcessor:
         self.console.log("TaskProcessor Initialized.", style="info")
 
     # MARK: - Private Data Fetching Helpers
+
     # & - def _fetch_user_data(self) -> Dict[str, Any]:
     def _fetch_user_data(self) -> Dict[str, Any]:
         """Fetches user data. Returns {} on failure."""
@@ -105,7 +115,8 @@ class TaskProcessor:
         """Fetches all tags. Returns [] on failure."""
         self.console.log("Fetching all tags for lookup...", style="info")
         try:
-            return self.api_client.get_tags()  # Returns list or []
+            return self.api_client.get_tags()
+        # Returns list or []
         except Exception as e:
             self.console.log(f"Exception fetching tags list: {e}", style="error")
             return []
@@ -115,6 +126,7 @@ class TaskProcessor:
         """Fetches game content from API or loads from cache. Returns {} on failure."""
         self.console.log("Fetching/Loading game content...", style="info")
         raw_content = None
+
         # --- 1. Try Cache ---
         if Path(CACHE_FILE_CONTENT).exists():
             self.console.log(
@@ -136,13 +148,16 @@ class TaskProcessor:
                     style="warning",
                 )
                 raw_content = None
+
         # --- 2. Fetch API if Needed ---
         if raw_content is None:
             self.console.log("Fetching game content from API...")
             try:
-                raw_content = self.api_client.get_content()  # Returns dict or None
+                raw_content = self.api_client.get_content()
+                # Returns dict or None
                 if isinstance(raw_content, dict) and raw_content:
                     self.console.log("Successfully fetched content from API.", style="success")
+
                     # --- 3. Save to Cache ---
                     try:
                         with open(CACHE_FILE_CONTENT, "w", encoding="utf-8") as f:
@@ -164,6 +179,7 @@ class TaskProcessor:
         return raw_content if isinstance(raw_content, dict) else {}
 
     # MARK: - Private Calculation & Preparation Helpers
+
     # & - def _prepare_tags_lookup(...)
     def _prepare_tags_lookup(self, tags_list: List[Dict[str, Any]]) -> Dict[str, str]:
         """Creates tag ID -> name lookup dict."""
@@ -171,7 +187,8 @@ class TaskProcessor:
             self.console.log("Tag list empty. Tag lookup will be empty.", style="warning")
             return {}
         lookup = {
-            tag["id"]: tag.get("name", f"Unnamed_{tag['id'][:6]}")  # More descriptive fallback
+            tag["id"]: tag.get("name", f"Unnamed_{tag['id'][:6]}")
+            # More descriptive fallback
             for tag in tags_list
             if isinstance(tag, dict) and "id" in tag
         }
@@ -187,6 +204,7 @@ class TaskProcessor:
             return
 
         try:
+
             # --- Calculate Effective CON ---
             stats = self.user_data.get("stats", {})
             level = stats.get("lvl", 0)
@@ -238,25 +256,30 @@ class TaskProcessor:
         try:
             quest = self.party_data.get("quest", {})
             if isinstance(quest, dict) and quest.get("active"):
-                boss = quest.get("boss")  # V3 API structure
+                boss_name = quest.get("key")
+                boss = self.game_content.get("quests", {}).get(boss_name, {}).get("boss", {})
+                # V3 API structure
                 if isinstance(boss, dict) and boss.get("str") is not None:
                     self.is_on_boss_quest = True
                     try:
                         self.boss_str = float(boss.get("str", 0.0))
                     except (ValueError, TypeError):
-                        self.boss_str = 0.0  # Default if conversion fails
+                        self.boss_str = 0.0
+                    # Default if conversion fails
                     self.console.log(
                         f"Party Context: On active BOSS quest (Str={self.boss_str:.2f}).",
                         style="info",
                     )
-                else:  # Active quest, but not a boss or no boss strength
+                else:
+                    # Active quest, but not a boss or no boss strength
                     self.is_on_boss_quest, self.boss_str = False, 0.0
                     quest_key = quest.get("key", "Unknown")
                     self.console.log(
                         f"Party Context: On active quest '{quest_key}' (not boss/no str).",
                         style="info",
                     )
-            else:  # Not on an active quest
+            else:
+                # Not on an active quest
                 self.is_on_boss_quest, self.boss_str = False, 0.0
                 self.console.log("Party Context: Not on active quest.", style="info")
         except Exception as e:
@@ -316,6 +339,7 @@ class TaskProcessor:
             return 1.0
 
     # MARK: - Private Task Type Processors
+
     # & - def _process_habit(...)
     def _process_habit(self, task_data: Dict) -> Dict[str, Any]:
         """Processes Habit-specific fields."""
@@ -325,12 +349,12 @@ class TaskProcessor:
         if up and down:
             processed["direction"], processed["counter"] = (
                 "both",
-                f"[#A6E3A1]+{cup}[/] / [#F38BA8]-{cdown}[/]",
+                f"[ #A6E3A1]+{cup}[/] / [ #F38BA8]-{cdown}[/]",
             )
         elif up:
-            processed["direction"], processed["counter"] = "up", f"[#A6E3A1]+{cup}[/]"
+            processed["direction"], processed["counter"] = "up", f"[ #A6E3A1]+{cup}[/]"
         elif down:
-            processed["direction"], processed["counter"] = "down", f"[#F38BA8]-{cdown}[/]"
+            processed["direction"], processed["counter"] = "down", f"[ #F38BA8]-{cdown}[/]"
         else:
             processed["direction"], processed["counter"] = "none", "[dim]N/A[/]"
         processed["frequency"] = task_data.get("frequency", "daily")
@@ -371,14 +395,15 @@ class TaskProcessor:
 
         status = "grey"
         if is_due:
-            status = "success" if completed else "due"  # Use 'success' for done
+            status = "success" if completed else "due"
+        # Use 'success' for done
         processed["_status"] = status
         processed["checklist"] = checklist
         processed["date"] = next_due[0] if isinstance(next_due, list) and next_due else ""
         processed["is_due"] = is_due
         processed["streak"] = task_data.get("streak", 0)
         processed["value"], processed["value_color"] = val, self._value_color(val)
-
+        print(self.boss_str)
         # --- Damage Calculation ---
         dmg_user, dmg_party = 0.0, 0.0
         if is_due and not completed and not self.is_sleeping and self.user_stealth <= 0:
@@ -402,8 +427,9 @@ class TaskProcessor:
                 hp_mod = delta * con_mult * prio_mult * 2.0
                 dmg_user = round(hp_mod * 10) / 10
                 if self.is_on_boss_quest and self.boss_str > 0:
-                    boss_delta = eff_delta * prio_mult if prio_mult < 1.0 else eff_delta
-                    dmg_party = round(boss_delta * self.boss_str, 1)
+
+                    hp_boss = delta * prio_mult * 2.0 * self.user_data.get("stats").get("con", 0)
+                    dmg_party = (hp_boss / 2) * self.boss_str
             except Exception as e_dmg:
                 self.console.log(
                     f"Error calculating damage for Daily {task_data.get('id', 'N/A')}: {e_dmg}",
@@ -418,9 +444,12 @@ class TaskProcessor:
     # & - def _process_reward(...)
     def _process_reward(self, task_data: Dict) -> Dict[str, Any]:
         """Processes Reward-specific fields."""
-        return {"value": task_data.get("value", 0)}  # Cost
+        return {"value": task_data.get("value", 0)}
+
+    # Cost
 
     # MARK: - Public Processing Methods
+
     # & - def process_single_task(...)
     def process_single_task(self, task_data: Dict) -> Optional[Dict[str, Any]]:
         """Processes a single raw task into standardized format."""
@@ -441,8 +470,10 @@ class TaskProcessor:
             "note": emoji_data_python.replace_colons(notes or ""),
             "priority": task_data.get("priority", 1.0),
             "attribute": task_data.get("attribute", "str"),
-            "tags": task_data.get("tags", []),  # Keep raw IDs
-            "tag_names": self._process_task_tags(task_data),  # Add names
+            "tags": task_data.get("tags", []),
+            # Keep raw IDs
+            "tag_names": self._process_task_tags(task_data),
+            # Add names
             "created": task_data.get("createdAt", ""),
             "challenge_id": challenge.get("id", ""),
             "challenge_name": emoji_data_python.replace_colons(challenge.get("shortName", "")),
@@ -465,7 +496,8 @@ class TaskProcessor:
         self.console.print("Fetching all tasks...", style="info")
         all_tasks_raw = []
         try:
-            all_tasks_raw = self.api_client.get_tasks()  # Returns list or []
+            all_tasks_raw = self.api_client.get_tasks()
+            # Returns list or []
             if not isinstance(all_tasks_raw, list):
                 self.console.print(
                     f"Failed fetch: Expected list, got {type(all_tasks_raw)}.", style="error"
@@ -496,7 +528,8 @@ class TaskProcessor:
             task_id = processed["id"]
             tasks_dict[task_id] = processed
             cats_dict["tags"].update(processed.get("tags", []))
-            challenge = task_data.get("challenge", {})  # Use raw data for broken flag
+            challenge = task_data.get("challenge", {})
+            # Use raw data for broken flag
             if isinstance(challenge, dict):
                 if challenge.get("broken"):
                     cats_dict["broken"].append(task_id)
@@ -518,6 +551,7 @@ class TaskProcessor:
         return {"data": tasks_dict, "cats": cats_dict}
 
     # MARK: - File Saving (Optional)
+
     # & - def save_processed_data(...)
     def save_processed_data(
         self, processed_results: Dict, base_filename: str = "processed_output"
@@ -539,6 +573,8 @@ class TaskProcessor:
 
 
 # MARK: - User Stats Function
+
+
 # & - def get_user_stats(...)
 def get_user_stats(
     api_client: HabiticaAPI,
@@ -575,6 +611,7 @@ def get_user_stats(
         return {}
 
     try:
+
         # --- Extract Data Safely ---
         stats = user_data.get("stats", {})
         party = user_data.get("party", {})
@@ -601,13 +638,15 @@ def get_user_stats(
         task_cats_data = cats_dict.get("tasks", {})
         if isinstance(task_cats_data, dict):
             for cat, data in task_cats_data.items():
-                if isinstance(data, dict):  # dailys/todos
+                if isinstance(data, dict):
+                    # dailys/todos
                     total = sum(len(ids) for ids in data.values() if isinstance(ids, list))
                     task_counts[cat] = {
                         status: len(ids) for status, ids in data.items() if isinstance(ids, list)
                     }
                     task_counts[cat]["_total"] = total
-                elif isinstance(data, list):  # habits/rewards
+                elif isinstance(data, list):
+                    # habits/rewards
                     task_counts[cat] = len(data)
         else:
             console.print("Invalid 'tasks' structure in cats_dict.", style="warning")
@@ -658,4 +697,7 @@ def get_user_stats(
     except Exception as e_stat:
         console.print(f"Error calculating user stats: {e_stat}", style="error")
         console.print_exception(show_locals=False)
-        return {}  # Return empty dict on failure
+        return {}
+
+
+# Return empty dict on failure

@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 
 import argparse
@@ -13,6 +14,7 @@ class Debug(argparse.Action):
         import pdb; pdb.set_trace()
 
 
+
 # MAIN
 parser = argparse.ArgumentParser(description="Set the training attribute on your tasks",
                                  epilog="For more info on attribute training, see http://habitica.wikia.com/wiki/Automatic_Allocation")
@@ -21,10 +23,12 @@ parser.add_argument('-a', '--attribute',
                     choices=['str', 'int', 'con', 'per'],
                     help='Attribute to train')
 parser.add_argument('-u', '--user-id',
-                    help='From https://habitica.com/#/options/settings/api\n \
+                    help='From https://habitica.com/
+#/options/settings/api\n \
                     default: environment variable HAB_API_USER')
 parser.add_argument('-k', '--api-token',
-                    help='From https://habitica.com/#/options/settings/api\n \
+                    help='From https://habitica.com/
+#/options/settings/api\n \
                     default: environment variable HAB_API_TOKEN')
 parser.add_argument('--baseurl',
                     type=str, default="https://habitica.com",

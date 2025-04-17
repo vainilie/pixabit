@@ -1,49 +1,94 @@
+
 # styles (or styles.theme / styles.config)
 
 [styles]
+
 # --- Base Palette (Catppuccin Macchiato / Rosé Pine inspired) ---
+
 # Not directly used as styles, but for reference
+
 # crust = #11111B
+
 # mantle = #181825
+
 # base = #1E1E2E
+
 # surface0 = #313244
+
 # surface1 = #45475A
+
 # surface2 = #585B70
+
 # overlay0 = #6C7086
+
 # overlay1 = #7F849C
+
 # overlay2 = #9399B2
+
 # text = #CDD6F4
+
 # subtext0 = #A6ADC8
+
 # subtext1 = #BAC2DE
+
 # rosewater = #F5E0DC
+
 # flamingo = #F2CDCD
+
 # pink = #F5C2E7
+
 # mauve = #CBA6F7
+
 # red = #F38BA8
+
 # maroon = #EBA0AC
+
 # peach = #FAB387
+
 # yellow = #F9E2AF
+
 # green = #A6E3A1
+
 # teal = #94E2D5
+
 # sky = #89DCEB
+
 # sapphire = #74C7EC
+
 # blue = #89B4FA
+
 # lavender = #B4BDF8
+
 # rp_base = #191724
+
 # rp_surface = #1f1d2e
+
 # rp_overlay = #26233a
+
 # rp_highlightLow = #21202e
+
 # rp_highlightMed = #403d52
+
 # rp_highlightHigh = #524f67
+
 # rp_muted = #6e6a86
+
 # rp_subtle_color = #908caa
+
 # rp_text = #e0def4
+
 # rp_love = #eb6f92
+
 # rp_gold = #f6c177
+
 # rp_rose = #ebbcba
+
 # rp_pine = #31748f
+
 # rp_foam = #9ccfd8
+
 # rp_iris = #c4a7e7
+
 
 
 # --- Semantic Styles ---
@@ -58,6 +103,7 @@ error = bold #f38ba8
 success = bold #a6e3a1
 keyword = bold #c4a7e7
 link_style = underline #89b4fa
+
 
 
 # --- Component Styles ---
@@ -85,6 +131,7 @@ bar.pulse = #f5c2e7
 table.header = bold #cba6f7
 
 
+
 # Add specific Rosé Pine theme colors if used directly
 rp_text = #e0def4
 rp_iris = #c4a7e7
@@ -97,6 +144,7 @@ rp_muted = #6e6a86
 rp_subtle_color = #908caa
 rp_surface = #1f1d2e
 rp_overlay = #26233a
+
 
 
 # Added field style used in config_tags review table

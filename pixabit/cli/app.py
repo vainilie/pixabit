@@ -1,4 +1,5 @@
 # pixabit/cli/app.py
+
 # MARK: - MODULE DOCSTRING
 """Main Command Line Interface application class for Pixabit.
 Handles user interaction, menu navigation, data fetching/refreshing,
@@ -6,11 +7,14 @@ and dispatching actions to underlying managers and processors, respecting
 optional feature configurations.
 """
 
+
 # MARK: - IMPORTS
 import builtins
 import datetime
 import difflib
-import json  # Keep for debug dumping if needed
+import json
+
+# Keep for debug dumping if needed
 import sys
 import time
 from collections import defaultdict
@@ -43,19 +47,30 @@ try:
         track,
     )
 except ImportError as e_rich:
+
     # Use standard print for this critical failure
     builtins.print(f"Fatal Error: Failed to import Rich components: {e_rich}")
     builtins.print("Please install Rich: pip install rich")
     sys.exit(1)
 
+
 # --- Local Application Imports ---
 try:
-    from pixabit import config  # Import config to check optional tags
-    from pixabit.api import MIN_REQUEST_INTERVAL, HabiticaAPI  # Import constant
-    from pixabit.challenge_backupper import ChallengeBackupper  # Correct class name/file
-    from pixabit.config_tags import configure_tags as run_tag_config_setup  # Alias for clarity
+    from pixabit import config
+
+    # Import config to check optional tags
+    from pixabit.api import MIN_REQUEST_INTERVAL, HabiticaAPI
+
+    # Import constant
+    from pixabit.challenge_backupper import ChallengeBackupper
+
+    # Correct class name/file
+    from pixabit.config_tags import configure_tags as run_tag_config_setup
+
+    # Alias for clarity
     from pixabit.data_processor import TaskProcessor, get_user_stats
-    from pixabit.exports import (  # Import export functions
+    from pixabit.exports import (
+        # Import export functions
         save_all_userdata_into_json,
         save_processed_tasks_into_json,
         save_tags_into_json,
@@ -64,29 +79,37 @@ try:
     from pixabit.tag_manager import TagManager
     from pixabit.utils.dates import convert_to_local_time
 except ImportError as e_imp:
+
     # Use standard print as console might not be ready
     builtins.print(f"Fatal Error importing Pixabit modules: {e_imp}")
     sys.exit(1)
 
 
 # MARK: - CliApp Class
+
+
 # ==============================================================================
 class CliApp:
     """Main application class for the Pixabit CLI."""
 
     # MARK: - Initialization
+
     # & - def __init__(self):
     def __init__(self):
         """Initializes API client, managers, state, and performs initial data load."""
         self.console = console
         self.console.log("Initializing Pixabit App...", style="info")
         try:
-            self.api_client = HabiticaAPI()  # Handles mandatory credential check
-            self.processor: Optional[TaskProcessor] = None  # Initialized in refresh_data
-            self.tag_manager = TagManager(self.api_client)  # Logs its own config status
+            self.api_client = HabiticaAPI()
+            # Handles mandatory credential check
+            self.processor: Optional[TaskProcessor] = None
+            # Initialized in refresh_data
+            self.tag_manager = TagManager(self.api_client)
+            # Logs its own config status
             self.backupper = ChallengeBackupper(self.api_client)
             self.console.log("Core components initialized.", style="info")
-        except ValueError as e:  # Catch missing mandatory creds from API init
+        except ValueError as e:
+            # Catch missing mandatory creds from API init
             self.console.print(f"Configuration Error: {e}", style="error")
             sys.exit(1)
         except Exception:
@@ -100,22 +123,28 @@ class CliApp:
         self.content_data: Dict[str, Any] = {}
         self.all_tags: List[Dict] = []
         self.processed_tasks: Dict[str, Dict] = {}
-        self.cats_data: Dict[str, Any] = {}  # Categorized task IDs/metadata
+        self.cats_data: Dict[str, Any] = {}
+        # Categorized task IDs/metadata
         self.user_stats: Dict[str, Any] = {}
         self.unused_tags: List[Dict] = []
-        self.all_challenges_cache: Optional[List[Dict]] = None  # Cache for GET /challenges/user
+        self.all_challenges_cache: Optional[List[Dict]] = None
+        # Cache for GET /challenges/user
 
         # --- Initial Data Load ---
         self.console.log("Performing initial data refresh...", style="info")
         self.refresh_data()
         self.console.log("Initialization complete.", style="success")
-        self.console.print("")  # Spacer
+        self.console.print("")
+
+    # Spacer
 
     # MARK: - Primary Public Method (Entry Point)
+
     # & - def run(self):
     def run(self):
         """Starts the main application menu loop."""
         while True:
+
             # --- Dynamically Build Menu Based on Config ---
             active_categories = self._build_active_menu()
             main_menu_options = list(active_categories.keys())
@@ -123,9 +152,11 @@ class CliApp:
             # --- Display Menu & Get Choice ---
             choice = self._display_menu("Main Menu", main_menu_options, embed_stats=True)
             if choice == 0:
-                break  # Exit
+                break
+            # Exit
             if choice == -1:
-                continue  # Invalid input
+                continue
+            # Invalid input
 
             # --- Handle Choice ---
             try:
@@ -153,6 +184,7 @@ class CliApp:
         self.console.print("\nExiting Pixabit. Goodbye!", style="bold info")
 
     # MARK: - Dynamic Menu Building
+
     # & - def _build_active_menu(self) -> Dict[str, List[str]]:
     def _build_active_menu(self) -> Dict[str, List[str]]:
         """Builds the menu dictionary, including optional items based on config."""
@@ -178,9 +210,12 @@ class CliApp:
         }
 
         # --- Add Optional Tag Actions Conditionally ---
-        mg_tags = categories["Manage Tags"]  # Shortcut
+        mg_tags = categories["Manage Tags"]
+        # Shortcut
+
         # Insert items at specific indices to maintain logical order
-        insert_pos = 3  # Position after basic display/delete options
+        insert_pos = 3
+        # Position after basic display/delete options
 
         # Check config directly (config module holds the loaded values)
         if config.CHALLENGE_TAG_ID and config.PERSONAL_TAG_ID:
@@ -198,11 +233,13 @@ class CliApp:
         return active_categories
 
     # MARK: - Major Workflow Methods
+
     # & - def refresh_data(self):
     def refresh_data(self):
         """Fetches/processes all necessary data using optimized API calls."""
         self.console.print("\nRefreshing all application data...", style="highlight")
         start_time = time.monotonic()
+
         # --- Setup Progress Bar ---
         progress = Progress(
             TextColumn(" • ", style="subtle"),
@@ -214,6 +251,7 @@ class CliApp:
             console=self.console,
             transient=False,
         )
+
         # Define steps and weights for progress calculation
         steps = [
             (
@@ -222,37 +260,43 @@ class CliApp:
                 "user_data",
                 1,
                 True,
-            ),  # Name, function, attr_name, weight, critical
+            ),
+            # Name, function, attr_name, weight, critical
             ("Fetch Content", self._get_content_cached, "content_data", 1, True),
-            ("Fetch Tags", self.api_client.get_tags, "all_tags", 1, False),  # Non-critical
+            ("Fetch Tags", self.api_client.get_tags, "all_tags", 1, False),
+            # Non-critical
             (
                 "Fetch Party",
                 self.api_client.get_party_data,
                 "party_data",
                 1,
                 False,
-            ),  # Non-critical
+            ),
+            # Non-critical
             (
                 "Fetch Challenges",
                 self._fetch_challenges_cached,
                 "all_challenges_cache",
                 1,
                 False,
-            ),  # Non-critical
+            ),
+            # Non-critical
             (
                 "Process Tasks",
                 self._process_tasks_step,
                 "processed_tasks",
                 5,
                 True,
-            ),  # Special step
+            ),
+            # Special step
             (
                 "Calculate Stats/Unused",
                 self._calculate_stats_unused_step,
                 None,
                 1,
                 False,
-            ),  # Special step
+            ),
+            # Special step
         ]
         total_weight = sum(w for _, _, _, w, _ in steps)
         main_task_id = progress.add_task("[info]Initializing...", total=total_weight)
@@ -262,23 +306,29 @@ class CliApp:
             progress, console=self.console, vertical_overflow="ellipsis", refresh_per_second=10
         ) as live:
             units_done = 0
+
             # --- Execute Steps ---
             for i, (name, func, attr, weight, critical) in enumerate(steps):
                 progress.update(main_task_id, description=f"[{i + 1}/{len(steps)}] {name}...")
                 try:
+
                     # Special steps call internal methods directly
                     if name == "Process Tasks":
-                        if not self._process_tasks_step():  # Returns success bool
+                        if not self._process_tasks_step():
+                            # Returns success bool
                             raise RuntimeError("Task processing failed.")
                     elif name == "Calculate Stats/Unused":
-                        self._calculate_stats_unused_step()  # Updates attributes directly
-                    else:  # Standard data fetching steps
-                        result = func()  # Call the fetch function
-                        if (
-                            result is None and critical
-                        ):  # Critical fetch failed (e.g., user, content)
+                        self._calculate_stats_unused_step()
+                    # Updates attributes directly
+                    else:
+                        # Standard data fetching steps
+                        result = func()
+                        # Call the fetch function
+                        if result is None and critical:
+                            # Critical fetch failed (e.g., user, content)
                             raise ValueError(f"{name} data fetch returned None.")
-                        if attr:  # If an attribute name is provided, store the result
+                        if attr:
+                            # If an attribute name is provided, store the result
                             setattr(
                                 self,
                                 attr,
@@ -293,21 +343,27 @@ class CliApp:
                     progress.update(main_task_id, description=failed_msg)
                     self.console.log(f"Error during '{name}': {e}", style="error")
                     refresh_ok = False
-                    if critical:  # Stop refresh if critical step fails
+                    if critical:
+                        # Stop refresh if critical step fails
                         self.console.print(
                             f"Halting refresh due to critical error in '{name}'.", style="error"
                         )
+
                         # Ensure default types are set for subsequent steps even if we break
                         self._ensure_default_attributes()
-                        break  # Exit the loop
-                    else:  # Non-critical error, log and continue
+                        break
+                    # Exit the loop
+                    else:
+                        # Non-critical error, log and continue
                         self.console.log(
                             "Continuing refresh despite non-critical error.", style="warning"
                         )
+
                         # Ensure attribute has a default value if fetch failed
                         if attr:
                             setattr(self, attr, self._get_default_for_attr(attr))
-                        units_done += weight  # Still advance progress for non-critical failures
+                        units_done += weight
+                        # Still advance progress for non-critical failures
                         progress.update(main_task_id, completed=units_done)
 
         # --- Post-Refresh Summary ---
@@ -319,8 +375,10 @@ class CliApp:
         progress.update(
             main_task_id, description=f"[{final_style}]{final_status}[/]", completed=total_weight
         )
-        time.sleep(0.1)  # Allow final render
+        time.sleep(0.1)
+        # Allow final render
         self.console.print(f"[{final_style}]{final_status}[/] (Duration: {duration:.2f}s)")
+
         # Ensure default types after loop finishes, especially if errors occurred
         self._ensure_default_attributes()
 
@@ -331,7 +389,9 @@ class CliApp:
             return []
         if "dict" in attr_name or "data" in attr_name or "stats" in attr_name:
             return {}
-        return None  # Default fallback
+        return None
+
+    # Default fallback
 
     # & - def _ensure_default_attributes(self):
     def _ensure_default_attributes(self):
@@ -349,21 +409,23 @@ class CliApp:
         }
         self.user_stats = getattr(self, "user_stats", None) or {}
         self.unused_tags = getattr(self, "unused_tags", None) or []
-        self.all_challenges_cache = getattr(
-            self, "all_challenges_cache", None
-        )  # Keep None if not fetched
+        self.all_challenges_cache = getattr(self, "all_challenges_cache", None)
+        # Keep None if not fetched
         if (
             not isinstance(self.all_challenges_cache, list)
             and self.all_challenges_cache is not None
         ):
-            self.all_challenges_cache = []  # Reset to list if it became something else
+            self.all_challenges_cache = []
+
+    # Reset to list if it became something else
 
     # & - def _get_content_cached(self) -> Dict[str, Any]: ... (keep previous implementation)
     def _get_content_cached(self) -> Dict[str, Any]:
         """Helper to get game content, using cache first."""
         # Re-use implementation from app_v5.txt
         content = None
-        cache_path = Path("content_cache.json")  # Use Path object
+        cache_path = Path("content_cache.json")
+        # Use Path object
         if cache_path.exists():
             try:
                 with open(cache_path, encoding="utf-8") as f:
@@ -384,7 +446,8 @@ class CliApp:
         if content is None:
             self.console.log("Fetching game content from API...", style="info")
             try:
-                content = self.api_client.get_content()  # Returns dict or None
+                content = self.api_client.get_content()
+                # Returns dict or None
                 if isinstance(content, dict) and content:
                     try:
                         with open(cache_path, "w", encoding="utf-8") as f:
@@ -401,16 +464,21 @@ class CliApp:
             except Exception as e_fetch:
                 self.console.log(f"Exception fetching content: {e_fetch}", style="error")
                 return {}
-        return {}  # Should not be reached
+        return {}
+
+    # Should not be reached
 
     # & - def _fetch_challenges_cached(self) -> Optional[List[Dict]]:
     def _fetch_challenges_cached(self) -> Optional[List[Dict]]:
         """Fetches challenges only if cache is empty."""
         if self.all_challenges_cache is None:
             self.console.log("Challenge cache empty, fetching...", style="subtle")
+
             # Fetch only challenges the user is currently a member of
-            fetched = self.api_client.get_challenges(member_only=True)  # Returns list or []
-            self.all_challenges_cache = fetched  # Update cache
+            fetched = self.api_client.get_challenges(member_only=True)
+            # Returns list or []
+            self.all_challenges_cache = fetched
+            # Update cache
             self.console.log(
                 f"Fetched and cached {len(self.all_challenges_cache)} challenges.", style="subtle"
             )
@@ -419,12 +487,15 @@ class CliApp:
                 f"Using cached challenges ({len(self.all_challenges_cache)} found).",
                 style="subtle",
             )
-        return self.all_challenges_cache  # Return the list (potentially empty or from cache)
+        return self.all_challenges_cache
+
+    # Return the list (potentially empty or from cache)
 
     # & - def _process_tasks_step(self) -> bool:
     def _process_tasks_step(self) -> bool:
         """Internal step for task processing during refresh_data."""
         try:
+
             # Instantiate processor, passing pre-fetched data
             self.processor = TaskProcessor(
                 api_client=self.api_client,
@@ -433,19 +504,25 @@ class CliApp:
                 all_tags_list=self.all_tags,
                 content_data=self.content_data,
             )
+
             # Perform processing and categorization
             processed_results = self.processor.process_and_categorize_all()
+
             # Store results
             self.processed_tasks = processed_results.get("data", {})
             self.cats_data = processed_results.get("cats", {})
             if not self.processed_tasks and not self.cats_data.get("tasks"):
                 self.console.log("No tasks found or processed.", style="info")
-            return True  # Indicate success
+            return True
+        # Indicate success
         except Exception as e:
             self.console.log(f"Error processing tasks: {e}", style="error")
-            self.processed_tasks = {}  # Reset on error
+            self.processed_tasks = {}
+            # Reset on error
             self.cats_data = {}
-            return False  # Indicate failure
+            return False
+
+    # Indicate failure
 
     # & - def _calculate_stats_unused_step(self):
     def _calculate_stats_unused_step(self):
@@ -454,10 +531,12 @@ class CliApp:
         try:
             if self.cats_data and self.processed_tasks and self.user_data:
                 self.user_stats = get_user_stats(
-                    api_client=self.api_client,  # Pass client just in case
+                    api_client=self.api_client,
+                    # Pass client just in case
                     cats_dict=self.cats_data,
                     processed_tasks_dict=self.processed_tasks,
-                    user_data=self.user_data,  # Pass pre-fetched data
+                    user_data=self.user_data,
+                    # Pass pre-fetched data
                 )
             else:
                 self.console.log("Skipping stats calculation: missing data.", style="warning")
@@ -469,10 +548,12 @@ class CliApp:
         # Calculate Unused Tags (uses pre-fetched/processed data)
         try:
             if isinstance(self.all_tags, list) and self.cats_data.get("tags") is not None:
+
                 # Ensure used_tag_ids is a set
                 used_tag_ids: Set[str] = set(self.cats_data.get("tags", []))
                 self.unused_tags = self.tag_manager.find_unused_tags(self.all_tags, used_tag_ids)
-                # self.console.log(f"Calculated {len(self.unused_tags)} unused tags.", style="subtle")
+
+            # self.console.log(f"Calculated {len(self.unused_tags)} unused tags.", style="subtle")
             else:
                 self.console.log(
                     "Skipping unused tags calculation: missing data.", style="warning"
@@ -501,32 +582,39 @@ class CliApp:
         """Executes selected action, passing data, checks config for optional actions."""
         self.console.print(f"\n➡️ Executing: [highlight]{action_name}[/]", highlight=False)
         refresh_needed = False
-        action_taken = False  # Track if an action was actually performed
+        action_taken = False
+        # Track if an action was actually performed
         start_time = time.monotonic()
 
         try:
+
             # --- Task Management ---
             if action_name == "Handle Broken Tasks":
+
                 # This action uses self.cats_data and self.processed_tasks internally
                 action_taken = refresh_needed = self._handle_broken_tasks_action()
             elif action_name == "Replicate Monthly Setup":
+
                 # This action uses self.cats_data, self.processed_tasks, self.all_challenges_cache
                 action_taken = refresh_needed = self._replicate_monthly_setup_action()
 
             # --- Tag Management (Check Config for Optional Actions) ---
             elif action_name == "Display All Tags":
                 self._display_tags()
-                action_taken = True  # Display actions always run
+                action_taken = True
+            # Display actions always run
             elif action_name == "Display Unused Tags":
                 self._display_unused_tags()
                 action_taken = True
             elif action_name == "Delete Unused Tags":
+
                 # Pass necessary data to TagManager method
                 used_ids = set(self.cats_data.get("tags", []))
                 action_taken = refresh_needed = self.tag_manager.delete_unused_tags_interactive(
                     self.all_tags, used_ids
                 )
             elif action_name == "Sync Challenge/Personal Tags":
+
                 # Check config before calling
                 if config.CHALLENGE_TAG_ID and config.PERSONAL_TAG_ID:
                     action_taken = refresh_needed = self.tag_manager.sync_challenge_personal_tags(
@@ -549,22 +637,27 @@ class CliApp:
                 else:
                     self.console.print("Attribute tags not fully configured.", style="info")
             elif action_name == "Add/Replace Tag Interactively":
+
                 # This action uses self.all_tags and self.processed_tasks
                 action_taken = refresh_needed = self._interactive_tag_replace_action()
 
             # --- Challenge Management ---
             elif action_name == "Backup Challenges":
                 if Confirm.ask("Backup all accessible challenges?", console=self.console):
-                    backup_folder = Path("_challenge_backups")  # Use Path
+                    backup_folder = Path("_challenge_backups")
+                    # Use Path
                     self.backupper.create_backups(output_folder=backup_folder)
                     action_taken = True
             elif action_name == "Leave Challenge":
+
                 # This action uses self.all_challenges_cache, self.user_data, updates cache
-                action_taken = self._leave_challenge_action()  # Returns False for refresh
+                action_taken = self._leave_challenge_action()
+            # Returns False for refresh
 
             # --- View Data ---
             elif action_name == "Display Stats":
-                stats_panel = self._display_stats()  # Uses self.user_stats
+                stats_panel = self._display_stats()
+                # Uses self.user_stats
                 if stats_panel:
                     self.console.print(stats_panel)
                     action_taken = True
@@ -612,11 +705,14 @@ class CliApp:
             # --- Application ---
             elif action_name == "Refresh Data":
                 refresh_needed = True
-                action_taken = True  # Refresh happens after action block
+                action_taken = True
+            # Refresh happens after action block
             elif action_name == "Configure Special Tags":
-                run_tag_config_setup()  # Call the setup function
+                run_tag_config_setup()
+                # Call the setup function
                 refresh_needed = True
-                action_taken = True  # Assume config changed
+                action_taken = True
+            # Assume config changed
 
             # --- Fallback ---
             else:
@@ -633,7 +729,8 @@ class CliApp:
         finally:
             end_time = time.monotonic()
             duration = end_time - start_time
-            if action_taken:  # Only prompt if something actually happened
+            if action_taken:
+                # Only prompt if something actually happened
                 self.console.print(
                     f"Action '{action_name}' finished. (Duration: {duration:.2f}s)", style="subtle"
                 )
@@ -642,6 +739,7 @@ class CliApp:
                 )
 
     # MARK: - UI Helper Methods
+
     # & - def _display_menu(...) (Keep previous themed implementation)
     def _display_menu(self, title: str, options: List[str], embed_stats: bool = False) -> int:
         """Displays a menu using Rich, optionally embedding stats."""
@@ -692,6 +790,7 @@ class CliApp:
             self.console.print("No user stats data available.", style="warning")
             return None
         try:
+
             # Extract data safely
             uname, lvl, uclass = (
                 stats.get("username", "N/A"),
@@ -739,7 +838,8 @@ class CliApp:
                     login_dt_aware = login_dt.replace(tzinfo=local_tz)
                     login_display = timeago.format(login_dt_aware, now_local)
                 except Exception:
-                    login_display = last_login  # Fallback
+                    login_display = last_login
+            # Fallback
 
             # Build UI Tables
             user_info = Table.grid(padding=(0, 1), expand=False)
@@ -772,7 +872,8 @@ class CliApp:
             day_d, todo_d = t_counts.get("dailys", {}), t_counts.get("todos", {})
             day_tot, todo_tot = day_d.get("_total", 0), todo_d.get("_total", 0)
             day_due, todo_due = day_d.get("due", 0), todo_d.get("due", 0) + todo_d.get("red", 0)
-            day_done = day_d.get("success", 0)  # Use 'success' key from processor
+            day_done = day_d.get("success", 0)
+            # Use 'success' key from processor
             tasks_text = f"Habits:[b]{hab_c}[/]\n Daylies:[b]{day_tot}[/] ([warning]{day_due}[/] due/[success]{day_done}[/] done)\n Todo:[b]{todo_tot}[/] ([warning]{todo_due}[/] due)\n Rewards:[b]{rew_c}[/]"
             tasks_p = Panel(
                 tasks_text, title="Tasks", border_style="blue", padding=(0, 1), expand=False
@@ -878,6 +979,7 @@ class CliApp:
         return display_tasks
 
     # MARK: - Action Helper Methods
+
     # & - def _handle_broken_tasks_action(...) (Keep previous themed implementation)
     def _handle_broken_tasks_action(self) -> bool:
         """Groups broken tasks, allows bulk/individual unlinking using theme styles."""
@@ -929,7 +1031,8 @@ class CliApp:
             )
             if mode == 0:
                 return False
-            elif mode == 1:  # Bulk
+            elif mode == 1:
+                # Bulk
                 if not ch_list:
                     return False
                 ch_num = IntPrompt.ask(
@@ -977,10 +1080,12 @@ class CliApp:
                         should_refresh = False
                 else:
                     self.console.print("Bulk unlink cancelled.", style="info")
-            elif mode == 2:  # Individual
+            elif mode == 2:
+                # Individual
                 if not all_valid:
                     return False
-                disp_tasks = self._display_broken_tasks()  # Use helper to display numbered list
+                disp_tasks = self._display_broken_tasks()
+                # Use helper to display numbered list
                 if not disp_tasks:
                     return False
                 task_num = IntPrompt.ask(
@@ -1065,6 +1170,7 @@ class CliApp:
                     self.console.print("No processed task data.", style="warning")
                     return False
                 self.console.print(f"Performing tag {mode} operation...", style="info")
+
                 # Pass data to TagManager method
                 success = self.tag_manager.add_or_replace_tag_based_on_other(
                     tasks_dict=self.processed_tasks,
@@ -1077,7 +1183,8 @@ class CliApp:
                     should_refresh = True
                 else:
                     self.console.print("Tag operation may have errors.", style="warning")
-                    should_refresh = True  # Refresh anyway
+                    should_refresh = True
+            # Refresh anyway
             else:
                 self.console.print("Operation cancelled.", style="info")
         except (ValueError, IndexError) as e:
@@ -1116,7 +1223,8 @@ class CliApp:
         table.add_column("Name", style="rp_iris", min_width=25)
         table.add_column("Leader", style="subtle", min_width=15)
         table.add_column("Memb", style="rp_text", width=7, justify="right")
-        valid_sel = []  # List of dicts
+        valid_sel = []
+        # List of dicts
         for ch in joined:
             if isinstance(ch, dict) and ch.get("id"):
                 valid_sel.append(ch)
@@ -1159,6 +1267,7 @@ class CliApp:
                     self.console.print(
                         f"Successfully left challenge '{sel_name}'.", style="success"
                     )
+
                     # --- IMPORTANT: Update Cache ---
                     if self.all_challenges_cache is not None:
                         self.all_challenges_cache = [
@@ -1167,7 +1276,8 @@ class CliApp:
                             if isinstance(c, dict) and c.get("id") != sel_id
                         ]
                         self.console.print("In-memory challenge cache updated.", style="subtle")
-                    return False  # IMPORTANT: Return False as refresh is not needed due to cache update
+                    return False
+                # IMPORTANT: Return False as refresh is not needed due to cache update
                 except Exception as e:
                     self.console.print(f"Error leaving challenge {sel_id}: {e}", style="error")
                     return False
@@ -1188,6 +1298,7 @@ class CliApp:
         should_refresh = False
         old_cid, new_cid = None, None
         try:
+
             # Step 1: Select Old
             self.console.print("Identifying source challenges...", style="info")
             broken_ids = self.cats_data.get("broken", [])
@@ -1207,7 +1318,8 @@ class CliApp:
                 )
                 return False
             old_list = list(old_chs.items())
-            old_list.sort(key=lambda x: x[1])  # Sort by name
+            old_list.sort(key=lambda x: x[1])
+            # Sort by name
             old_table = Table(
                 title="Select Source (Old/Broken)", box=box.ROUNDED, border_style="rp_pine"
             )
@@ -1225,6 +1337,7 @@ class CliApp:
             )
             old_cid, old_cname = old_list[old_choice - 1]
             uid = self.user_data.get("id", "") if self.user_data else None
+
             # Step 2: Select New
             self.console.print("\nLoading current challenges for destination...", style="info")
             if self.all_challenges_cache is None:
@@ -1274,9 +1387,8 @@ class CliApp:
                 t for t in self.processed_tasks.values() if t.get("challenge_id") == old_cid
             ]
             if not old_tasks:
-                self.console.print(
-                    "Warning: No tasks found for OLD challenge.", style="warning"
-                )  # Allow continue?
+                self.console.print("Warning: No tasks found for OLD challenge.", style="warning")
+            # Allow continue?
 
             self.console.print(f"Gathering NEW tasks for '{new_cname}'...", style="info")
             new_tasks = [
@@ -1295,28 +1407,38 @@ class CliApp:
 
             # Step 6: Match Tasks
             sim_thresh = 0.80
-            matched: List[Tuple[Dict, Dict]] = []  # List of (old_task, new_task) tuples
-            matched_new_ids: Set[str] = set()  # Track matched new tasks to avoid duplicates
+            matched: List[Tuple[Dict, Dict]] = []
+            # List of (old_task, new_task) tuples
+            matched_new_ids: Set[str] = set()
+            # Track matched new tasks to avoid duplicates
             self.console.print(
                 f"Matching tasks (> {sim_thresh * 100:.0f}% similarity)...", style="info"
             )
+
             # --- START: INSERTED FUZZY MATCHING LOOP ---
+
             # Use track for progress indication if task lists are large
             for old_task in track(
                 old_tasks,
-                description="Comparing tasks...",  # Progress bar description
+                description="Comparing tasks...",
+                # Progress bar description
                 console=self.console,
                 total=len(old_tasks),
-                transient=True,  # Make bar disappear after loop
+                transient=True,
+                # Make bar disappear after loop
             ):
                 best_match_new_task = None
                 highest_ratio = 0.0
                 old_text = old_task.get("text", "")
-                old_id = old_task.get("id")  # Needed for debugging maybe
+                old_id = old_task.get("id")
+                # Needed for debugging maybe
 
                 if not old_text or not old_id:
+
                     # self.console.log(f"Skipping old task due to missing text/ID: {old_task}", style="subtle")
-                    continue  # Skip old tasks without text or ID
+                    continue
+                # Skip old tasks without text or ID
+
                 # Compare against all potentially available new tasks
                 for new_task in new_tasks:
                     new_id = new_task.get("id")
@@ -1325,24 +1447,33 @@ class CliApp:
                     # Skip new tasks already matched or without text/ID
                     if not new_id or new_id in matched_new_ids or not new_text:
                         continue
+
                     # --- Calculate Similarity ---
+
                     # SequenceMatcher is good for finding similar sequences
+
                     # You could also explore other libraries like fuzzywuzzy or rapidfuzz if needed
+
                     # but difflib is built-in.
                     matcher = difflib.SequenceMatcher(None, old_text, new_text, autojunk=False)
-                    ratio = matcher.ratio()  # Get similarity ratio (0.0 to 1.0)
+                    ratio = matcher.ratio()
+                    # Get similarity ratio (0.0 to 1.0)
 
                     # --- Check if this is the best match found *so far* for this *old_task* ---
                     if ratio > highest_ratio and ratio >= sim_thresh:
                         highest_ratio = ratio
-                        best_match_new_task = new_task  # Store the potential best match
+                        best_match_new_task = new_task
+                # Store the potential best match
 
                 # After checking all new tasks for the current old_task:
                 if best_match_new_task:
+
                     # We found a suitable match above the threshold
                     matched.append((old_task, best_match_new_task))
+
                     # Mark the new task as used so it can't be matched again
                     matched_new_ids.add(best_match_new_task["id"])
+
             # --- END: INSERTED FUZZY MATCHING LOOP ---
 
             if not matched:
@@ -1373,7 +1504,9 @@ class CliApp:
                 total=len(matched),
                 transient=True,
             ):
+
                 # Extract IDs and attributes
+
                 # Corrected variable names
                 new_id = new["id"]
                 old_attr = old.get("attribute", "str")
@@ -1385,7 +1518,8 @@ class CliApp:
                         self.console.print(f"Error setting attr: {e}", style="error")
                         errors += 1
                 old_tags = old.get("tags", [])
-                tags_to_add = [t for t in old_tags if t != old_cid]  # Filter out old challenge tag
+                tags_to_add = [t for t in old_tags if t != old_cid]
+                # Filter out old challenge tag
                 cur_new_tags = set(new.get("tags", []))
                 for tag_id in tags_to_add:
                     if tag_id not in cur_new_tags:
@@ -1424,6 +1558,7 @@ class CliApp:
                     self.console.print("No matching types after filtering.", style="warning")
                     return False
                 self.console.print("Determining original task order...", style="info")
+
                 # Create map of {old_task_id: original_index} from the filtered old_tasks list
                 old_task_order_map = {
                     task["id"]: i
@@ -1434,11 +1569,12 @@ class CliApp:
                 # Sort the *matched* new task IDs based on the original order of their old counterparts
                 def sort_key(match_tuple: Tuple[Dict, Dict]):
                     old_task_id = match_tuple[0].get("id")
-                    return old_task_order_map.get(
-                        old_task_id, float("inf")
-                    )  # Place unmatched last
+                    return old_task_order_map.get(old_task_id, float("inf"))
+
+                # Place unmatched last
 
                 sorted_matched_tasks = sorted(matched, key=sort_key)
+
                 # Extract the new task IDs in the desired final order
                 desired_new_task_order_ids = [
                     new_task["id"]
@@ -1450,10 +1586,10 @@ class CliApp:
                     self.console.print("Could not determine desired task order.", style="warning")
                 else:
                     num_to_move = len(desired_new_task_order_ids)
+
                     # Estimate time using the actual request interval from the API client
-                    est_time_secs = num_to_move * (
-                        self.api_client.request_interval + 0.1
-                    )  # Add small buffer
+                    est_time_secs = num_to_move * (self.api_client.request_interval + 0.1)
+                    # Add small buffer
                     self.console.print(f"Will move {num_to_move} tasks to replicate order.")
                     self.console.print(
                         f"[warning]Estimated time: ~{est_time_secs:.1f} seconds due to API rate limits.[/warning]"
@@ -1463,7 +1599,9 @@ class CliApp:
                         "Proceed with moving tasks?", default=True, console=self.console
                     ):
                         move_errors = 0
+
                         # Move tasks to the top (position 0) one by one, IN REVERSE of the desired final order
+
                         # This ensures they end up in the correct order at the top.
                         for task_id_to_move in track(
                             reversed(desired_new_task_order_ids),
@@ -1474,8 +1612,10 @@ class CliApp:
                         ):
                             try:
                                 self.api_client.move_task_to_position(task_id_to_move, 0)
-                                # Rate limiting is handled automatically by api_client._wait_for_rate_limit
+
+                            # Rate limiting is handled automatically by api_client._wait_for_rate_limit
                             except Exception as e:
+
                                 # Use print within track context
                                 self.console.print(
                                     f"\n[error]Error moving task {task_id_to_move}: {e}[/]"
@@ -1487,7 +1627,8 @@ class CliApp:
                             self.console.print(
                                 f"Completed moving with {move_errors} errors.", style="warning"
                             )
-                        should_refresh = True  # Order definitely changed (or errors occurred)
+                        should_refresh = True
+                    # Order definitely changed (or errors occurred)
                     else:
                         self.console.print("Task moving cancelled.", style="info")
             else:
@@ -1520,6 +1661,7 @@ class CliApp:
                         f"Attempting bulk unlink for OLD challenge ({old_cid})...", style="info"
                     )
                     try:
+
                         # Call the correct API method
                         response = self.api_client.unlink_all_challenge_tasks(
                             old_cid, keep="remove-all"
@@ -1537,7 +1679,8 @@ class CliApp:
                     self.console.print("Unlinking from old challenge cancelled.", style="info")
             else:
                 self.console.print("Skipping cleanup of old challenge tasks.", style="info")
-                # ... (Confirm keep/remove, confirm unlink, call unlink_all_challenge_tasks) ...
+
+        # ... (Confirm keep/remove, confirm unlink, call unlink_all_challenge_tasks) ...
 
         except (ValueError, IndexError) as e:
             self.console.print(f"Invalid selection: {e}", style="error")
@@ -1550,6 +1693,7 @@ class CliApp:
         return should_refresh
 
     # MARK: - Static Helper Methods
+
     # & - def _get_total(...) (Keep previous implementation)
     @staticmethod
     def _get_total(task_counts: Dict) -> int:
@@ -1573,23 +1717,44 @@ class CliApp:
 
 
 # MARK: - Entry Point (Example for running the CLI)
+
 # Typically lives in project root, e.g., main.py or run_pixabit.py
+
 # if __name__ == "__main__":
+
 #     try:
+
 #         app = CliApp()
+
 #         app.run()
+
 #     except KeyboardInterrupt:
+
 #         console.print("\n[bold yellow]Ctrl+C detected. Exiting Pixabit.[/bold yellow]")
+
 #         sys.exit(0)
+
 #     except Exception as e:
-#         # Use console for final error display if available
+
+#
+# Use console for final error display if available
+
 #         try: from pixabit.utils.display import console
+
 #         except ImportError: console = None
+
 #         if console:
+
 #              console.print(f"\n[error]An unexpected critical error occurred:[/error]")
+
 #              console.print_exception(show_locals=True, word_wrap=False)
+
 #         else:
+
 #              import traceback
+
 #              print(f"\nAn unexpected critical error occurred: {e}")
+
 #              traceback.print_exc()
+
 #         sys.exit(1)
