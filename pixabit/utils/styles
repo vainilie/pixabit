@@ -1,151 +1,119 @@
-
-# styles (or styles.theme / styles.config)
+# pixabit/utils/styles
+# ─── STYLES ───────────────────────────────────────────────────────────────────
+# Modified: 2025.04.17 by vainilie.
 
 [styles]
 
-# --- Base Palette (Catppuccin Macchiato / Rosé Pine inspired) ---
 
-# Not directly used as styles, but for reference
+# ─── Base Palette ─────────────────────────────────────────────────────────────
+# Catppuccin Macchiato / Rosé Pine inspired.
+# Not directly used as styles, but for reference.
 
-# crust = #11111B
+# crust =                    #11111B
+# mantle =                   #181825
+# base =                     #1E1E2E
 
-# mantle = #181825
+# surface0 =                 #313244
+# surface1 =                 #45475A
+# surface2 =                 #585B70
+# overlay0 =                 #6C7086
+# overlay1 =                 #7F849C
+# overlay2 =                 #9399B2
 
-# base = #1E1E2E
+# text =                     #CDD6F4
+# subtext0 =                 #A6ADC8
+# subtext1 =                 #BAC2DE
 
-# surface0 = #313244
+# rosewater =                #F5E0DC
+# flamingo =                 #F2CDCD
+# pink =                     #F5C2E7
+# mauve =                    #CBA6F7
+# red =                      #F38BA8
+# maroon =                   #EBA0AC
+# peach =                    #FAB387
+# yellow =                   #F9E2AF
+# green =                    #A6E3A1
+# teal =                     #94E2D5
+# sky =                      #89DCEB
+# sapphire =                 #74C7EC
+# blue =                     #89B4FA
+# lavender =                 #B4BDF8
 
-# surface1 = #45475A
+# rp_base =                  #191724
+# rp_surface =               #1f1d2e
+# rp_overlay =               #26233a
+# rp_highlightLow =          #21202e
+# rp_highlightMed =          #403d52
+# rp_highlightHigh =         #524f67
+# rp_muted =                 #6e6a86
+# rp_subtle_color =          #908caa
 
-# surface2 = #585B70
-
-# overlay0 = #6C7086
-
-# overlay1 = #7F849C
-
-# overlay2 = #9399B2
-
-# text = #CDD6F4
-
-# subtext0 = #A6ADC8
-
-# subtext1 = #BAC2DE
-
-# rosewater = #F5E0DC
-
-# flamingo = #F2CDCD
-
-# pink = #F5C2E7
-
-# mauve = #CBA6F7
-
-# red = #F38BA8
-
-# maroon = #EBA0AC
-
-# peach = #FAB387
-
-# yellow = #F9E2AF
-
-# green = #A6E3A1
-
-# teal = #94E2D5
-
-# sky = #89DCEB
-
-# sapphire = #74C7EC
-
-# blue = #89B4FA
-
-# lavender = #B4BDF8
-
-# rp_base = #191724
-
-# rp_surface = #1f1d2e
-
-# rp_overlay = #26233a
-
-# rp_highlightLow = #21202e
-
-# rp_highlightMed = #403d52
-
-# rp_highlightHigh = #524f67
-
-# rp_muted = #6e6a86
-
-# rp_subtle_color = #908caa
-
-# rp_text = #e0def4
-
-# rp_love = #eb6f92
-
-# rp_gold = #f6c177
-
-# rp_rose = #ebbcba
-
-# rp_pine = #31748f
-
-# rp_foam = #9ccfd8
-
-# rp_iris = #c4a7e7
+# rp_text =                  #e0def4
+# rp_love =                  #eb6f92
+# rp_gold =                  #f6c177
+# rp_rose =                  #ebbcba
+# rp_pine =                  #31748f
+# rp_foam =                  #9ccfd8
+# rp_iris =                  #c4a7e7
 
 
-
-# --- Semantic Styles ---
-regular = default
-highlight = bold #eb6f92
-subtle = dim #908caa
-file = underline #b4bdf8
-info = #cba6f7
-warning = bold #f6c177
-danger = bold #eb6f92 on #e0def4
-error = bold #f38ba8
-success = bold #a6e3a1
-keyword = bold #c4a7e7
-link_style = underline #89b4fa
-
+# ─── Semantic Styles ──────────────────────────────────────────────────────────
+regular =                      default
+highlight =                    bold         #eb6f92
+subtle =                       dim          #908caa
+file =                         underline    #b4bdf8
+info =                                      #cba6f7
+warning =                      bold         #f6c177
+danger =                       bold         #eb6f92    on #e0def4
+error =                        bold         #f38ba8
+success =                      bold         #a6e3a1
+keyword =                      bold         #c4a7e7
+link_style =                   underline    #89b4fa
 
 
-# --- Component Styles ---
-dim = dim
-rule.line = #45475A
-prompt.choices = #94e2d5
-prompt.default = #7f849c
-prompt.invalid = #f38ba8
-log.level.warning = bold #f6c177
-log.level.error = bold #f38ba8
-log.level.info = #cba6f7
-log.level.debug = dim #908caa
-repr.number = #fab387
-repr.str = #a6e3a1
-repr.bool_true = bold #a6e3a1
-repr.bool_false = bold #f38ba8
-repr.none = dim #908caa
-repr.url = underline #89b4fa
-progress.description = #e0def4
-progress.percentage = #9ccfd8
-progress.remaining = #f6c177
-bar.complete = #a6e3a1
-bar.finished = #74c7ec
-bar.pulse = #f5c2e7
-table.header = bold #cba6f7
+# ─── Component Styles ─────────────────────────────────────────────────────────
+
+dim =                          dim
+rule.line =                                 #45475A
+prompt.choices =                            #94e2d5
+prompt.default =                            #7f849c
+prompt.invalid =                            #f38ba8
+log.level.warning =            bold         #f6c177
+log.level.error =              bold         #f38ba8
+log.level.info =                            #cba6f7
+log.level.debug =              dim          #908caa
+repr.number =                               #fab387
+repr.str =                                  #a6e3a1
+repr.bool_true =               bold         #a6e3a1
+repr.bool_false =              bold         #f38ba8
+repr.none =                    dim          #908caa
+repr.url =                     underline    #89b4fa
+progress.description =                      #e0def4
+progress.percentage =                       #9ccfd8
+progress.remaining =                        #f6c177
+bar.complete =                              #a6e3a1
+bar.finished =                              #74c7ec
+bar.pulse =                                 #f5c2e7
+table.header =                 bold         #cba6f7
 
 
-
+# ─── Rosé Pine Colors ─────────────────────────────────────────────────────────
 # Add specific Rosé Pine theme colors if used directly
-rp_text = #e0def4
-rp_iris = #c4a7e7
-rp_foam = #9ccfd8
-rp_rose = #ebbcba
-rp_gold = #f6c177
-rp_pine = #31748f
-rp_love = #eb6f92
-rp_muted = #6e6a86
-rp_subtle_color = #908caa
-rp_surface = #1f1d2e
-rp_overlay = #26233a
+
+rp_text =                    #e0def4
+rp_iris =                    #c4a7e7
+rp_foam =                    #9ccfd8
+rp_rose =                    #ebbcba
+rp_gold =                    #f6c177
+rp_pine =                    #31748f
+rp_love =                    #eb6f92
+rp_muted =                   #6e6a86
+rp_subtle_color =            #908caa
+rp_surface =                 #1f1d2e
+rp_overlay =                 #26233a
 
 
-
+# ─── Field Style ──────────────────────────────────────────────────────────────
 # Added field style used in config_tags review table
-field = dim
+
+field =                        dim

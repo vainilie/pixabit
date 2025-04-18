@@ -1,49 +1,61 @@
 # pixabit/utils/save_json.py
 
-# MARK: - MODULE DOCSTRING
-"""Provides a utility function for saving Python data structures (dictionaries or lists)
-into JSON files with pretty printing and proper encoding. Includes directory
-creation and error handling.
+# SECTION: MODULE DOCSTRING
+"""Provides utility functions for saving and loading Python data to/from JSON files.
+
+Includes pretty printing, UTF-8 encoding, directory creation, and error handling.
+Uses the themed console for status messages if available.
 """
 
-
-# MARK: - IMPORTS
+# SECTION: IMPORTS
 import builtins
-
-# For fallback print
 import json
 from pathlib import Path
-from typing import Any, List, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Union,
+)  # Kept Dict/List for clarity
 
-# Import console/print if needed for messages, assuming from .display
+# Use themed console/print if available
 try:
+    from .display import console, print  # Import print wrapper too
 
-    # Use the themed console instance if available
-    from .display import console, print
+    LOG_FUNC = console.print  # Use the themed print for logging success/errors
+    LOG_DETAIL = (
+        console.log
+    )  # Use log for less critical info like cache hits/misses
+except ImportError:  # Fallback
+    # Provide a dummy console object
+    class DummyConsole:  # noqa: D101
+        def print(self, *args: Any, **kwargs: Any) -> None:  # noqa: D102
+            builtins.print(*args)
 
-    LOG_FUNC = console.print
-# Prioritize themed console.print
-except ImportError:
+        def log(self, *args: Any, **kwargs: Any) -> None:  # noqa: D102
+            builtins.print("LOG:", *args)
 
-    # Fallback if display utils are missing or run standalone
+    console = DummyConsole()
+    print = builtins.print  # Fallback print
+    LOG_FUNC = builtins.print  # Fallback logging function
+    LOG_DETAIL = lambda *args, **kwargs: None  # No detailed logging in fallback
     builtins.print(
-        "Warning: Console/theme not found, using standard print for save_json messages."
+        "Warning: pixabit.utils.display not found, using standard print for save/load messages."
     )
-    LOG_FUNC = builtins.print
-    console = None
-# Indicate console is not available
+
+# SECTION: FUNCTIONS
 
 
-# MARK: - SAVE JSON FUNCTION
-
-
-# & - def save_json(data: Union[dict[str, Any], List[Any]], filepath: Union[str, Path]) -> bool:
-def save_json(data: Union[dict[str, Any], List[Any]], filepath: Union[str, Path]) -> bool:
-    """Saves Python data (dict or list) to a JSON file with pretty printing.
+# FUNC: save_json
+def save_json(
+    data: Union[Dict[str, Any], List[Any]],  # Use Dict/List for clarity
+    filepath: Union[str, Path],
+) -> bool:
+    """Saves Python data (dict or list) to a JSON file with pretty printing (indent=4).
 
     Ensures the output directory exists. Handles potential JSON serialization
-    errors and file I/O errors, printing messages using the themed console if
-    available, otherwise standard print.
+    errors and file I/O errors, logging messages.
 
     Args:
         data: The Python dictionary or list to save.
@@ -51,60 +63,81 @@ def save_json(data: Union[dict[str, Any], List[Any]], filepath: Union[str, Path]
                   the output file, as a string or Path object.
 
     Returns:
-        bool: True if saving was successful, False otherwise.
+        True if saving was successful, False otherwise.
     """
-    if not isinstance(filepath, Path):
-        filepath = Path(filepath)
-    # Convert string path to Path object
+    output_path = Path(filepath) if not isinstance(filepath, Path) else filepath
 
     try:
-
         # Create parent directory(ies) if they don't exist
-        filepath.parent.mkdir(parents=True, exist_ok=True)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write the file with UTF-8 encoding and indentation
-        with open(filepath, "w", encoding="utf-8") as f:
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
 
-        # Use LOG_FUNC (either console.print or builtins.print)
-        if console:
-
-            # Use theme style 'success' and 'file'
-            LOG_FUNC(f"[success]Successfully saved data to:[/success] [file]'{filepath}'[/]")
-        else:
-            LOG_FUNC(f"Successfully saved data to: '{filepath}'")
+        LOG_FUNC(
+            f"[success]Successfully saved data to:[/success] [file]'{output_path}'[/]"
+        )
         return True
 
-    except TypeError as e:
-
-        # Handle non-serializable data
-        msg = f"Data structure not JSON serializable for '{filepath}'. {e}"
-        if console:
-            LOG_FUNC(f"[error]Error:[/error] {msg}", style="error")
-        else:
-            LOG_FUNC(f"ERROR: {msg}")
+    except TypeError as e:  # Handle non-serializable data
+        msg = f"Data structure not JSON serializable for '{output_path}'. Error: {e}"
+        LOG_FUNC(f"[error]Save Error:[/error] {msg}", style="error")
+        return False
+    except OSError as e:  # Handle file system errors
+        msg = f"Could not write file '{output_path}'. Error: {e}"
+        LOG_FUNC(f"[error]Save Error:[/error] {msg}", style="error")
+        return False
+    except Exception as e:  # Catch any other unexpected errors
+        msg = f"An unexpected error occurred saving to '{output_path}'. Error: {e}"
+        LOG_FUNC(f"[error]Save Error:[/error] {msg}", style="error")
+        # Consider logging traceback here if needed: console.print_exception()
         return False
 
-    except OSError as e:
 
-        # Handle file system errors
-        msg = f"Could not write file '{filepath}': {e}"
-        if console:
-            LOG_FUNC(f"[error]Error:[/error] {msg}", style="error")
+# FUNC: load_json
+def load_json(
+    filepath: Union[str, Path],
+) -> Optional[Union[Dict[str, Any], List[Any]]]:
+    """Loads data from a JSON file.
+
+    Args:
+        filepath: The path to the JSON file, as a string or Path object.
+
+    Returns:
+        The loaded Python dictionary or list, or None if the file doesn't exist,
+        cannot be read, or contains invalid JSON.
+    """
+    input_path = Path(filepath) if not isinstance(filepath, Path) else filepath
+
+    if not input_path.is_file():  # Check if it exists and is a file
+        LOG_DETAIL(
+            f"JSON file not found: [file]'{input_path}'[/]", style="subtle"
+        )
+        return None
+
+    try:
+        with input_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Basic validation of loaded data type
+        if isinstance(data, (dict, list)):
+            LOG_DETAIL(
+                f"Loaded JSON data from: [file]'{input_path}'[/]", style="info"
+            )
+            return data
         else:
-            LOG_FUNC(f"ERROR: {msg}")
-        return False
+            LOG_FUNC(
+                f"[warning]Warning:[/warning] Invalid data type ({type(data).__name__}) in JSON file: [file]'{input_path}'[/]"
+            )
+            return None
 
-    except Exception as e:
-
-        # Catch any other unexpected errors
-        msg = f"An unexpected error occurred saving to '{filepath}': {e}"
-        if console:
-            LOG_FUNC(f"[error]Error:[/error] {msg}", style="error")
-
-        # Optional: Print traceback for unexpected errors if console exists
-
-        # console.print_exception(show_locals=False)
-        else:
-            LOG_FUNC(f"ERROR: {msg}")
-        return False
+    except (OSError, json.JSONDecodeError) as e:
+        msg = f"Failed to load/parse JSON file '{input_path}'. Error: {e}"
+        LOG_FUNC(f"[warning]Load Warning:[/warning] {msg}")
+        return None
+    except Exception as e:  # Catch unexpected errors during loading
+        msg = f"An unexpected error occurred loading '{input_path}'. Error: {e}"
+        LOG_FUNC(f"[error]Load Error:[/error] {msg}")
+        # Consider logging traceback here if needed: console.print_exception()
+        return None

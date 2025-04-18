@@ -1,0 +1,90 @@
+/* pixabit/tui/pixabit.tcss - Basic Stylesheet */
+
+/* Apply to the root App widget */
+PixabitTUIApp {
+  /* Use grid layout for overall structure */
+  layout: grid;
+  /* Define rows: auto height for header, flexible main area, auto for footer */
+  grid-size: 2; /* Two columns */
+  grid-rows: auto 1fr auto;
+  /* Define columns: Example: 1/3 for stats/menu, 2/3 for content */
+  /* grid-columns: 1fr 2fr; */ /* Adjusted to match Container layout below */
+  background: $panel; /* Use Textual's built-in variable */
+  color: $text;
+}
+
+Header {
+  dock: top; /* Place header at the top */
+  height: 1; /* Header takes 1 row */
+  background: $accent-darken-1;
+  color: $text;
+  /* Textual's default Header styling is usually sufficient */
+}
+
+Footer {
+  dock: bottom; /* Place footer at the bottom */
+  height: 1; /* Footer takes 1 row */
+  /* Textual's default Footer styling handles key display */
+}
+
+/* Container for the main UI areas below the header */
+Container#main-grid {
+  /* This container spans both columns defined in the App grid */
+  /* It then defines its own internal grid */
+  grid-row: 2; /* Takes the 1fr row defined in App */
+  grid-column: 1 / 3; /* Spans both columns */
+  /* Internal grid for the panels */
+  grid-size: 2; /* Two columns for panels */
+  grid-gutter: 1 2; /* Row and column gutters */
+  padding: 1 2; /* Padding around the grid */
+}
+
+/* Styling for the vertical panels */
+#stats-panel {
+  grid-column: 1; /* Place in the first column */
+  border: heavy $accent;
+  background: $surface;
+}
+
+#menu-panel {
+  grid-column: 1; /* Place below stats in the first column */
+  /* (Assuming you want stats above menu) */
+  /* If side-by-side, adjust App's grid-columns */
+  border: heavy $accent;
+  background: $surface;
+  margin-top: 1; /* Add space above if stacked */
+}
+
+#content-panel {
+  grid-column: 2; /* Place in the second column */
+  grid-row: 1 / 3; /* Make it span both rows if stats/menu are stacked */
+  border: heavy $accent;
+  background: $surface;
+}
+
+/* Placeholder styling (remove when using real widgets) */
+PlaceholderWidget {
+  content-align: center middle;
+  background: $panel-lighten-1;
+  border: thick $accent-lighten-1;
+}
+
+/* Optional Loading Indicator Styling */
+/*
+LoadingIndicator#loading-indicator {
+    display: block; // Show by default
+    dock: bottom;
+    height: 1;
+    background: $accent-darken-2;
+    color: $text;
+    margin-top: 1;
+    opacity: 0; // Start hidden
+    transition: opacity 0.3s ease-in-out; // Fade effect
+}
+LoadingIndicator#loading-indicator.--visible {
+    opacity: 1; // Make visible when needed
+}
+PixabitTUIApp:disabled LoadingIndicator#loading-indicator { // Show when app is disabled?
+    opacity: 1;
+}
+*/
