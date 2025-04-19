@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Set  # Added List/Union
 
 # --- Rich and Display ---
 try:
-    from ..utils.display import (  # Use .. to import from parent utils
+    from pixabit.utils.display import (  # Use .. to import from parent utils
         BarColumn,
         Confirm,
         IntPrompt,
@@ -47,9 +47,15 @@ except ImportError as e_rich:
 
 # --- Local Application Imports ---
 try:
-    from ..utils.dates import convert_to_local_time  # Use .. for parent utils
-    from . import config  # Import from .cli
-    from .api import MIN_REQUEST_INTERVAL, HabiticaAPI  # Import sync API
+    from pixabit import config  # Import from .cli
+    from pixabit.tui.api import (
+        MIN_REQUEST_INTERVAL,
+        HabiticaAPI,
+    )  # Import sync API
+    from pixabit.utils.dates import (
+        convert_to_local_time,
+    )  # Use .. for parent utils
+
     from .challenge_backupper import ChallengeBackupper
     from .config_tags import configure_tags as run_tag_config_setup  # Use alias
     from .data_processor import (

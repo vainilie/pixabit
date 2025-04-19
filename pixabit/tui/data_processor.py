@@ -9,13 +9,24 @@ using the processed task data and user context.
 """
 
 # SECTION: IMPORTS
+import logging
 import math
 from typing import Any, Dict, List, Optional, Type  # Keep Dict/List, add Type
+
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 # Local Imports
 try:
     # Import the data models
     # Import utilities
+    # Import the GameContent manager for context data
+
     from pixabit.models.task import (
         ChallengeData,
         ChecklistItem,
@@ -25,33 +36,13 @@ try:
         Task,
         Todo,
     )
-
-    from ..utils.dates import (
+    from pixabit.tui.game_content import GameContent
+    from pixabit.utils.dates import (
         convert_timestamp_to_utc,
     )  # Only used by get_user_stats here
-    from ..utils.display import console, print
-
-    # Import the GameContent manager for context data
-    from .game_content import GameContent
+    from pixabit.utils.display import console, print
 except ImportError:
     # Fallback for standalone testing or import issues
-    import builtins
-
-    print = builtins.print
-
-    class DummyConsole:  # Define a simple fallback console
-        def print(self, *args: Any, **kwargs: Any) -> None:
-            builtins.print(*args)
-
-        def log(self, *args: Any, **kwargs: Any) -> None:
-            builtins.print("LOG:", *args)
-
-        def print_exception(self, *args: Any, **kwargs: Any) -> None:
-            import traceback
-
-            traceback.print_exc()
-
-    console = DummyConsole()
 
     # Define dummy models/classes if imports fail
     class Task:
@@ -85,9 +76,7 @@ except ImportError:
     def convert_timestamp_to_utc(ts: Any) -> Any:
         return None
 
-    print(
-        "Warning: Could not import models/GameContent/utils in data_processor.py. Using fallbacks."
-    )
+    log.warning("Warning: Could not import models/GameContent/utils in data_processor.py. Using fallbacks.")
 
 
 # SECTION: TaskProcessor Class
@@ -111,9 +100,11 @@ class TaskProcessor:
     def __init__(
         self,
         user_data: Dict[str, Any],
-        party_data: Optional[Dict[str, Any]],  # Party data can be None
-        all_tags_list: List[Dict[str, Any]],  # Raw tag list for lookup
-        game_content_manager: GameContent,  # Requires a GameContent instance
+        party_data: Optional[Dict[str, Any]],
+        all_tags_list: List[Dict[str, Any]],
+        # Accept pre-fetched dicts instead of the manager
+        gear_data_lookup: Dict[str, Any],
+        quests_data_lookup: Dict[str, Any],
     ):
         """Initializes TaskProcessor with necessary context data.
 
@@ -121,36 +112,30 @@ class TaskProcessor:
             user_data: Raw user data dictionary from API.
             party_data: Raw party data dictionary from API, or None.
             all_tags_list: Raw list of tag dictionaries from API.
-            game_content_manager: Instance of GameContent managing cached content.
-
-        Raises:
-            ValueError: If critical context data (user_data, game_content_manager) is invalid.
+            gear_data_lookup: Pre-fetched 'gear.flat' dictionary from game content.
+            quests_data_lookup: Pre-fetched 'quests' dictionary from game content.
         """
         self.console = console
-        self.console.log("Initializing TaskProcessor...", style="info")
+        log.info("Initializing TaskProcessor...")
 
         # Validate critical context
         if not isinstance(user_data, dict) or not user_data:
             raise ValueError("TaskProcessor requires valid user_data.")
-        if not isinstance(game_content_manager, GameContent):
-            raise ValueError(
-                "TaskProcessor requires a valid GameContent manager instance."
-            )
+        # Basic validation for lookups
+        if not isinstance(gear_data_lookup, dict):
+            log.warning("Warning: gear_data_lookup is not a dict.")
+        if not isinstance(quests_data_lookup, dict):
+            log.warning("Warning: quests_data_lookup is not a dict.")
 
         # Store context needed for processing
         self.user_data = user_data
         self.party_data = party_data if isinstance(party_data, dict) else {}
-        self.all_tags_list = (
-            all_tags_list if isinstance(all_tags_list, list) else []
-        )
-        self.content_manager = game_content_manager
+        self.all_tags_list = all_tags_list if isinstance(all_tags_list, list) else []
 
-        # Prepare lookups from context data
-        # Gear data needed for CON calculation
-        self.gear_stats_lookup = self.content_manager.get_gear_data()
+        # Store the pre-fetched lookup dictionaries directly
+        self.gear_stats_lookup = gear_data_lookup
         self.tags_lookup = self._prepare_tags_lookup(self.all_tags_list)
-        # Quest data needed for boss strength lookup
-        self.quests_lookup = self.content_manager.get_quest_data()
+        self.quests_lookup = quests_data_lookup
 
         # Calculate and store context values needed internally for processing tasks
         self.user_con: float = 0.0
@@ -160,44 +145,28 @@ class TaskProcessor:
         self.boss_str: float = 0.0
         self._calculate_user_context()  # Calculate based on stored raw data
 
-        self.console.log("TaskProcessor Context Initialized.", style="info")
+        log.info("TaskProcessor Context Initialized.")
 
     # FUNC: _prepare_tags_lookup
-    def _prepare_tags_lookup(
-        self, tags_list: List[Dict[str, Any]]
-    ) -> Dict[str, str]:
+    def _prepare_tags_lookup(self, tags_list: List[Dict[str, Any]]) -> Dict[str, str]:
         """Creates a tag ID -> tag name lookup dictionary."""
         if not tags_list:
             return {}
-        lookup = {
-            tag["id"]: tag.get(
-                "name", f"ID:{tag['id'][:6]}"
-            )  # Use ID prefix fallback
-            for tag in tags_list
-            if isinstance(tag, dict) and "id" in tag
-        }
-        # self.console.log(f"Prepared lookup for {len(lookup)} tags.", style="info")
+        lookup = {tag["id"]: tag.get("name", f"ID:{tag['id'][:6]}") for tag in tags_list if isinstance(tag, dict) and "id" in tag}  # Use ID prefix fallback
+        # log.info(f"Prepared lookup for {len(lookup)} tags.")
         return lookup
 
     # FUNC: _calculate_user_context
     def _calculate_user_context(self) -> None:
         """Calculates effective CON, stealth, sleep, quest status from instance data."""
-        # self.console.log("Calculating user context...", style="info")
+        # log.info("Calculating user context...")
         try:
             # --- User Stats Context ---
             stats = self.user_data.get("stats", {})
             level = int(stats.get("lvl", 0))
             user_class = stats.get("class")
-            buffs = (
-                stats.get("buffs", {})
-                if isinstance(stats.get("buffs"), dict)
-                else {}
-            )
-            equipped_gear = (
-                self.user_data.get("items", {})
-                .get("gear", {})
-                .get("equipped", {})
-            )
+            buffs = stats.get("buffs", {}) if isinstance(stats.get("buffs"), dict) else {}
+            equipped_gear = self.user_data.get("items", {}).get("gear", {}).get("equipped", {})
             if not isinstance(equipped_gear, dict):
                 equipped_gear = {}
 
@@ -217,18 +186,12 @@ class TaskProcessor:
                         if item_stats.get("klass") == user_class:
                             class_bonus_con += item_base_con * 0.5
 
-            self.user_con = (
-                level_bonus + alloc_con + gear_con + class_bonus_con + buff_con
-            )
+            self.user_con = level_bonus + alloc_con + gear_con + class_bonus_con + buff_con
             self.user_stealth = int(buffs.get("stealth", 0))
-            self.is_sleeping = self.user_data.get("preferences", {}).get(
-                "sleep", False
-            )
+            self.is_sleeping = self.user_data.get("preferences", {}).get("sleep", False)
 
             # --- Party/Quest Context ---
-            quest_info = (
-                self.party_data.get("quest", {}) if self.party_data else {}
-            )
+            quest_info = self.party_data.get("quest", {}) if self.party_data else {}
             self.is_on_boss_quest = False
             self.boss_str = 0.0
             if isinstance(quest_info, dict) and quest_info.get("active"):
@@ -238,24 +201,17 @@ class TaskProcessor:
                     quest_content = self.quests_lookup.get(quest_key, {})
                     if isinstance(quest_content, dict):
                         boss_content = quest_content.get("boss")
-                        if (
-                            isinstance(boss_content, dict)
-                            and "str" in boss_content
-                        ):
+                        if isinstance(boss_content, dict) and "str" in boss_content:
                             self.is_on_boss_quest = True
                             try:
                                 self.boss_str = float(boss_content["str"])
                             except (ValueError, TypeError):
-                                self.boss_str = (
-                                    0.0  # Handle invalid strength value
-                                )
+                                self.boss_str = 0.0  # Handle invalid strength value
             # Log calculated context
-            # self.console.log(f"Context: CON={self.user_con:.1f}, Stealth={self.user_stealth}, Sleep={self.is_sleeping}, BossQuest={self.is_on_boss_quest}, BossStr={self.boss_str:.1f}", style="subtle")
+            # log.subtle(f"Context: CON={self.user_con:.1f}, Stealth={self.user_stealth}, Sleep={self.is_sleeping}, BossQuest={self.is_on_boss_quest}, BossStr={self.boss_str:.1f}")
 
         except Exception as e:
-            self.console.log(
-                f"[error]Error calculating user/party context:[/error] {e}. Using defaults."
-            )
+            log.error(f"[red]Error calculating user/party context:[/red] {e}. Using defaults.")
             # Reset defaults on error
             self.user_con, self.user_stealth, self.is_sleeping = 0.0, 0, False
             self.is_on_boss_quest, self.boss_str = False, 0.0
@@ -282,27 +238,17 @@ class TaskProcessor:
             return "red"  # Very negative
 
     # FUNC: _calculate_checklist_done
-    def _calculate_checklist_done(
-        self, checklist: List[ChecklistItem]
-    ) -> float:
+    def _calculate_checklist_done(self, checklist: List[ChecklistItem]) -> float:
         """Calculates proportion (0.0-1.0) of checklist items done."""
         # Expects list of ChecklistItem objects
         if not checklist or not isinstance(checklist, list):
             return 1.0  # Treat no checklist as fully "done" for mitigation
         try:
-            completed = sum(
-                1
-                for item in checklist
-                if isinstance(item, ChecklistItem) and item.completed
-            )
+            completed = sum(1 for item in checklist if isinstance(item, ChecklistItem) and item.completed)
             total = len(checklist)
-            return (
-                completed / total if total > 0 else 1.0
-            )  # Avoid division by zero
+            return completed / total if total > 0 else 1.0  # Avoid division by zero
         except Exception as e:
-            self.console.log(
-                f"Error calculating checklist progress: {e}", style="warning"
-            )
+            log.warning(f"Error calculating checklist progress: {e}")
             return 1.0  # Default to max mitigation on error
 
     # FUNC: _create_task_object
@@ -315,22 +261,19 @@ class TaskProcessor:
             try:
                 return task_class(task_data)  # Instantiate specific subclass
             except (TypeError, ValueError) as e:  # Catch model init errors
-                self.console.log(
+                log.error(
                     f"Error instantiating {task_type} task {task_data.get('_id', 'N/A')}: {e}",
-                    style="error",
                 )
                 return None
             except Exception as e:  # Catch unexpected errors
-                self.console.log(
+                log.error(
                     f"Unexpected error instantiating {task_type} task {task_data.get('_id', 'N/A')}: {e}",
-                    style="error",
                 )
                 return None
         else:
             # Handle unknown type - create base Task object if possible
-            self.console.log(
+            log.warning(
                 f"Unknown task type '{task_type}' for task {task_data.get('_id', 'N/A')}. Creating base Task.",
-                style="warning",
             )
             try:
                 # Need to ensure base Task init handles missing ID gracefully or check here
@@ -340,15 +283,13 @@ class TaskProcessor:
                 base_task.type = task_type  # Store original type if known
                 return base_task
             except (TypeError, ValueError) as e:
-                self.console.log(
+                log.error(
                     f"Error instantiating base Task for {task_data.get('_id', 'N/A')}: {e}",
-                    style="error",
                 )
                 return None
             except Exception as e:
-                self.console.log(
+                log.error(
                     f"Unexpected error instantiating base Task for {task_data.get('_id', 'N/A')}: {e}",
-                    style="error",
                 )
                 return None
 
@@ -360,10 +301,7 @@ class TaskProcessor:
         potential damage (for Dailies). Modifies the task_instance directly.
         """
         # 1. Assign Tag Names using lookup
-        task_instance.tag_names = [
-            self.tags_lookup.get(tag_id, f"ID:{tag_id}")
-            for tag_id in task_instance.tags
-        ]
+        task_instance.tag_names = [self.tags_lookup.get(tag_id, f"ID:{tag_id}") for tag_id in task_instance.tags]
 
         # 2. Determine Value Color
         task_instance.value_color = self._value_color(task_instance.value)
@@ -381,60 +319,36 @@ class TaskProcessor:
             calculated_status = status
 
             # Calculate Damage ONLY if due, not completed, not sleeping, not stealthed
-            if (
-                task_instance.is_due
-                and not task_instance.completed
-                and not self.is_sleeping
-                and self.user_stealth <= 0
-            ):
+            if task_instance.is_due and not task_instance.completed and not self.is_sleeping and self.user_stealth <= 0:
                 try:
                     task_value = task_instance.value
-                    checklist = (
-                        task_instance.checklist
-                    )  # List of ChecklistItem objects
+                    checklist = task_instance.checklist  # List of ChecklistItem objects
                     priority_val = task_instance.priority
 
                     # Habitica Damage Formula components:
                     v_min, v_max = -47.27, 21.27
                     clamped_value = max(v_min, min(task_value, v_max))
                     base_delta = abs(math.pow(0.9747, clamped_value))
-                    checklist_mitigation = 1.0 - self._calculate_checklist_done(
-                        checklist
-                    )
+                    checklist_mitigation = 1.0 - self._calculate_checklist_done(checklist)
                     effective_delta = base_delta * checklist_mitigation
                     con_mitigation = max(0.1, 1.0 - (self.user_con / 250.0))
                     prio_map = {0.1: 0.1, 1.0: 1.0, 1.5: 1.5, 2.0: 2.0}
                     priority_multiplier = prio_map.get(priority_val, 1.0)
 
                     # Calculate User HP Damage
-                    hp_mod = (
-                        effective_delta
-                        * con_mitigation
-                        * priority_multiplier
-                        * 2.0
-                    )
+                    hp_mod = effective_delta * con_mitigation * priority_multiplier * 2.0
                     dmg_user_calc = round(hp_mod, 1)
-                    dmg_user = (
-                        dmg_user_calc if dmg_user_calc > 0 else None
-                    )  # Store None if zero
+                    dmg_user = dmg_user_calc if dmg_user_calc > 0 else None  # Store None if zero
 
                     # Calculate Party Damage (Boss Quest Only)
                     if self.is_on_boss_quest and self.boss_str > 0:
                         # Boss delta might adjust slightly for trivial tasks
-                        boss_delta = (
-                            effective_delta * priority_multiplier
-                            if priority_multiplier < 1.0
-                            else effective_delta
-                        )
+                        boss_delta = effective_delta * priority_multiplier if priority_multiplier < 1.0 else effective_delta
                         dmg_party_calc = round(boss_delta * self.boss_str, 1)
-                        dmg_party = (
-                            dmg_party_calc if dmg_party_calc > 0 else None
-                        )  # Store None if zero
+                        dmg_party = dmg_party_calc if dmg_party_calc > 0 else None  # Store None if zero
 
                 except Exception as e_dmg:
-                    self.console.log(
-                        f"[error]Error calculating damage for Daily {task_instance.id}:[/error] {e_dmg}"
-                    )
+                    log.error(f"[red]Error calculating damage for Daily {task_instance.id}:[/red] {e_dmg}")
                     # Leave dmg_user and dmg_party as None on error
 
         elif isinstance(task_instance, Todo):
@@ -460,9 +374,7 @@ class TaskProcessor:
         # 5. Emoji processing is now handled in Task model __init__.
 
     # FUNC: process_and_categorize_all
-    def process_and_categorize_all(
-        self, raw_task_list: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def process_and_categorize_all(self, raw_task_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Processes a list of raw task data into Task objects and categorizes them.
 
         Args:
@@ -497,15 +409,12 @@ class TaskProcessor:
         }
 
         if not isinstance(raw_task_list, list):
-            self.console.print(
-                "[error]Invalid raw_task_list provided to processor.[/error]"
-            )
+            log.error("[red]Invalid raw_task_list provided to processor.[/red]")
             # Return empty structure on invalid input
             return {"data": {}, "cats": cats_dict}
 
-        self.console.log(
+        log.info(
             f"Processing {len(raw_task_list)} raw tasks into objects...",
-            style="info",
         )
         processed_count = 0
         skipped_count = 0
@@ -546,9 +455,7 @@ class TaskProcessor:
                 cats_dict["tasks"]["rewards"].append(task_instance.id)
             elif task_type == "todo" and status in cats_dict["tasks"]["todos"]:
                 cats_dict["tasks"]["todos"][status].append(task_instance.id)
-            elif (
-                task_type == "daily" and status in cats_dict["tasks"]["dailys"]
-            ):
+            elif task_type == "daily" and status in cats_dict["tasks"]["dailys"]:
                 cats_dict["tasks"]["dailys"][status].append(task_instance.id)
             # else: Status might be 'unknown' or category doesn't exist, ignore for categorization
 
@@ -556,9 +463,8 @@ class TaskProcessor:
         cats_dict["tags"] = sorted(list(cats_dict["tags"]))
         cats_dict["challenge"] = sorted(list(cats_dict["challenge"]))
 
-        self.console.log(
+        log.info(
             f"Task processing complete. Processed: {processed_count}, Skipped: {skipped_count}",
-            style="info",
         )
         return {"data": tasks_dict, "cats": cats_dict}
 
@@ -567,9 +473,7 @@ class TaskProcessor:
 # FUNC: get_user_stats
 def get_user_stats(
     cats_dict: Dict[str, Any],  # Expects 'cats' dictionary from TaskProcessor
-    processed_tasks_dict: Dict[
-        str, Task
-    ],  # Expects 'data' dictionary (Task objects)
+    processed_tasks_dict: Dict[str, Task],  # Expects 'data' dictionary (Task objects)
     user_data: Dict[str, Any],  # Expects raw user data dict
 ) -> Optional[Dict[str, Any]]:
     """Generates user statistics dict using categorized tasks and raw user data.
@@ -585,19 +489,13 @@ def get_user_stats(
     # console.log("Calculating user stats from processed data...", style="info")
     # Validate inputs
     if not isinstance(user_data, dict) or not user_data:
-        console.print(
-            "[error]Cannot calculate stats: Valid user_data required.[/error]"
-        )
+        log.error("[red]Cannot calculate stats: Valid user_data required.[/red]")
         return None
     if not isinstance(cats_dict, dict):
-        console.print(
-            "[error]Cannot calculate stats: Valid cats_dict required.[/error]"
-        )
+        log.error("[red]Cannot calculate stats: Valid cats_dict required.[/red]")
         return None
     if not isinstance(processed_tasks_dict, dict):
-        console.print(
-            "[error]Cannot calculate stats: Valid processed_tasks_dict required.[/error]"
-        )
+        log.error("[red]Cannot calculate stats: Valid processed_tasks_dict required.[/red]")
         return None
 
     try:
@@ -611,9 +509,7 @@ def get_user_stats(
         balance = user_data.get("balance", 0.0)
         gems = int(balance * 4) if balance > 0 else 0
         u_class_raw = stats.get("class", "warrior")
-        u_class = (
-            "mage" if u_class_raw == "wizard" else u_class_raw
-        )  # Normalize wizard -> mage?
+        u_class = "mage" if u_class_raw == "wizard" else u_class_raw  # Normalize wizard -> mage?
         last_login_utc_str = ts.get("loggedin")
         last_login_local_str = "N/A"
         # Use utility for local time conversion
@@ -630,31 +526,19 @@ def get_user_stats(
             for category, cat_data in task_cats_data.items():
                 if category not in ["habits", "dailys", "todos", "rewards"]:
                     continue
-                if isinstance(
-                    cat_data, dict
-                ):  # dailys/todos with status sub-keys
-                    status_counts = {
-                        k: len(v)
-                        for k, v in cat_data.items()
-                        if isinstance(v, list)
-                    }
+                if isinstance(cat_data, dict):  # dailys/todos with status sub-keys
+                    status_counts = {k: len(v) for k, v in cat_data.items() if isinstance(v, list)}
                     status_counts["_total"] = sum(status_counts.values())
                     task_counts[category] = status_counts
-                elif isinstance(
-                    cat_data, list
-                ):  # habits/rewards (just a list of IDs)
+                elif isinstance(cat_data, list):  # habits/rewards (just a list of IDs)
                     task_counts[category] = len(cat_data)
         else:
-            console.print(
-                "[warning]Invalid 'tasks' structure in cats_dict during stats calculation.[/warning]"
-            )
+            log.warning("[warning]Invalid 'tasks' structure in cats_dict during stats calculation.[/warning]")
 
         # --- Calculate Total Damage (Sums pre-calculated values from Task objects) ---
         dmg_user_total, dmg_party_total = 0.0, 0.0
         # Get IDs of dailies currently marked as 'due'
-        due_daily_ids = (
-            cats_dict.get("tasks", {}).get("dailys", {}).get("due", [])
-        )
+        due_daily_ids = cats_dict.get("tasks", {}).get("dailys", {}).get("due", [])
         if isinstance(due_daily_ids, list):
             for task_id in due_daily_ids:
                 task_obj = processed_tasks_dict.get(task_id)
@@ -689,12 +573,8 @@ def get_user_stats(
             "quest_key": quest.get("key"),  # Quest key string
             "task_counts": task_counts,  # Nested dict of counts by type/status
             "broken_challenge_tasks": len(cats_dict.get("broken", [])),
-            "joined_challenges_count": len(
-                cats_dict.get("challenge", [])
-            ),  # Count of unique challenge IDs
-            "tags_in_use_count": len(
-                cats_dict.get("tags", [])
-            ),  # Count of unique tag IDs used
+            "joined_challenges_count": len(cats_dict.get("challenge", [])),  # Count of unique challenge IDs
+            "tags_in_use_count": len(cats_dict.get("tags", [])),  # Count of unique tag IDs used
             "potential_daily_damage_user": round(dmg_user_total, 2),
             "potential_daily_damage_party": round(dmg_party_total, 2),
         }
@@ -702,6 +582,6 @@ def get_user_stats(
         return output_stats
 
     except Exception as e_stat:
-        console.print(f"[error]Error calculating user stats:[/error] {e_stat}")
-        console.print_exception(show_locals=False)
+        log.error(f"[red]Error calculating user stats:[/red] {e_stat}")
+        log.exception(show_locals=False)
         return None  # Return None on critical failure

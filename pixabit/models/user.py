@@ -10,17 +10,26 @@ Includes:
 """
 
 # SECTION: IMPORTS
+import logging
 import math
 from datetime import datetime  # Ensure timezone imported
 from typing import Any, Dict, List, Optional, Union  # Keep Dict/List
+
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 import emoji_data_python
 
 # Local Imports
 try:
-    from ..utils.dates import convert_timestamp_to_utc
+    from pixabit.utils.dates import convert_timestamp_to_utc
 except ImportError:
-    print("Warning: Using placeholder convert_timestamp_to_utc in user.py.")
+    log.warning("Warning: Using placeholder convert_timestamp_to_utc in user.py.")
 
     def convert_timestamp_to_utc(ts: Any) -> Optional[datetime]:
         return None  # type: ignore
@@ -41,13 +50,9 @@ class UserProfile:
     def __init__(self, profile_data: Optional[Dict[str, Any]]):
         data = profile_data if isinstance(profile_data, dict) else {}
         _name = data.get("name")
-        self.name: Optional[str] = (
-            emoji_data_python.replace_colons(_name) if _name else None
-        )
+        self.name: Optional[str] = emoji_data_python.replace_colons(_name) if _name else None
         _blurb = data.get("blurb")
-        self.blurb: Optional[str] = (
-            emoji_data_python.replace_colons(_blurb) if _blurb else None
-        )
+        self.blurb: Optional[str] = emoji_data_python.replace_colons(_blurb) if _blurb else None
         # Add other profile fields if needed (imageUrl, etc.)
         # self.image_url: Optional[str] = data.get("imageUrl")
 
@@ -65,9 +70,7 @@ class UserAuth:
         data = auth_data if isinstance(auth_data, dict) else {}
         # Username is usually nested under 'local'
         local_auth = data.get("local", {})
-        self.username: Optional[str] = (
-            local_auth.get("username") if isinstance(local_auth, dict) else None
-        )
+        self.username: Optional[str] = local_auth.get("username") if isinstance(local_auth, dict) else None
         # Add other auth fields if needed (e.g., social IDs from auth_data root)
 
     # FUNC: __repr__
@@ -88,37 +91,19 @@ class UserTimestamps:
         ts_data = timestamps_data if isinstance(timestamps_data, dict) else {}
         root_data = user_root_data if isinstance(user_root_data, dict) else {}
 
-        self.created: Optional[datetime] = convert_timestamp_to_utc(
-            ts_data.get("created")
-        )
-        self.updated: Optional[datetime] = convert_timestamp_to_utc(
-            ts_data.get("updated")
-        )
-        self.logged_in: Optional[datetime] = convert_timestamp_to_utc(
-            ts_data.get("loggedin")
-        )
+        self.created: Optional[datetime] = convert_timestamp_to_utc(ts_data.get("created"))
+        self.updated: Optional[datetime] = convert_timestamp_to_utc(ts_data.get("updated"))
+        self.logged_in: Optional[datetime] = convert_timestamp_to_utc(ts_data.get("loggedin"))
         # lastCron is often at the root of the user object
-        self.last_cron: Optional[datetime] = convert_timestamp_to_utc(
-            root_data.get("lastCron")
-        )
+        self.last_cron: Optional[datetime] = convert_timestamp_to_utc(root_data.get("lastCron"))
         # needsCron might indicate if cron run is pending (often at root)
         self.needs_cron: Optional[bool] = root_data.get("needsCron")
 
     # FUNC: __repr__
     def __repr__(self) -> str:
-        login_str = (
-            self.logged_in.strftime("%Y-%m-%d %H:%M")
-            if self.logged_in
-            else "None"
-        )
-        cron_str = (
-            self.last_cron.strftime("%Y-%m-%d %H:%M")
-            if self.last_cron
-            else "None"
-        )
-        return (
-            f"UserTimestamps(logged_in='{login_str}', last_cron='{cron_str}')"
-        )
+        login_str = self.logged_in.strftime("%Y-%m-%d %H:%M") if self.logged_in else "None"
+        cron_str = self.last_cron.strftime("%Y-%m-%d %H:%M") if self.last_cron else "None"
+        return f"UserTimestamps(logged_in='{login_str}', last_cron='{cron_str}')"
 
 
 # KLASS: UserPreferences
@@ -128,17 +113,11 @@ class UserPreferences:
     # FUNC: __init__
     def __init__(self, preferences_data: Optional[Dict[str, Any]]):
         data = preferences_data if isinstance(preferences_data, dict) else {}
-        self.sleep: bool = data.get(
-            "sleep", False
-        )  # Is user resting in the Inn?
-        self.day_start: int = int(
-            data.get("dayStart", 0)
-        )  # Custom Day Start hour (0-23)
+        self.sleep: bool = data.get("sleep", False)  # Is user resting in the Inn?
+        self.day_start: int = int(data.get("dayStart", 0))  # Custom Day Start hour (0-23)
         # Offset from UTC in minutes (e.g., -300 for EST)
         self.timezone_offset: Optional[int] = data.get("timezoneOffset")
-        self.timezone_offset_at_last_cron: Optional[int] = data.get(
-            "timezoneOffsetAtLastCron"
-        )
+        self.timezone_offset_at_last_cron: Optional[int] = data.get("timezoneOffsetAtLastCron")
         # Add other preferences: email, notifications, language, etc. if needed
 
     # FUNC: __repr__
@@ -173,12 +152,8 @@ class UserStats:
                               keyed by the gear key string. Needed for stat bonuses.
         """
         stats = stats_data if isinstance(stats_data, dict) else {}
-        self._equipped_gear_keys = (
-            equipped_gear if isinstance(equipped_gear, dict) else {}
-        )
-        self._all_gear_content = (
-            all_gear_content if isinstance(all_gear_content, dict) else {}
-        )
+        self._equipped_gear_keys = equipped_gear if isinstance(equipped_gear, dict) else {}
+        self._all_gear_content = all_gear_content if isinstance(all_gear_content, dict) else {}
 
         # --- Raw Stats from API ---
         self.hp: float = float(stats.get("hp", 0.0))
@@ -186,9 +161,7 @@ class UserStats:
         self.exp: float = float(stats.get("exp", 0.0))
         self.gp: float = float(stats.get("gp", 0.0))
         self.level: int = int(stats.get("lvl", 0))
-        self.klass: Optional[str] = stats.get(
-            "class"
-        )  # 'warrior', 'rogue', 'wizard', 'healer'
+        self.klass: Optional[str] = stats.get("class")  # 'warrior', 'rogue', 'wizard', 'healer'
         # Attribute points available to spend
         self.points: int = int(stats.get("points", 0))
 
@@ -205,11 +178,7 @@ class UserStats:
         self.perception: int = int(stats.get("per", 0))
 
         # Buffs (temporary increases/decreases from spells, food, etc.)
-        buffs = (
-            stats.get("buffs", {})
-            if isinstance(stats.get("buffs"), dict)
-            else {}
-        )
+        buffs = stats.get("buffs", {}) if isinstance(stats.get("buffs"), dict) else {}
         self.buff_str: float = float(buffs.get("str", 0.0))
         self.buff_int: float = float(buffs.get("int", 0.0))
         self.buff_con: float = float(buffs.get("con", 0.0))
@@ -219,11 +188,7 @@ class UserStats:
         # Add other buffs if needed (e.g., seafoam, shinyseed directly?)
 
         # Training (permanent increases from leveling, usually 0 unless reset/legacy)
-        training = (
-            stats.get("training", {})
-            if isinstance(stats.get("training"), dict)
-            else {}
-        )
+        training = stats.get("training", {}) if isinstance(stats.get("training"), dict) else {}
         self.train_str: int = int(training.get("str", 0))
         self.train_int: int = int(training.get("int", 0))
         self.train_con: int = int(training.get("con", 0))
@@ -238,12 +203,8 @@ class UserStats:
 
         # Calculate Max HP/MP based on effective stats
         # Formulas based on Habitica source/wiki:
-        self.max_hp: float = float(
-            self.max_hp_base + math.floor(self.effective_constitution * 2.0)
-        )
-        self.max_mp: float = float(
-            self.max_mp_base + math.floor(self.effective_intelligence * 2.0)
-        )
+        self.max_hp: float = float(self.max_hp_base + math.floor(self.effective_constitution * 2.0))
+        self.max_mp: float = float(self.max_mp_base + math.floor(self.effective_intelligence * 2.0))
         # TODO: Verify max MP formula if it differs significantly by class beyond base MP.
 
     # FUNC: _get_gear_stat_bonus
@@ -291,32 +252,20 @@ class UserStats:
         """
         # Fetch components using getattr for safety, default to 0 or 0.0
         base_stat = getattr(self, stat_name, 0)  # e.g., self.strength (int)
-        train_stat = getattr(
-            self, f"train_{stat_name}", 0
-        )  # e.g., self.train_str (int)
-        buff_stat = getattr(
-            self, f"buff_{stat_name}", 0.0
-        )  # e.g., self.buff_str (float)
-        gear_stat = self._get_gear_stat_bonus(
-            stat_name
-        )  # Calculated float bonus
+        train_stat = getattr(self, f"train_{stat_name}", 0)  # e.g., self.train_str (int)
+        buff_stat = getattr(self, f"buff_{stat_name}", 0.0)  # e.g., self.buff_str (float)
+        gear_stat = self._get_gear_stat_bonus(stat_name)  # Calculated float bonus
 
         # Level bonus: 1 point per 2 levels, capped at 50 points (at level 100+)
         level_bonus = min(50.0, math.floor(self.level / 2.0))
 
         # Summing components: ints will be promoted to float
-        return float(
-            base_stat + train_stat + gear_stat + buff_stat + level_bonus
-        )
+        return float(base_stat + train_stat + gear_stat + buff_stat + level_bonus)
 
     # FUNC: __repr__
     def __repr__(self) -> str:
         # Use calculated max values in repr
-        return (
-            f"UserStats(lvl={self.level}, class='{self.klass}', "
-            f"hp={self.hp:.1f}/{self.max_hp:.1f}, mp={self.mp:.1f}/{self.max_mp:.1f}, "
-            f"exp={self.exp:.0f}/{self.exp_to_next_level}, gp={self.gp:.2f})"
-        )
+        return f"UserStats(lvl={self.level}, class='{self.klass}', " f"hp={self.hp:.1f}/{self.max_hp:.1f}, mp={self.mp:.1f}/{self.max_mp:.1f}, " f"exp={self.exp:.0f}/{self.exp_to_next_level}, gp={self.gp:.2f})"
 
 
 # KLASS: UserAchievements
@@ -327,15 +276,9 @@ class UserAchievements:
     def __init__(self, achievements_data: Optional[Dict[str, Any]]):
         data = achievements_data if isinstance(achievements_data, dict) else {}
         # Extract specific known achievements
-        self.challenges_completed: List[str] = data.get(
-            "challenges", []
-        )  # List of challenge IDs completed
-        self.quests_completed: Dict[str, int] = data.get(
-            "quests", {}
-        )  # Dict {quest_key: completion_count}
-        self.perfect_days: int = int(
-            data.get("perfect", 0)
-        )  # Count of perfect days (all dailies done)
+        self.challenges_completed: List[str] = data.get("challenges", [])  # List of challenge IDs completed
+        self.quests_completed: Dict[str, int] = data.get("quests", {})  # Dict {quest_key: completion_count}
+        self.perfect_days: int = int(data.get("perfect", 0))  # Count of perfect days (all dailies done)
         self.streak: int = int(data.get("streak", 0))  # Max perfect day streak
         # Might be login incentive count? API docs unclear sometimes.
         self.login_incentives: int = int(data.get("loginIncentives", 0))
@@ -361,13 +304,8 @@ class UserAchievements:
 
     # FUNC: __repr__
     def __repr__(self) -> str:
-        quests_count = (
-            sum(self.quests_completed.values()) if self.quests_completed else 0
-        )
-        return (
-            f"UserAchievements(earned={len(self.earned_list)}, "
-            f"quests={quests_count}, perfect={self.perfect_days}, streak={self.streak})"
-        )
+        quests_count = sum(self.quests_completed.values()) if self.quests_completed else 0
+        return f"UserAchievements(earned={len(self.earned_list)}, " f"quests={quests_count}, perfect={self.perfect_days}, streak={self.streak})"
 
 
 # KLASS: UserItems
@@ -377,9 +315,7 @@ class UserItems:
     # FUNC: __init__
     def __init__(self, items_data: Optional[Dict[str, Any]]):
         data = items_data if isinstance(items_data, dict) else {}
-        gear = (
-            data.get("gear", {}) if isinstance(data.get("gear"), dict) else {}
-        )
+        gear = data.get("gear", {}) if isinstance(data.get("gear"), dict) else {}
         # Currently equipped gear/costume {slot: item_key}
         self.gear_equipped: Dict[str, Optional[str]] = gear.get("equipped", {})
         self.gear_costume: Dict[str, Optional[str]] = gear.get("costume", {})
@@ -389,21 +325,11 @@ class UserItems:
         # Eggs, Food, HatchingPotions, Pets, Mounts, Special Items, Quests etc.
         self.eggs: Dict[str, int] = data.get("eggs", {})  # {egg_name: count}
         self.food: Dict[str, int] = data.get("food", {})  # {food_name: count}
-        self.hatching_potions: Dict[str, int] = data.get(
-            "hatchingPotions", {}
-        )  # {potion_name: count}
-        self.pets: Dict[str, int] = data.get(
-            "pets", {}
-        )  # {Pet-Species: feed_count} or {Pet-Name: feed_count}? Check API. Usually {Wolf-Base: 5}
-        self.mounts: Dict[str, bool] = data.get(
-            "mounts", {}
-        )  # {Mount-Species: True} or {Mount-Name: True}? Usually {Wolf-Base: True}
-        self.special: Dict[str, int] = data.get(
-            "special", {}
-        )  # {item_key: count} e.g., rebirthOrb, mysteryItem
-        self.quests: Dict[str, int] = data.get(
-            "quests", {}
-        )  # {quest_scroll_key: count}
+        self.hatching_potions: Dict[str, int] = data.get("hatchingPotions", {})  # {potion_name: count}
+        self.pets: Dict[str, int] = data.get("pets", {})  # {Pet-Species: feed_count} or {Pet-Name: feed_count}? Check API. Usually {Wolf-Base: 5}
+        self.mounts: Dict[str, bool] = data.get("mounts", {})  # {Mount-Species: True} or {Mount-Name: True}? Usually {Wolf-Base: True}
+        self.special: Dict[str, int] = data.get("special", {})  # {item_key: count} e.g., rebirthOrb, mysteryItem
+        self.quests: Dict[str, int] = data.get("quests", {})  # {quest_scroll_key: count}
 
     # FUNC: __repr__
     def __repr__(self) -> str:
@@ -445,9 +371,7 @@ class UserInboxInfo:
         # List of blocked user IDs
         self.blocks: List[str] = data.get("blocks", [])
         # Inbox messages - often just contains message IDs or is empty in /user response
-        self.messages: Union[List[str], Dict[str, Any]] = data.get(
-            "messages", []
-        )  # Type can vary
+        self.messages: Union[List[str], Dict[str, Any]] = data.get("messages", [])  # Type can vary
 
     # FUNC: __repr__
     def __repr__(self) -> str:
@@ -470,9 +394,7 @@ class User:
     def __init__(
         self,
         user_data: Dict[str, Any],
-        all_gear_content: Optional[
-            AllGearContent
-        ] = None,  # Pass gear content for UserStats
+        all_gear_content: Optional[AllGearContent] = None,  # Pass gear content for UserStats
     ):
         """Initializes a User object from the full API user data response.
 
@@ -503,17 +425,11 @@ class User:
         # --- Instantiate Nested Data Classes (passing relevant sub-dicts) ---
         self.profile: UserProfile = UserProfile(user_data.get("profile"))
         self.auth: UserAuth = UserAuth(user_data.get("auth"))
-        self.preferences: UserPreferences = UserPreferences(
-            user_data.get("preferences")
-        )
+        self.preferences: UserPreferences = UserPreferences(user_data.get("preferences"))
         # Timestamps requires auth.timestamps and user root data
-        self.timestamps: UserTimestamps = UserTimestamps(
-            user_data.get("auth", {}).get("timestamps"), user_data
-        )
+        self.timestamps: UserTimestamps = UserTimestamps(user_data.get("auth", {}).get("timestamps"), user_data)
         self.items: UserItems = UserItems(user_data.get("items"))
-        self.achievements: UserAchievements = UserAchievements(
-            user_data.get("achievements")
-        )
+        self.achievements: UserAchievements = UserAchievements(user_data.get("achievements"))
         # Party info might be at root or nested, check common patterns
         self.party_info: UserPartyInfo = UserPartyInfo(user_data.get("party"))
         self.inbox_info: UserInboxInfo = UserInboxInfo(user_data.get("inbox"))
@@ -543,7 +459,4 @@ class User:
     # FUNC: __repr__
     def __repr__(self) -> str:
         """Provides a developer-friendly string representation."""
-        return (
-            f"User(id='{self.id}', username='{self.username}', "
-            f"class='{self.klass}', level={self.level})"
-        )
+        return f"User(id='{self.id}', username='{self.username}', " f"class='{self.klass}', level={self.level})"

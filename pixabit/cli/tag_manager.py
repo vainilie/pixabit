@@ -16,7 +16,7 @@ import requests # For API error handling
 
 # Use themed display components
 try:
-    from ..utils.display import ( # Use ..
+    from pixabit.utils.display import ( # Use ..
         BarColumn, Confirm, Progress, SpinnerColumn, Table, TextColumn,
         TimeElapsedColumn, TimeRemainingColumn, box, console, print, Rule # Added print/Rule
     )
@@ -39,7 +39,7 @@ except ImportError: # Fallback
 
 # Local Imports
 try:
-    from .api import HabiticaAPI # Import sync API
+    from pixabit.api import HabiticaAPI # Import sync API
     from .config import ( # Import specific, configured tag IDs directly
         ATTR_TAG_MAP, CHALLENGE_TAG_ID, NO_ATTR_TAG_ID, NOT_PSN_TAG_ID,
         PERSONAL_TAG_ID, PSN_TAG_ID,

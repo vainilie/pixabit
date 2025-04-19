@@ -10,37 +10,32 @@ from the cached data on demand.
 
 # SECTION: IMPORTS
 import asyncio
+import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional  # Keep Dict/List
+from typing import Any, Dict, List, Optional
+
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 # Local Imports
 try:
-    from ..cli.config import CACHE_FILE_CONTENT  # Use config for cache filename
-    from ..utils.display import console, print
-    from ..utils.save_json import load_json, save_json
-
     # Direct import assumes flat structure or correct PYTHONPATH
-    from .api import HabiticaAPI, HabiticaAPIError
+    from pixabit.cli.config import CACHE_FILE_CONTENT
+
+    CACHE_FILE_RAW = CACHE_FILE_CONTENT  # Keep original name? Or rename? Let's rename for clarity.
+    # CACHE_FILE_RAW = "content_cache_raw.json"
+    CACHE_FILE_EXTRACTED = "content_cache_extracted.json"
+
+    from pixabit.tui.api import HabiticaAPI, HabiticaAPIError
+    from pixabit.utils.display import console, print
+    from pixabit.utils.save_json import load_json, save_json
 except ImportError:
-    # Fallback for standalone testing or import issues
-    import builtins
-
-    print = builtins.print
-
-    class DummyConsole:
-        def print(self, *args: Any, **kwargs: Any) -> None:
-            builtins.print(*args)
-
-        def log(self, *args: Any, **kwargs: Any) -> None:
-            builtins.print("LOG:", *args)
-
-        def print_exception(self, *args: Any, **kwargs: Any) -> None:
-            import traceback
-
-            traceback.print_exc()
-
-    console = DummyConsole()
 
     # Define dummy fallback components
     class HabiticaAPI:  # type: ignore
@@ -50,25 +45,25 @@ except ImportError:
     HabiticaAPIError = Exception  # type: ignore
 
     def save_json(data: Any, filepath: Any) -> bool:
-        print(f"Dummy save_json({filepath})")
+        log.info(f"Dummy save_json({filepath})")
         return False
 
     def load_json(filepath: Any) -> Any:
-        print(f"Dummy load_json({filepath})")
+        log.info(f"Dummy load_json({filepath})")
         return None
 
-    CACHE_FILE_CONTENT = "content_cache_fallback.json"
-    print(
-        "Warning: Could not import Pixabit components in game_content.py. Using fallbacks."
-    )
+    # ... (Keep fallbacks, define both cache filenames) ...
+    CACHE_FILE_RAW = "content_cache_raw_fallback.json"
+    CACHE_FILE_EXTRACTED = "content_cache_extracted_fallback.json"
+    log.error("Warning: Could not import Pixabit components in game_content.py. Using fallbacks.")
 
 
 # KLASS: GameContent
 class GameContent:
-    """Manages lazy-loading and caching of the main Habitica game content object."""
+    """Manages lazy-loading and caching (raw & extracted) of Habitica game content."""
 
-    # Class variable for the cache file path, using value from config
-    CACHE_FILE_PATH: Path = Path(CACHE_FILE_CONTENT)
+    CACHE_PATH_RAW: Path = Path(CACHE_FILE_RAW)
+    CACHE_PATH_EXTRACTED: Path = Path(CACHE_FILE_EXTRACTED)
 
     # FUNC: __init__
     def __init__(self, api_client: Optional[HabiticaAPI] = None):
@@ -82,146 +77,245 @@ class GameContent:
         self.console = console
         # Store API client if provided, otherwise create lazily if needed
         self._api_client_instance: Optional[HabiticaAPI] = api_client
-        # Internal cache storage
-        self._main_content_cache: Optional[Dict[str, Any]] = None
-        self._cache_loaded: bool = False
+        # Stores the *full* raw content if loaded directly or fetched
+        self._raw_content_cache: Optional[Dict[str, Any]] = None
+        # Stores *only* the extracted sections if loaded from extracted cache or after extraction
+        self._extracted_content_cache: Optional[Dict[str, Any]] = None
+        # Flags
+        self._raw_cache_loaded: bool = False  # Tracks if full cache is in memory
+        self._extracted_cache_loaded: bool = False  # Tracks if extracted cache is in memory/loaded
+        # Locks and timestamp
+        self._fetch_lock = asyncio.Lock()
         self._last_fetch_attempt: float = 0.0
-        self._fetch_lock = asyncio.Lock()  # Use asyncio lock for async fetch
 
     # FUNC: _get_api_client (Lazy instantiation)
     def _get_api_client(self) -> HabiticaAPI:
         """Returns the stored API client or attempts to create a new one."""
         if self._api_client_instance is None:
-            self.console.log(
+            log.info(
                 "GameContent: API client not provided, creating instance...",
-                style="info",
             )
             try:
-                self._api_client_instance = (
-                    HabiticaAPI()
-                )  # Assumes config is available
+                self._api_client_instance = HabiticaAPI()  # Assumes config is available
             except Exception as e:
-                self.console.print(
+                log.error(
                     "[error]Failed to auto-create HabiticaAPI client in GameContent![/error]",
-                    style="error",
                 )
-                raise RuntimeError(
-                    "GameContent requires a valid HabiticaAPI client."
-                ) from e
+                raise RuntimeError("GameContent requires a valid HabiticaAPI client.") from e
         return self._api_client_instance
 
     # FUNC: invalidate_cache
     def invalidate_cache(self) -> None:
-        """Clears the internal cache, forcing a reload on next access."""
-        self.console.log("GameContent cache invalidated.", style="info")
-        self._main_content_cache = None
-        self._cache_loaded = False
+        """Clears internal caches, forcing a reload on next access."""
+        log.info("GameContent caches invalidated.")
+        self._raw_content_cache = None
+        self._extracted_content_cache = None
+        self._raw_cache_loaded = False
+        self._extracted_cache_loaded = False
 
-    # FUNC: _load_from_cache_file
-    def _load_from_cache_file(self) -> bool:
-        """Attempts to load content from the JSON cache file."""
-        if not self.CACHE_FILE_PATH.is_file():
-            self.console.log(
-                f"Cache file not found: '{self.CACHE_FILE_PATH}'",
-                style="subtle",
-            )
+    # FUNC: _load_extracted_cache
+    def _load_extracted_cache(self) -> bool:
+        """Attempts to load content from the EXTRACTED JSON cache file."""
+        if not self.CACHE_PATH_EXTRACTED.is_file():
             return False
-
-        self.console.log(
-            f"Attempting load from cache: '{self.CACHE_FILE_PATH}'...",
-            style="info",
+        log.info(
+            f"Attempting load from extracted cache: '{self.CACHE_PATH_EXTRACTED}'...",
         )
-        loaded_data = load_json(self.CACHE_FILE_PATH)  # Uses sync load_json
-
+        loaded_data = load_json(self.CACHE_PATH_EXTRACTED)
+        # Basic validation: is it a non-empty dictionary?
         if isinstance(loaded_data, dict) and loaded_data:
-            self._main_content_cache = loaded_data
-            self._cache_loaded = True
-            self.console.log(
-                "Successfully loaded content from cache.", style="success"
+            self._extracted_content_cache = loaded_data
+            self._extracted_cache_loaded = True
+            self._raw_cache_loaded = False  # Don't need raw if extracted loaded
+            self._raw_content_cache = None  # Clear raw from memory
+            log.info(
+                "Successfully loaded content from extracted cache.",
             )
             return True
         else:
-            self.console.log(
-                f"Cache file '{self.CACHE_FILE_PATH}' empty or invalid format.",
-                style="warning",
+            log.warning(
+                f"Extracted cache '{self.CACHE_PATH_EXTRACTED}' empty or invalid format.",
+            )
+            return False
+
+    # FUNC: _load_raw_cache
+    def _load_raw_cache(self) -> bool:
+        """Attempts to load content from the RAW JSON cache file."""
+        if not self.CACHE_PATH_RAW.is_file():
+            return False
+        log.info(
+            f"Attempting load from raw cache: '{self.CACHE_PATH_RAW}'...",
+        )
+        loaded_data = load_json(self.CACHE_PATH_RAW)
+        if isinstance(loaded_data, dict) and loaded_data:
+            self._raw_content_cache = loaded_data  # Store full raw data
+            self._raw_cache_loaded = True
+            self._extracted_cache = None  # Clear any old extracted data
+            self._extracted_cache_loaded = False
+            log.info(
+                "Successfully loaded full content from raw cache.",
+            )
+            return True
+        else:
+            log.warning(
+                f"Raw cache file '{self.CACHE_PATH_RAW}' empty or invalid format.",
             )
             # Optionally delete invalid cache file?
             # try: self.CACHE_FILE_PATH.unlink() except OSError: pass
             return False
 
-    # FUNC: _fetch_and_save_content (Async)
-    async def _fetch_and_save_content(self) -> bool:
-        """Fetches content from API, saves to cache, and updates internal cache."""
-        # Prevent multiple concurrent fetches
+    # FUNC: _fetch_and_save_raw_content (Async)
+    async def _fetch_and_save_raw_content(self) -> bool:
+        """Fetches full content from API, saves to raw cache, stores internally."""
         async with self._fetch_lock:
             # Debounce fetching slightly if called rapidly
             now = time.monotonic()
-            if now - self._last_fetch_attempt < 1.0:  # Avoid fetch spam
-                self.console.log("Debouncing content fetch.", style="subtle")
-                # Return status based on current cache state after debounce
-                return self._cache_loaded
+            debounce_time = 1.0
+            if now - self._last_fetch_attempt < debounce_time:
+                return self._raw_cache_loaded
             self._last_fetch_attempt = now
 
-            self.console.log("Fetching game content from API...", style="info")
+            log.info("Fetching full game content from API...")
             try:
-                api = self._get_api_client()  # Get or create API client
-                content = await api.get_content()  # Await the async call
-
+                api = self._get_api_client()
+                content = await api.get_content()
                 if isinstance(content, dict) and content:
-                    self.console.log(
-                        "Successfully fetched content from API.",
-                        style="success",
+                    log.info(
+                        "Successfully fetched full content from API.",
                     )
-                    # Save to file (using sync save_json for simplicity)
-                    save_success = save_json(content, self.CACHE_FILE_PATH)
-                    if save_success:
-                        self.console.log(
-                            f"Saved content to cache: '{self.CACHE_FILE_PATH}'",
-                            style="info",
+                    save_raw_ok = save_json(content, self.CACHE_PATH_RAW)
+                    if save_raw_ok:
+                        log.info(
+                            f"Saved raw content to cache: '{self.CACHE_PATH_RAW}'",
                         )
-                    # Update internal cache immediately
-                    self._main_content_cache = content
-                    self._cache_loaded = True
+                    self._raw_content_cache = content  # Store fetched raw data
+                    self._raw_cache_loaded = True
+                    self._extracted_cache = None  # Invalidate old extracted cache
+                    self._extracted_cache_loaded = False
                     return True
                 else:
-                    self.console.log(
-                        "Failed to fetch valid content from API (None or empty dict returned).",
-                        style="error",
-                    )
-                    # Keep existing cache if fetch failed? Or clear it? Let's keep it for now.
+                    log.error("Failed fetch valid content from API.")
                     return False
-            except HabiticaAPIError as e:
-                self.console.print(
-                    f"API Error fetching content: {e}", style="error"
-                )
-                return False
             except Exception as e:
-                self.console.print(
-                    f"Unexpected Error fetching content: {e}", style="error"
+                log.error(
+                    f"Error fetching full content: {e}",
                 )
                 return False
 
-    # FUNC: _ensure_content_loaded (Async)
-    async def _ensure_content_loaded(self) -> None:
-        """Ensures content is loaded, trying cache first, then fetching if needed."""
-        if self._cache_loaded and self._main_content_cache is not None:
-            return  # Already loaded
-
-        # Try loading from file cache
-        if self._load_from_cache_file():
-            return  # Loaded from file successfully
-
-        # File cache failed or missing, fetch from API
-        await self._fetch_and_save_content()
-
-        # After fetch attempt, check cache status again
-        if not self._cache_loaded:
-            # Fetching also failed, content is unavailable
-            self.console.print(
-                "Game content unavailable after fetch attempt.", style="error"
+    # FUNC: _generate_and_save_extracted_cache (NEW - Sync)
+    def _generate_and_save_extracted_cache(self) -> None:
+        """Generates the extracted data dict using getters and saves it."""
+        if not self._raw_cache_loaded or not self._raw_content_cache:
+            log.warning(
+                "Cannot generate extracted cache: Raw content not loaded.",
             )
-            # Optionally raise an error here? Or just return None from getters?
-            # Let's allow getters to return None/empty if content is missing.
+            return
+
+        log.info("Generating and saving extracted content cache...")
+        extracted_data = {
+            "gear_flat": self._get_gear_data_internal(),  # Use internal getters
+            "spells": self._get_skill_data_internal(),
+            "quests": self._get_quest_data_internal(),
+            "pets": self._get_pets_data_internal(),
+            "mounts": self._get_mounts_data_internal(),
+            # Add calls to other internal getters for keys in KEYS_TO_EXTRACT
+        }
+
+        save_success = save_json(extracted_data, self.CACHE_PATH_EXTRACTED)
+        if save_success:
+            log.info(
+                f"Saved extracted content to cache: '{self.CACHE_PATH_EXTRACTED}'",
+            )
+            # Update internal extracted cache state
+            self._extracted_content_cache = extracted_data
+            self._extracted_cache_loaded = True
+            # Optionally clear raw cache from memory now if desired
+            # self._raw_content_cache = None
+            # self._raw_cache_loaded = False
+        else:
+            log.warning(
+                f"Failed to save extracted content cache: '{self.CACHE_PATH_EXTRACTED}'",
+            )
+            # If save failed, keep extracted data in memory anyway for this session
+            self._extracted_content_cache = extracted_data
+            self._extracted_cache_loaded = True
+
+    # FUNC: _ensure_content_loaded (Async - Orchestrator - Modified)
+    async def _ensure_content_loaded(self) -> None:
+        """Ensures extracted content is loaded, using two-stage cache."""
+        if self._extracted_cache_loaded:
+            return  # Already have what we need
+
+        # 1. Try loading the small extracted cache
+        if self._load_extracted_cache():
+            return
+
+        # 2. Extracted cache failed, ensure RAW cache is loaded/fetched
+        if not self._raw_cache_loaded:  # Check if raw is already in memory
+            if not self._load_raw_cache():  # Try loading raw from file
+                if not await self._fetch_and_save_raw_content():  # Fetch raw if load failed
+                    log.error(
+                        "Game content unavailable: Failed cache loads and API fetch.",
+                    )
+                    self._extracted_cache = {}  # Ensure empty dict
+                    self._extracted_cache_loaded = True  # Mark as "attempted"
+                    return
+
+        # 3. We have raw content (in self._raw_content_cache), generate extracted cache
+        self._generate_and_save_extracted_cache()  # Sync generation after load/fetch
+
+        # Final check
+        if not self._extracted_cache_loaded:
+            log.error(
+                "Failed to populate extracted cache.",
+            )
+            self._extracted_cache = {}
+            self._extracted_cache_loaded = True  # Mark as attempted
+
+    # --- Internal Getters (Operating on _raw_content_cache or _extracted_content_cache) ---
+    # These are called by the public async getters OR by _generate_and_save_extracted_cache
+
+    def _get_active_cache(self) -> Optional[Dict[str, Any]]:
+        """Returns the currently active cache (prefer extracted)."""
+        if self._extracted_cache_loaded:
+            return self._extracted_content_cache
+        elif self._raw_cache_loaded:
+            return self._raw_content_cache
+        else:
+            return None  # Should not happen if _ensure_content_loaded is called first
+
+    def _get_gear_data_internal(self) -> Dict[str, Any]:
+        """Internal sync getter for gear data."""
+        active_cache = self._get_active_cache()
+        if active_cache:
+            # If using extracted cache, the key is 'gear_flat'
+            if self._extracted_cache_loaded:
+                return active_cache.get("gear_flat", {})
+            # If using raw cache, get nested 'gear.flat'
+            else:
+                gear = active_cache.get("gear", {})
+                return gear.get("flat", {}) if isinstance(gear, dict) else {}
+        return {}
+
+    def _get_skill_data_internal(self) -> Dict[str, Any]:
+        """Internal sync getter for spells data."""
+        active_cache = self._get_active_cache()
+        return active_cache.get("spells", {}) if active_cache else {}
+
+    def _get_quest_data_internal(self) -> Dict[str, Any]:
+        """Internal sync getter for quests data."""
+        active_cache = self._get_active_cache()
+        return active_cache.get("quests", {}) if active_cache else {}
+
+    def _get_pets_data_internal(self) -> Dict[str, Any]:
+        """Internal sync getter for pets data."""
+        active_cache = self._get_active_cache()
+        return active_cache.get("pets", {}) if active_cache else {}
+
+    def _get_mounts_data_internal(self) -> Dict[str, Any]:
+        """Internal sync getter for mounts data."""
+        active_cache = self._get_active_cache()
+        return active_cache.get("mounts", {}) if active_cache else {}
 
     # --- Public Accessor Methods (Async) ---
     # These methods ensure data is loaded before returning sections.
@@ -234,46 +328,30 @@ class GameContent:
 
     # FUNC: get_gear_data (Async)
     async def get_gear_data(self) -> Dict[str, Any]:
-        """Returns the 'gear.flat' section of game content, loading/fetching if necessary."""
+        """Returns the 'gear.flat' section of game content."""
         await self._ensure_content_loaded()
-        if self._main_content_cache:
-            # Safely access nested structure
-            gear = self._main_content_cache.get("gear", {})
-            return gear.get("flat", {}) if isinstance(gear, dict) else {}
-        return {}
+        # --- CHANGE: Call internal getter ---
+        return self._get_gear_data_internal()
 
     # FUNC: get_quest_data (Async)
     async def get_quest_data(self) -> Dict[str, Any]:
         """Returns the 'quests' section of game content, loading/fetching if necessary."""
         await self._ensure_content_loaded()
-        if self._main_content_cache:
-            return self._main_content_cache.get("quests", {})
-        return {}
+        return self._get_quest_data_internal()
 
     # FUNC: get_skill_data (Async) - Assuming skills/spells are under 'spells' key
     async def get_skill_data(self) -> Dict[str, Any]:
         """Returns the 'spells' section (containing class skills) of game content."""
         await self._ensure_content_loaded()
-        if self._main_content_cache:
-            # Habitica content uses 'spells' key for class skills
-            return self._main_content_cache.get("spells", {})
-        return {}
+        return self._get_skill_data_internal()
 
     # Add more getters for other content sections as needed (e.g., pets, mounts, food)
     async def get_pets_data(self) -> Dict[str, Any]:
         """Returns the 'pets' section of game content."""
         await self._ensure_content_loaded()
-        return (
-            self._main_content_cache.get("pets", {})
-            if self._main_content_cache
-            else {}
-        )
+        return self._get_pets_data_internal()
 
     async def get_mounts_data(self) -> Dict[str, Any]:
         """Returns the 'mounts' section of game content."""
         await self._ensure_content_loaded()
-        return (
-            self._main_content_cache.get("mounts", {})
-            if self._main_content_cache
-            else {}
-        )
+        return self._get_mounts_data_internal()

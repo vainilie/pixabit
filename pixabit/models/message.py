@@ -10,23 +10,29 @@ Includes:
 """
 
 # SECTION: IMPORTS
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone  # Ensure timezone is imported
 from typing import Any, Dict, List, Optional  # Keep Dict/List for clarity
 
 import emoji_data_python
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 # Local Imports (assuming utils is a sibling or configured in path)
 try:
-    from ..utils.dates import convert_timestamp_to_utc
+    from pixabit.utils.dates import convert_timestamp_to_utc
 except ImportError:
     # Fallback placeholder if imports fail
-    print("Warning: Using placeholder convert_timestamp_to_utc in message.py.")
+    log.info("Warning: Using placeholder convert_timestamp_to_utc in message.py.")
 
     def convert_timestamp_to_utc(ts: Any) -> Optional[datetime]:  # type: ignore  # noqa: D103
-        if isinstance(
-            ts, (int, float)
-        ):  # Handle epoch milliseconds common in JS/APIs
+        if isinstance(ts, (int, float)):  # Handle epoch milliseconds common in JS/APIs
             try:
                 # Assume ms if large number, otherwise seconds
                 ts_sec = ts / 1000.0 if ts > 1e11 else ts
@@ -79,9 +85,7 @@ class Message:
             raise TypeError("message_data must be a dictionary.")
 
         # Core IDs
-        self.id: Optional[str] = message_data.get("_id") or message_data.get(
-            "id"
-        )  # Message/Document ID
+        self.id: Optional[str] = message_data.get("_id") or message_data.get("id")  # Message/Document ID
         # Sender's User ID (usually 'uuid', but check 'sent' flag too)
         self.sender_id: Optional[str] = message_data.get("uuid")
 
@@ -89,38 +93,22 @@ class Message:
         self.sent_by_me: Optional[bool] = None
         if self.sender_id == current_user_id:
             self.sent_by_me = True
-        elif (
-            message_data.get("sent") is True
-        ):  # Habitica API might use 'sent: true' for outgoing PMs
+        elif message_data.get("sent") is True:  # Habitica API might use 'sent: true' for outgoing PMs
             self.sent_by_me = True
-            if (
-                not self.sender_id
-            ):  # If uuid wasn't set, assume current user sent it
+            if not self.sender_id:  # If uuid wasn't set, assume current user sent it
                 self.sender_id = current_user_id
 
         # Content and Timestamp
         _text = message_data.get("text", "")
-        self.text: str = (
-            emoji_data_python.replace_colons(_text) if _text else ""
-        )
+        self.text: str = emoji_data_python.replace_colons(_text) if _text else ""
         _unformatted = message_data.get("unformattedText")  # Might not exist
-        self.unformatted_text: Optional[str] = (
-            emoji_data_python.replace_colons(_unformatted)
-            if _unformatted
-            else None
-        )
+        self.unformatted_text: Optional[str] = emoji_data_python.replace_colons(_unformatted) if _unformatted else None
         # Use our standardized converter
-        self.timestamp: Optional[datetime] = convert_timestamp_to_utc(
-            message_data.get("timestamp")
-        )
+        self.timestamp: Optional[datetime] = convert_timestamp_to_utc(message_data.get("timestamp"))
 
         # Engagement
-        self.likes: Dict[str, bool] = message_data.get(
-            "likes", {}
-        )  # Keys are user IDs
-        self.flags: Dict[str, bool] = message_data.get(
-            "flags", {}
-        )  # Keys are user IDs
+        self.likes: Dict[str, bool] = message_data.get("likes", {})  # Keys are user IDs
+        self.flags: Dict[str, bool] = message_data.get("flags", {})  # Keys are user IDs
         self.flag_count: int = int(message_data.get("flagCount", 0))
 
         # Context: Group ID (e.g., 'party', 'tavern', specific guild ID)
@@ -128,36 +116,20 @@ class Message:
 
         # Sender Info (often included directly in message objects)
         _sender_disp = message_data.get("user")  # Display name
-        self.sender_display_name: Optional[str] = (
-            emoji_data_python.replace_colons(_sender_disp)
-            if _sender_disp
-            else None
-        )
-        self.sender_username: Optional[str] = message_data.get(
-            "username"
-        )  # Login name
-        self.sender_styles: Optional[Dict[str, Any]] = message_data.get(
-            "userStyles"
-        )
+        self.sender_display_name: Optional[str] = emoji_data_python.replace_colons(_sender_disp) if _sender_disp else None
+        self.sender_username: Optional[str] = message_data.get("username")  # Login name
+        self.sender_styles: Optional[Dict[str, Any]] = message_data.get("userStyles")
         # Extract class from styles if available
-        self.sender_class: Optional[str] = (
-            self.sender_styles.get("stats", {}).get("class")
-            if isinstance(self.sender_styles, dict)
-            else None
-        )
+        self.sender_class: Optional[str] = self.sender_styles.get("stats", {}).get("class") if isinstance(self.sender_styles, dict) else None
 
         # System Message Info (for spells, quests, system announcements etc.)
         self.info: Optional[Dict[str, Any]] = message_data.get("info")
 
         # --- Calculated/Derived Attributes ---
-        self.is_system_message: bool = (
-            bool(self.info) or self.sender_id == "system"
-        )  # Check info dict or system sender ID
+        self.is_system_message: bool = bool(self.info) or self.sender_id == "system"  # Check info dict or system sender ID
 
         # Conversation ID (Crucial for grouping PMs or identifying group chat)
-        self.conversation_id: Optional[str] = self._determine_conversation_id(
-            message_data, current_user_id
-        )
+        self.conversation_id: Optional[str] = self._determine_conversation_id(message_data, current_user_id)
 
         # Recipient ID (mainly relevant for PMs)
         # 'ownerId' might indicate the owner of the inbox copy (recipient), OR it might
@@ -165,9 +137,7 @@ class Message:
         self.recipient_id: Optional[str] = message_data.get("ownerId")
 
     # FUNC: _determine_conversation_id
-    def _determine_conversation_id(
-        self, message_data: Dict[str, Any], current_user_id: Optional[str]
-    ) -> Optional[str]:
+    def _determine_conversation_id(self, message_data: Dict[str, Any], current_user_id: Optional[str]) -> Optional[str]:
         """Calculates a consistent ID for the conversation this message belongs to.
 
         - For group messages, it's the group_id.
@@ -187,12 +157,8 @@ class Message:
         # --- Private Message (PM) Logic ---
         # Requires knowing the current user to identify the 'other' participant.
         sender = self.sender_id
-        recipient_guess = message_data.get(
-            "recipient"
-        )  # Check if 'recipient' field exists (less common)
-        owner_id = message_data.get(
-            "ownerId"
-        )  # ID of the user whose inbox this message copy belongs to
+        recipient_guess = message_data.get("recipient")  # Check if 'recipient' field exists (less common)
+        owner_id = message_data.get("ownerId")  # ID of the user whose inbox this message copy belongs to
 
         if not current_user_id:
             # Cannot reliably determine PM conversation without current user context
@@ -208,9 +174,7 @@ class Message:
             # If fetched from *my* inbox, ownerId is me. We need recipient info somehow.
             # Let's assume 'recipient' or 'ownerId' (if different from me) holds the recipient.
             # This logic is fragile and endpoint-dependent.
-            other_user = recipient_guess or (
-                owner_id if owner_id != current_user_id else None
-            )
+            other_user = recipient_guess or (owner_id if owner_id != current_user_id else None)
             return other_user
 
         elif sender and sender != current_user_id:
@@ -225,22 +189,10 @@ class Message:
     # FUNC: __repr__
     def __repr__(self) -> str:
         """Provides a developer-friendly string representation."""
-        sender_repr = (
-            "System"
-            if self.is_system_message
-            else (self.sender_username or self.sender_id or "Unknown")
-        )
-        ts_repr = (
-            self.timestamp.strftime("%Y-%m-%d %H:%M")
-            if self.timestamp
-            else "No Timestamp"
-        )
-        conv_repr = (
-            f" (Conv: {self.conversation_id})" if self.conversation_id else ""
-        )
-        text_preview = self.text[:30].replace("\n", " ") + (
-            "..." if len(self.text) > 30 else ""
-        )
+        sender_repr = "System" if self.is_system_message else (self.sender_username or self.sender_id or "Unknown")
+        ts_repr = self.timestamp.strftime("%Y-%m-%d %H:%M") if self.timestamp else "No Timestamp"
+        conv_repr = f" (Conv: {self.conversation_id})" if self.conversation_id else ""
+        text_preview = self.text[:30].replace("\n", " ") + ("..." if len(self.text) > 30 else "")
         return f"Message(id={self.id}, from='{sender_repr}', time='{ts_repr}{conv_repr}', text='{text_preview}')"
 
 
@@ -274,17 +226,13 @@ class MessageList:
         """Processes the raw list, creating Message instances and sorting them."""
         processed_messages: List[Message] = []
         if not isinstance(raw_message_list, list):
-            print(
-                f"Error: raw_message_list must be a list, got {type(raw_message_list)}. Cannot process messages."
-            )
+            log.info(f"Error: raw_message_list must be a list, got {type(raw_message_list)}. Cannot process messages.")
             self.messages = []
             return
 
         for raw_message in raw_message_list:
             if not isinstance(raw_message, dict):
-                print(
-                    f"Skipping invalid entry in raw_message_list: {raw_message}"
-                )
+                log.info(f"Skipping invalid entry in raw_message_list: {raw_message}")
                 continue
             try:
                 # Pass current_user_id for conversation ID calculation
@@ -292,13 +240,9 @@ class MessageList:
                 if message_instance.id:  # Require an ID
                     processed_messages.append(message_instance)
                 else:
-                    print(
-                        f"Skipping message data missing ID: {raw_message.get('text', 'N/A')[:30]}..."
-                    )
+                    log.info(f"Skipping message data missing ID: {raw_message.get('text', 'N/A')[:30]}...")
             except Exception as e:
-                print(
-                    f"Error processing message data for ID {raw_message.get('id', 'N/A')}: {e}"
-                )
+                log.info(f"Error processing message data for ID {raw_message.get('id', 'N/A')}: {e}")
 
         # Sort messages chronologically (oldest first)
         # Provide a default datetime for messages lacking a timestamp to avoid errors
@@ -368,9 +312,7 @@ class MessageList:
             A list of matching Message objects, sorted chronologically.
         """
         # Messages are already sorted, so filtering preserves order
-        return [
-            m for m in self.messages if m.conversation_id == conversation_id
-        ]
+        return [m for m in self.messages if m.conversation_id == conversation_id]
 
     # FUNC: filter_by_group
     def filter_by_group(self, group_id: str) -> List[Message]:
@@ -407,9 +349,7 @@ class MessageList:
         return [m for m in self.messages if m.is_system_message is is_system]
 
     # FUNC: filter_by_text
-    def filter_by_text(
-        self, text_part: str, case_sensitive: bool = False
-    ) -> List[Message]:
+    def filter_by_text(self, text_part: str, case_sensitive: bool = False) -> List[Message]:
         """Filters messages containing a specific text substring.
 
         Args:
@@ -421,16 +361,12 @@ class MessageList:
         """
         if not case_sensitive:
             text_part_lower = text_part.lower()
-            return [
-                m for m in self.messages if text_part_lower in m.text.lower()
-            ]
+            return [m for m in self.messages if text_part_lower in m.text.lower()]
         else:
             return [m for m in self.messages if text_part in m.text]
 
     # FUNC: filter_by_date_range
-    def filter_by_date_range(
-        self, start: Optional[datetime] = None, end: Optional[datetime] = None
-    ) -> List[Message]:
+    def filter_by_date_range(self, start: Optional[datetime] = None, end: Optional[datetime] = None) -> List[Message]:
         """Filters messages within a specific date/time range (UTC, inclusive).
 
         Naive datetime inputs for start/end are assumed to be UTC.
@@ -445,9 +381,7 @@ class MessageList:
         # Ensure start/end are timezone-aware UTC for comparison
         start_utc: Optional[datetime] = None
         if start:
-            start_utc = (
-                start if start.tzinfo else start.replace(tzinfo=timezone.utc)
-            )
+            start_utc = start if start.tzinfo else start.replace(tzinfo=timezone.utc)
         end_utc: Optional[datetime] = None
         if end:
             end_utc = end if end.tzinfo else end.replace(tzinfo=timezone.utc)
@@ -506,9 +440,7 @@ class MessageList:
         # Use defaultdict for easier appending
         convos: Dict[str, List[Message]] = defaultdict(list)
         for msg in self.messages:
-            if (
-                msg.conversation_id
-            ):  # Only include messages where conversation could be determined
+            if msg.conversation_id:  # Only include messages where conversation could be determined
                 convos[msg.conversation_id].append(msg)
         # Convert back to standard dict for return type consistency
         return dict(convos)

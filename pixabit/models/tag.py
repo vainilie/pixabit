@@ -10,22 +10,29 @@ Includes:
 """
 
 # SECTION: IMPORTS
+import logging
 import re
 from typing import Any, Dict, List, Optional  # Keep Dict/List, added Set
 
 import emoji_data_python
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
+
 
 # Local Imports (assuming config and utils are siblings or configured in path)
 try:
     # Import the configuration maps directly
-    from ..cli.config import ATTRIBUTE_MAP, TAG_MAP
+    from pixabit.cli.config import ATTRIBUTE_MAP, TAG_MAP
 
     # Placeholder for potential console usage, though models usually don't print
-    # from ..utils.display import console
+    # from pixabit.utils.display import console
 except ImportError:
-    print(
-        "Warning: Could not import config maps in tag.py. Tag processing might be limited."
-    )
+    log.warning("Warning: Could not import config maps in tag.py. Tag processing might be limited.")
     ATTRIBUTE_MAP: Dict[str, str] = {}
     TAG_MAP: Dict[str, str] = {}
     # Define dummy maps if import fails
@@ -42,9 +49,7 @@ ATTRIBUTE_SYMBOL_MAP: Dict[str, str] = {
     "᛭": "legacy",  # Nordic cross symbol?
 }
 # Precompile regex for finding attribute symbols
-ATTRIBUTE_SYMBOL_REGEX = re.compile(
-    f"([{ ''.join(ATTRIBUTE_SYMBOL_MAP.keys()) }])"
-)
+ATTRIBUTE_SYMBOL_REGEX = re.compile(f"([{ ''.join(ATTRIBUTE_SYMBOL_MAP.keys()) }])")
 
 # SECTION: DATA CLASSES
 
@@ -78,9 +83,7 @@ class Tag:
         origin: Optional[str] = None,
         position: Optional[int] = None,
         parent_id: Optional[str] = None,
-        children: Optional[
-            List["Tag"]
-        ] = None,  # Forward reference for type hint
+        children: Optional[List["Tag"]] = None,  # Forward reference for type hint
     ):
         """Initializes a Tag object.
 
@@ -101,9 +104,7 @@ class Tag:
 
         self.id: Optional[str] = tag_data.get("id")
         _name = tag_data.get("name")
-        self.name: str = (
-            emoji_data_python.replace_colons(_name) if _name else "Unnamed Tag"
-        )
+        self.name: str = emoji_data_python.replace_colons(_name) if _name else "Unnamed Tag"
         # API sometimes returns 'challenge': <challenge_id_string> or 'challenge': True/False
         # Normalize to boolean based on presence/truthiness
         self.challenge: bool = bool(tag_data.get("challenge"))
@@ -114,9 +115,7 @@ class Tag:
         self.attr: Optional[str] = attr
         self.origin: Optional[str] = origin
         self.parent_id: Optional[str] = parent_id
-        self.children: List[Tag] = (
-            children if children is not None else []
-        )  # Ensure list
+        self.children: List[Tag] = children if children is not None else []  # Ensure list
 
     # FUNC: __repr__
     def __repr__(self) -> str:
@@ -156,9 +155,7 @@ class TagList:
         # self._link_tags()
 
     # FUNC: _process_single_tag
-    def _process_single_tag(
-        self, i: int, tag_info: Dict[str, Any]
-    ) -> Optional[Tag]:
+    def _process_single_tag(self, i: int, tag_info: Dict[str, Any]) -> Optional[Tag]:
         """Processes a single raw tag dictionary into a Tag object with context.
 
         Determines `tag_type`, `attr`, `origin`, and `parent_id` based on config
@@ -172,7 +169,7 @@ class TagList:
             A processed Tag object, or None if the input tag_info is invalid.
         """
         if not isinstance(tag_info, dict) or not tag_info.get("id"):
-            print(f"Skipping invalid tag data at index {i}: {tag_info}")
+            log.warning(f"Skipping invalid tag data at index {i}: {tag_info}")
             return None
 
         # Create base Tag object
@@ -198,9 +195,7 @@ class TagList:
             if symbol in ATTRIBUTE_SYMBOL_MAP:
                 potential_attr = ATTRIBUTE_SYMBOL_MAP[symbol]
                 # If not already marked as a parent, assume it's a child
-                if (
-                    tag.tag_type == "basic"
-                ):  # Only overwrite if not already a parent
+                if tag.tag_type == "basic":  # Only overwrite if not already a parent
                     tag.tag_type = "child"
                     tag.attr = potential_attr
 
@@ -216,9 +211,7 @@ class TagList:
                     else:
                         # Couldn't find a parent defined in ATTRIBUTE_MAP for this attribute symbol.
                         # It remains a 'child' type but without a parent_id link based on this rule.
-                        print(
-                            f"Warning: Tag '{tag_name}' (ID: {tag_id}) has symbol for '{potential_attr}' but no matching parent in ATTRIBUTE_MAP."
-                        )
+                        log.warning(f"Warning: Tag '{tag_name}' (ID: {tag_id}) has symbol for '{potential_attr}' but no matching parent in ATTRIBUTE_MAP.")
 
         # If after checks, tag_type is still 'basic', it doesn't fit parent/child rules.
         return tag
@@ -235,9 +228,7 @@ class TagList:
         """
         processed_tags: List[Tag] = []
         if not isinstance(raw_tag_list, list):
-            print(
-                f"Error: raw_tag_list must be a list, got {type(raw_tag_list)}. Cannot process tags."
-            )
+            log.warning(f"Error: raw_tag_list must be a list, got {type(raw_tag_list)}. Cannot process tags.")
             self.tags = []
             return
 

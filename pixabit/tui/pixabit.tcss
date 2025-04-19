@@ -1,90 +1,109 @@
-/* pixabit/tui/pixabit.tcss - Basic Stylesheet */
+/* pixabit/tui/pixabit.tcss - Relying on Implicit Grid Placement */
 
-/* Apply to the root App widget */
 PixabitTUIApp {
-  /* Use grid layout for overall structure */
   layout: grid;
-  /* Define rows: auto height for header, flexible main area, auto for footer */
-  grid-size: 2; /* Two columns */
+  /* Define rows: Header (auto), Main (1fr), Footer (auto) */
   grid-rows: auto 1fr auto;
-  /* Define columns: Example: 1/3 for stats/menu, 2/3 for content */
-  /* grid-columns: 1fr 2fr; */ /* Adjusted to match Container layout below */
-  background: $panel; /* Use Textual's built-in variable */
+  /* Define columns: Left Panel (auto), Main Content (1fr) */
+  grid-columns: auto 1fr;
+  background: $panel;
   color: $text;
 }
 
 Header {
-  dock: top; /* Place header at the top */
-  height: 1; /* Header takes 1 row */
+  /* Implicitly row 1, column 1 */
+  column-span: 2; /* Span the 2 columns */
+  height: 1;
   background: $accent-darken-1;
   color: $text;
-  /* Textual's default Header styling is usually sufficient */
 }
 
 Footer {
-  dock: bottom; /* Place footer at the bottom */
-  height: 1; /* Footer takes 1 row */
-  /* Textual's default Footer styling handles key display */
+  /* Implicitly row 3, column 1 */
+  column-span: 2; /* Span the 2 columns */
+  height: 1;
 }
 
-/* Container for the main UI areas below the header */
 Container#main-grid {
-  /* This container spans both columns defined in the App grid */
-  /* It then defines its own internal grid */
-  grid-row: 2; /* Takes the 1fr row defined in App */
-  grid-column: 1 / 3; /* Spans both columns */
-  /* Internal grid for the panels */
-  grid-size: 2; /* Two columns for panels */
-  grid-gutter: 1 2; /* Row and column gutters */
-  padding: 1 2; /* Padding around the grid */
+  /* Implicitly row 2, column 1 */
+  column-span: 2; /* Span the 2 columns of App grid */
+
+  /* Use HORIZONTAL layout internally */
+  layout: horizontal;
+  /* grid-gutter: 1 1; */ /* Use gap for horizontal layout */
+  padding: 1;
+  background: $panel;
 }
 
-/* Styling for the vertical panels */
-#stats-panel {
-  grid-column: 1; /* Place in the first column */
-  border: heavy $accent;
+/* --- Column Container Styling --- */
+/* These are direct children of the horizontal #main-grid */
+
+Vertical#left-column {
+    /* width: auto; */ /* REMOVE auto */
+    width: 30; /* Assign a fixed width (e.g., 30 columns) */
+    /* Or use a percentage if preferred, though fixed is often easier */
+    /* width: 25%; */
+    grid-gutter: 1 0; /* Vertical gutter for items inside */
+  }
+
+
+Vertical#right-column {
+  width: 1fr; /* Take remaining horizontal space */
+}
+
+/* --- Panel Styling (Widgets inside the Vertical columns) --- */
+/* NO grid-row, grid-column, column-span, or row-span needed here */
+/* Their position is determined by being inside #left-column or #right-column */
+
+StatsPanel {
+  height: 40%;
+  border: round $accent;
+  padding: 1;
   background: $surface;
+  /* margin-bottom removed, use grid-gutter on parent Vertical#left-column */
 }
 
-#menu-panel {
-  grid-column: 1; /* Place below stats in the first column */
-  /* (Assuming you want stats above menu) */
-  /* If side-by-side, adjust App's grid-columns */
-  border: heavy $accent;
+MainMenu#menu-panel {
+  border: round $accent;
   background: $surface;
-  margin-top: 1; /* Add space above if stacked */
+  padding: 1;
+  height: 40%; /* Fill remaining vertical space in left column */
+  PlaceholderWidget { height: 100%; width: 100%; }
+  width: 100%; /* This is okay if parent (#left-column) has fixed width */
 }
 
-#content-panel {
-  grid-column: 2; /* Place in the second column */
-  grid-row: 1 / 3; /* Make it span both rows if stats/menu are stacked */
-  border: heavy $accent;
+ContentArea#content-panel {
+  border: round $accent;
   background: $surface;
+  padding: 1;
+  height: 100%; /* Fill vertical space in right column */
+  PlaceholderWidget { height: 100%; width: 100%; }
 }
 
-/* Placeholder styling (remove when using real widgets) */
-PlaceholderWidget {
-  content-align: center middle;
-  background: $panel-lighten-1;
-  border: thick $accent-lighten-1;
-}
+/* --- StatsPanel Internal Styling --- */
+StatsPanel Static { height: 1; margin-bottom: 1; }
+.stat-label { color: $text-muted; margin-right: 1;}
+.stat-value { color: $text; }
+#stat-level .stat-value { color: $warning; }
+#stat-hp .stat-value { color: $error; }
+#stat-mp .stat-value { color: $primary; }
+#stat-exp .stat-value { color: $success; }
+#stat-gp .stat-value { color: $warning-darken-2; }
+#stat-gems .stat-value { color: $secondary; }
+#stat-class .stat-value { color: $text; }
+#stat-status .stat-value { color: $text; }
 
-/* Optional Loading Indicator Styling */
-/*
-LoadingIndicator#loading-indicator {
-    display: block; // Show by default
-    dock: bottom;
-    height: 1;
-    background: $accent-darken-2;
-    color: $text;
-    margin-top: 1;
-    opacity: 0; // Start hidden
-    transition: opacity 0.3s ease-in-out; // Fade effect
+/* --- Placeholder Styling --- */
+PlaceholderWidget { border: dashed $accent-lighten-2; content-align: center middle; height: 100%; width: 100%;}
+
+/* --- Optional Loading Indicator --- */
+LoadingIndicator {
+  background: $accent-darken-2;
+  color: $text;
+  dock: bottom;
+  height: 1;
+  margin-top: 1;
+  opacity: 0;
+  transition: opacity 0.3s linear;
 }
-LoadingIndicator#loading-indicator.--visible {
-    opacity: 1; // Make visible when needed
-}
-PixabitTUIApp:disabled LoadingIndicator#loading-indicator { // Show when app is disabled?
-    opacity: 1;
-}
-*/
+LoadingIndicator.--visible { opacity: 1; }

@@ -10,9 +10,17 @@ Includes:
 """
 
 # SECTION: IMPORTS
+import logging
 from typing import Any, Dict, List, Optional  # Keep Dict/List for clarity
 
 import emoji_data_python
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 # SECTION: DATA CLASSES
 
@@ -62,40 +70,26 @@ class Spell:
 
         # Map content fields to attributes, handling potential missing keys gracefully
         _name = spell_data.get("text")
-        self.name: str = (
-            emoji_data_python.replace_colons(_name) if _name else spell_key
-        )  # Fallback to key
+        self.name: str = emoji_data_python.replace_colons(_name) if _name else spell_key  # Fallback to key
         _desc = spell_data.get("notes")
-        self.description: str = (
-            emoji_data_python.replace_colons(_desc) if _desc else ""
-        )
-        self.mana_cost: Optional[float] = spell_data.get(
-            "mana"
-        )  # Can be float or int
-        self.target: Optional[str] = spell_data.get(
-            "target"
-        )  # 'self', 'user', 'party', 'task'
+        self.description: str = emoji_data_python.replace_colons(_desc) if _desc else ""
+        self.mana_cost: Optional[float] = spell_data.get("mana")  # Can be float or int
+        self.target: Optional[str] = spell_data.get("target")  # 'self', 'user', 'party', 'task'
         self.level_required: Optional[int] = spell_data.get("lvl")
 
         # Other potentially useful flags from content
         self.is_bulk: Optional[bool] = spell_data.get("bulk")
         self.is_immediate_use: Optional[bool] = spell_data.get("immediateUse")
         self.is_limited: Optional[bool] = spell_data.get("limited")
-        self.is_previous_purchase: Optional[bool] = spell_data.get(
-            "previousPurchase"
-        )
+        self.is_previous_purchase: Optional[bool] = spell_data.get("previousPurchase")
         self.purchase_type: Optional[str] = spell_data.get("purchaseType")
         self.is_silent: Optional[bool] = spell_data.get("silent")
-        self.value: Optional[int] = spell_data.get(
-            "value"
-        )  # Often gold cost/value
+        self.value: Optional[int] = spell_data.get("value")  # Often gold cost/value
 
     # FUNC: __repr__
     def __repr__(self) -> str:
         """Provides a developer-friendly string representation."""
-        return (
-            f"Spell(key='{self.key}', class='{self.klass}', name='{self.name}')"
-        )
+        return f"Spell(key='{self.key}', class='{self.klass}', name='{self.name}')"
 
 
 # KLASS: SpellList
@@ -110,9 +104,7 @@ class SpellList:
     def __init__(
         self,
         # Expects the nested structure content['spells'] which is dict[class_name, dict[spell_key, spell_data]]
-        raw_content_spells: Optional[
-            Dict[str, Dict[str, Dict[str, Any]]]
-        ] = None,
+        raw_content_spells: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
         current_user_class: Optional[str] = None,
     ):
         """Initializes the SpellList by processing the spells section from game content.
@@ -126,13 +118,13 @@ class SpellList:
         """
         self.spells: List[Spell] = []
         self.current_user_class: Optional[str] = current_user_class
+        log.info(f"!!! INSIDE SpellList.__init__: Type is {type(raw_content_spells).__name__}")
+
         if raw_content_spells:
             self._process_list(raw_content_spells)
 
     # FUNC: _process_list
-    def _process_list(
-        self, raw_content_spells: Dict[str, Dict[str, Dict[str, Any]]]
-    ) -> None:
+    def _process_list(self, raw_content_spells: Dict[str, Dict[str, Dict[str, Any]]]) -> None:
         """Processes the raw content dictionary, creating Spell instances.
 
         Iterates through each class ('rogue', 'warrior', 'special', etc.) and
@@ -142,43 +134,38 @@ class SpellList:
             raw_content_spells: The dictionary structure from `content['spells']`.
         """
         processed_spells: List[Spell] = []
+        log.info(f"!!! INSIDE SpellList._process_list: Type is {type(raw_content_spells).__name__}")
 
-        if not isinstance(raw_content_spells, dict):
-            print(
-                "Error: raw_content_spells data must be a dictionary. Cannot process spells."
-            )
+        # --- ADD THIS LINE ---
+        is_dict_check_result = isinstance(raw_content_spells, dict)
+        log.info(f"!!! INSIDE SpellList._process_list: isinstance(..., dict) result is: {is_dict_check_result}")
+        # --- END ADD ---
+
+        if not is_dict_check_result:  # Use the stored result
+            # if not isinstance(raw_content_spells, dict): # Original check
+            log.info("Error: raw_content_spells data must be a dictionary. Cannot process spells.")
             self.spells = []
             return
 
         # Iterate through each class ('rogue', 'warrior', 'special', etc.)
         for klass, class_spells_dict in raw_content_spells.items():
             if not isinstance(class_spells_dict, dict):
-                print(
-                    f"Warning: Invalid spell data structure for class '{klass}'. Skipping."
-                )
+                log.info(f"Warning: Invalid spell data structure for class '{klass}'. Skipping.")
                 continue
 
             # Iterate through each spell within that class
             for spell_key, raw_spell_data in class_spells_dict.items():
                 if not isinstance(raw_spell_data, dict):
-                    print(
-                        f"Warning: Invalid spell data for key '{spell_key}' in class '{klass}'. Skipping."
-                    )
+                    log.info(f"Warning: Invalid spell data for key '{spell_key}' in class '{klass}'. Skipping.")
                     continue
                 try:
                     # Create the Spell instance, passing key, data, and class
-                    spell_instance = Spell(
-                        spell_key, raw_spell_data, spell_class=klass
-                    )
+                    spell_instance = Spell(spell_key, raw_spell_data, spell_class=klass)
                     processed_spells.append(spell_instance)
                 except (ValueError, TypeError) as e:
-                    print(
-                        f"Error instantiating Spell object: Key='{spell_key}', Class='{klass}'. Error: {e}"
-                    )
+                    log.info(f"Error instantiating Spell object: Key='{spell_key}', Class='{klass}'. Error: {e}")
                 except Exception as e:
-                    print(
-                        f"Unexpected error processing spell: Key='{spell_key}', Class='{klass}'. Error: {e}"
-                    )
+                    log.info(f"Unexpected error processing spell: Key='{spell_key}', Class='{klass}'. Error: {e}")
 
         # Sort spells, perhaps alphabetically by key or name? (Optional)
         # processed_spells.sort(key=lambda s: s.name)
@@ -246,9 +233,7 @@ class SpellList:
         return [spell for spell in self.spells if spell.target == target]
 
     # FUNC: filter_by_mana_cost
-    def filter_by_mana_cost(
-        self, max_cost: float, min_cost: float = 0.0
-    ) -> List[Spell]:
+    def filter_by_mana_cost(self, max_cost: float, min_cost: float = 0.0) -> List[Spell]:
         """Returns spells within a specified mana cost range (inclusive).
 
         Args:
@@ -258,17 +243,10 @@ class SpellList:
         Returns:
             A list of matching Spell objects.
         """
-        return [
-            spell
-            for spell in self.spells
-            if spell.mana_cost is not None
-            and min_cost <= spell.mana_cost <= max_cost
-        ]
+        return [spell for spell in self.spells if spell.mana_cost is not None and min_cost <= spell.mana_cost <= max_cost]
 
     # FUNC: filter_by_level
-    def filter_by_level(
-        self, max_level: int, min_level: int = 0
-    ) -> List[Spell]:
+    def filter_by_level(self, max_level: int, min_level: int = 0) -> List[Spell]:
         """Returns spells within a specified level requirement range (inclusive).
 
         Args:
@@ -278,17 +256,10 @@ class SpellList:
         Returns:
             A list of matching Spell objects.
         """
-        return [
-            spell
-            for spell in self.spells
-            if spell.level_required is not None
-            and min_level <= spell.level_required <= max_level
-        ]
+        return [spell for spell in self.spells if spell.level_required is not None and min_level <= spell.level_required <= max_level]
 
     # FUNC: get_available_spells
-    def get_available_spells(
-        self, user_level: int, user_class: Optional[str] = None
-    ) -> List[Spell]:
+    def get_available_spells(self, user_level: int, user_class: Optional[str] = None) -> List[Spell]:
         """Gets spells available to a user based on their level and class.
 
         Includes spells matching the user's class AND 'special' spells,
@@ -306,18 +277,13 @@ class SpellList:
 
         if not target_class and "special" not in {s.klass for s in self.spells}:
             # If no target class specified and no 'special' spells exist at all
-            print(
-                "Warning: Cannot determine available spells without a user class or 'special' spells."
-            )
+            log.info("Warning: Cannot determine available spells without a user class or 'special' spells.")
             return []
 
         available_spells: List[Spell] = []
         for spell in self.spells:
             # 1. Check Level Requirement
-            level_ok = (
-                spell.level_required is None
-                or spell.level_required <= user_level
-            )
+            level_ok = spell.level_required is None or spell.level_required <= user_level
             if not level_ok:
                 continue
 

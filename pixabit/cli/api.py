@@ -16,8 +16,8 @@ import requests
 
 # Local Imports (Adjust path based on execution context)
 try:
-    from ..utils.display import console, print  # Use themed console/print
-    from . import config  # Import config from within cli package
+    from pixabit.cli import config  # Import config from within cli package
+    from pixabit.utils.display import console, print  # Use themed console/print
 except ImportError:
     # Fallback imports
     import builtins

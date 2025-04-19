@@ -13,20 +13,28 @@ Includes:
 """
 
 # SECTION: IMPORTS
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union  # Keep Dict/List, add Union
 
 import emoji_data_python
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 # Local Imports (assuming utils and models are siblings or configured in path)
 try:
-    from ..utils.dates import convert_timestamp_to_utc
+    from pixabit.utils.dates import convert_timestamp_to_utc
 
     # Tag models might be needed if linking Tag objects instead of just names/IDs
     # from .tag import Tag, TagList
 except ImportError:
-    print("Warning: Using placeholder convert_timestamp_to_utc in task.py.")
+    log.warning("Warning: Using placeholder convert_timestamp_to_utc in task.py.")
 
     def convert_timestamp_to_utc(ts: Any) -> Optional[datetime]:  # noqa: D103
         return None  # type: ignore
@@ -53,9 +61,7 @@ class ChecklistItem:
             raise TypeError("item_data must be a dictionary.")
         self.id: Optional[str] = item_data.get("id")
         _text = item_data.get("text", "")
-        self.text: str = (
-            emoji_data_python.replace_colons(_text) if _text else ""
-        )
+        self.text: str = emoji_data_python.replace_colons(_text) if _text else ""
         self.completed: bool = item_data.get("completed", False)
         # Optional: Add position if available/needed: self.position = item_data.get('position')
 
@@ -80,23 +86,15 @@ class ChallengeData:
         """
         data = challenge_data if isinstance(challenge_data, dict) else {}
 
-        self.task_id: Optional[str] = data.get(
-            "taskId"
-        )  # ID of the task *within* the challenge
+        self.task_id: Optional[str] = data.get("taskId")  # ID of the task *within* the challenge
         self.id: Optional[str] = data.get("id")  # ID of the challenge itself
         _short_name = data.get("shortName")
-        self.name: Optional[str] = (
-            emoji_data_python.replace_colons(_short_name)
-            if _short_name
-            else None
-        )  # Often challenge shortName
+        self.name: Optional[str] = emoji_data_python.replace_colons(_short_name) if _short_name else None  # Often challenge shortName
 
         # Process 'broken' status - can indicate task or challenge issues
         broken_raw: Optional[str] = data.get("broken")
         self.broken_status: Optional[str] = None  # e.g., 'task', 'challenge'
-        self.is_broken: bool = bool(
-            broken_raw
-        )  # True if any broken status exists
+        self.is_broken: bool = bool(broken_raw)  # True if any broken status exists
 
         if broken_raw:
             if broken_raw in ("TASK_DELETED", "CHALLENGE_TASK_NOT_FOUND"):
@@ -146,66 +144,38 @@ class Task:
             raise TypeError("task_data must be a dictionary.")
         if not task_data.get("_id"):
             # ID is essential for referencing the task
-            raise ValueError(
-                f"Task data is missing '_id': {task_data.get('text', 'N/A')}"
-            )
+            raise ValueError(f"Task data is missing '_id': {task_data.get('text', 'N/A')}")
 
         self.id: str = task_data["_id"]  # Should exist based on check above
         self.alias: Optional[str] = task_data.get("alias")
-        self.user_id: Optional[str] = task_data.get(
-            "userId"
-        )  # ID of the user who owns this task
+        self.user_id: Optional[str] = task_data.get("userId")  # ID of the user who owns this task
 
         _text = task_data.get("text", "")
-        self.text: str = (
-            emoji_data_python.replace_colons(_text) if _text else ""
-        )
+        self.text: str = emoji_data_python.replace_colons(_text) if _text else ""
         _notes = task_data.get("notes", "")
-        self.notes: str = (
-            emoji_data_python.replace_colons(_notes) if _notes else ""
-        )
+        self.notes: str = emoji_data_python.replace_colons(_notes) if _notes else ""
 
-        self.type: Optional[str] = task_data.get(
-            "type"
-        )  # 'habit', 'daily', 'todo', 'reward'
+        self.type: Optional[str] = task_data.get("type")  # 'habit', 'daily', 'todo', 'reward'
         self.tags: List[str] = task_data.get("tags", [])  # List of Tag UUIDs
-        self.value: float = float(
-            task_data.get("value", 0.0)
-        )  # Task difficulty/value
-        self.priority: float = float(
-            task_data.get("priority", 1.0)
-        )  # Task priority (difficulty multiplier)
-        self.attribute: str = task_data.get(
-            "attribute", "str"
-        )  # Default 'str', others: 'int', 'con', 'per'
+        self.value: float = float(task_data.get("value", 0.0))  # Task difficulty/value
+        self.priority: float = float(task_data.get("priority", 1.0))  # Task priority (difficulty multiplier)
+        self.attribute: str = task_data.get("attribute", "str")  # Default 'str', others: 'int', 'con', 'per'
 
         # Position: This is tricky. API doesn't return absolute position.
         # It might be calculated relative to type during processing. Initialize as None.
         self.position: Optional[int] = None
 
         # Dates (converted to UTC datetime objects)
-        self.created_at: Optional[datetime] = convert_timestamp_to_utc(
-            task_data.get("createdAt")
-        )
-        self.updated_at: Optional[datetime] = convert_timestamp_to_utc(
-            task_data.get("updatedAt")
-        )
+        self.created_at: Optional[datetime] = convert_timestamp_to_utc(task_data.get("createdAt"))
+        self.updated_at: Optional[datetime] = convert_timestamp_to_utc(task_data.get("updatedAt"))
 
         # Other common fields
-        self.by_habitica: bool = task_data.get(
-            "byHabitica", False
-        )  # System-created task?
-        self.reminders: List[Dict[str, Any]] = task_data.get(
-            "reminders", []
-        )  # List of reminder objects
+        self.by_habitica: bool = task_data.get("byHabitica", False)  # System-created task?
+        self.reminders: List[Dict[str, Any]] = task_data.get("reminders", [])  # List of reminder objects
 
         # Challenge Integration (using ChallengeData class)
-        challenge_info = task_data.get(
-            "challenge"
-        )  # Can be {} or dict with data
-        self.challenge: Optional[ChallengeData] = (
-            ChallengeData(challenge_info) if challenge_info else None
-        )
+        challenge_info = task_data.get("challenge")  # Can be {} or dict with data
+        self.challenge: Optional[ChallengeData] = ChallengeData(challenge_info) if challenge_info else None
 
         # Standardized Checklist placeholder (populated by specific types if applicable)
         self.checklist: List[ChecklistItem] = []
@@ -214,13 +184,9 @@ class Task:
         # These are initialized here but set externally after instantiation.
         self.tag_names: List[str] = []  # Resolved tag names
         self.value_color: str = "neutral"  # Semantic color based on value
-        self._status: str = (
-            "unknown"  # Calculated status (e.g., 'due', 'red', 'success')
-        )
+        self._status: str = "unknown"  # Calculated status (e.g., 'due', 'red', 'success')
         self.damage_user: Optional[float] = None  # Potential HP damage to user
-        self.damage_party: Optional[float] = (
-            None  # Potential damage to party/boss
-        )
+        self.damage_party: Optional[float] = None  # Potential damage to party/boss
         # Optional: Store linked Tag objects if needed later
         # self.origin_tag: Optional[Tag] = None
         # self.attribute_tag: Optional[Tag] = None
@@ -258,21 +224,11 @@ class Habit(Task):
         """Initializes the Habit object, calling parent init and adding habit-specific fields."""
         super().__init__(task_data)
         self.type = "habit"  # Override type
-        self.up: bool = task_data.get(
-            "up", True
-        )  # Can score positively? (Defaults true)
-        self.down: bool = task_data.get(
-            "down", True
-        )  # Can score negatively? (Defaults true)
-        self.counter_up: int = int(
-            task_data.get("counterUp", 0)
-        )  # Positive clicks count
-        self.counter_down: int = int(
-            task_data.get("counterDown", 0)
-        )  # Negative clicks count
-        self.frequency: str = task_data.get(
-            "frequency", "daily"
-        )  # Not typically used for Habits? API includes it.
+        self.up: bool = task_data.get("up", True)  # Can score positively? (Defaults true)
+        self.down: bool = task_data.get("down", True)  # Can score negatively? (Defaults true)
+        self.counter_up: int = int(task_data.get("counterUp", 0))  # Positive clicks count
+        self.counter_down: int = int(task_data.get("counterDown", 0))  # Negative clicks count
+        self.frequency: str = task_data.get("frequency", "daily")  # Not typically used for Habits? API includes it.
         # History might contain recent scoring events, could be large
         self.history: List[Dict[str, Any]] = task_data.get("history", [])
 
@@ -282,9 +238,7 @@ class Habit(Task):
         up_str = f"⬆️{self.counter_up}" if self.up else ""
         down_str = f"⬇️{self.counter_down}" if self.down else ""
         sep = " / " if self.up and self.down else ""
-        counters = (
-            f"{up_str}{sep}{down_str}" if up_str or down_str else "No Counters"
-        )
+        counters = f"{up_str}{sep}{down_str}" if up_str or down_str else "No Counters"
         text_preview = self.text[:30] + ("..." if len(self.text) > 30 else "")
         return f"Habit(id='{self.id}', text='{text_preview}', counters='{counters}')"
 
@@ -298,28 +252,16 @@ class Todo(Task):
         """Initializes the Todo object, calling parent init and adding to-do-specific fields."""
         super().__init__(task_data)
         self.type = "todo"  # Override type
-        self.completed: bool = task_data.get(
-            "completed", False
-        )  # Is the To-Do marked complete?
+        self.completed: bool = task_data.get("completed", False)  # Is the To-Do marked complete?
         # Date the To-Do was completed
-        self.completed_date: Optional[datetime] = convert_timestamp_to_utc(
-            task_data.get("dateCompleted")
-        )
+        self.completed_date: Optional[datetime] = convert_timestamp_to_utc(task_data.get("dateCompleted"))
         # Due date for the To-Do
-        self.due_date: Optional[datetime] = convert_timestamp_to_utc(
-            task_data.get("date")
-        )
+        self.due_date: Optional[datetime] = convert_timestamp_to_utc(task_data.get("date"))
         # Preference for collapsing checklist display
-        self.collapse_checklist: bool = task_data.get(
-            "collapseChecklist", False
-        )
+        self.collapse_checklist: bool = task_data.get("collapseChecklist", False)
 
         # Populate checklist from data using ChecklistItem class
-        self.checklist: List[ChecklistItem] = [
-            ChecklistItem(item)
-            for item in task_data.get("checklist", [])
-            if isinstance(item, dict)
-        ]
+        self.checklist: List[ChecklistItem] = [ChecklistItem(item) for item in task_data.get("checklist", []) if isinstance(item, dict)]
 
     # Property to check if due date is passed (read-only check)
     @property
@@ -337,11 +279,7 @@ class Todo(Task):
     def __repr__(self) -> str:
         """Developer-friendly representation including completion status and due date."""
         status_char = "[X]" if self.completed else "[ ]"
-        due_str = (
-            f", due={self.due_date.strftime('%Y-%m-%d')}"
-            if self.due_date
-            else ""
-        )
+        due_str = f", due={self.due_date.strftime('%Y-%m-%d')}" if self.due_date else ""
         text_preview = self.text[:30] + ("..." if len(self.text) > 30 else "")
         return f"Todo(id='{self.id}', status='{status_char}', text='{text_preview}'{due_str})"
 
@@ -355,38 +293,20 @@ class Daily(Task):
         """Initializes the Daily object, calling parent init and adding daily-specific fields."""
         super().__init__(task_data)
         self.type = "daily"  # Override type
-        self.completed: bool = task_data.get(
-            "completed", False
-        )  # Completed for the current period?
-        self.is_due: bool = task_data.get(
-            "isDue", False
-        )  # Is it due today based on schedule and CDS?
-        self.streak: int = int(
-            task_data.get("streak", 0)
-        )  # Current completion streak
+        self.completed: bool = task_data.get("completed", False)  # Completed for the current period?
+        self.is_due: bool = task_data.get("isDue", False)  # Is it due today based on schedule and CDS?
+        self.streak: int = int(task_data.get("streak", 0))  # Current completion streak
         # Preference for collapsing checklist display
-        self.collapse_checklist: bool = task_data.get(
-            "collapseChecklist", False
-        )
+        self.collapse_checklist: bool = task_data.get("collapseChecklist", False)
 
         # Populate checklist from data using ChecklistItem class
-        self.checklist: List[ChecklistItem] = [
-            ChecklistItem(item)
-            for item in task_data.get("checklist", [])
-            if isinstance(item, dict)
-        ]
+        self.checklist: List[ChecklistItem] = [ChecklistItem(item) for item in task_data.get("checklist", []) if isinstance(item, dict)]
 
         # Scheduling properties
-        self.frequency: str = task_data.get(
-            "frequency", "weekly"
-        )  # 'daily', 'weekly', 'monthly', 'yearly'
-        self.every_x: int = int(
-            task_data.get("everyX", 1)
-        )  # e.g., every 3 days
+        self.frequency: str = task_data.get("frequency", "weekly")  # 'daily', 'weekly', 'monthly', 'yearly'
+        self.every_x: int = int(task_data.get("everyX", 1))  # e.g., every 3 days
         # Date the daily first became active
-        self.start_date: Optional[datetime] = convert_timestamp_to_utc(
-            task_data.get("startDate")
-        )
+        self.start_date: Optional[datetime] = convert_timestamp_to_utc(task_data.get("startDate"))
         # For monthly frequency (days of month)
         self.days_of_month: List[int] = task_data.get("daysOfMonth", [])
         # For monthly frequency (weeks of month)
@@ -397,20 +317,14 @@ class Daily(Task):
         self.yesterday_completed: bool = task_data.get("yesterDaily", False)
         # List of upcoming due dates (timestamps)
         _next_due_ts = task_data.get("nextDue", [])
-        self.next_due: List[datetime] = [
-            dt
-            for ts in _next_due_ts
-            if (dt := convert_timestamp_to_utc(ts)) is not None
-        ]
+        self.next_due: List[datetime] = [dt for ts in _next_due_ts if (dt := convert_timestamp_to_utc(ts)) is not None]
         # History might contain recent scoring/cron events
         self.history: List[Dict[str, Any]] = task_data.get("history", [])
 
     # FUNC: __repr__
     def __repr__(self) -> str:
         """Developer-friendly representation including due status and streak."""
-        status_char = (
-            "[X]" if self.completed else ("[ ]" if self.is_due else "[-]")
-        )
+        status_char = "[X]" if self.completed else ("[ ]" if self.is_due else "[-]")
         streak_str = f" (Streak: {self.streak})" if self.streak > 0 else ""
         text_preview = self.text[:30] + ("..." if len(self.text) > 30 else "")
         return f"Daily(id='{self.id}', status='{status_char}', text='{text_preview}'{streak_str})"
@@ -428,9 +342,7 @@ class Reward(Task):
         super().__init__(task_data)
         self.type = "reward"  # Override type
         # Value is cost, already handled by base Task. Ensure it's parsed correctly.
-        self.value = float(
-            task_data.get("value", 0.0)
-        )  # Explicitly handle value as cost
+        self.value = float(task_data.get("value", 0.0))  # Explicitly handle value as cost
 
     # FUNC: __repr__
     def __repr__(self) -> str:
@@ -501,7 +413,7 @@ class TaskList:
     # def _resolve_tag_names(self, tag_collection: TagList) -> None:
     #     """Populates the tag_names list for each task using the tag_collection."""
     #     if not hasattr(tag_collection, "by_id"):
-    #         print("Warning: tag_collection provided to TaskList lacks 'by_id'. Cannot resolve tag names.")
+    #         log.warning("Warning: tag_collection provided to TaskList lacks 'by_id'. Cannot resolve tag names.")
     #         return
     #     for task in self.tasks:
     #         task.tag_names = [] # Reset just in case
@@ -587,14 +499,8 @@ class TaskList:
         """
         # Check if tag_names seem populated on the first task (heuristic)
         if not self.tasks or not hasattr(self.tasks[0], "tag_names"):
-            print(
-                "Warning: Filtering by tag name, but 'tag_names' may not be populated."
-            )
-        return [
-            task
-            for task in self.tasks
-            if hasattr(task, "tag_names") and tag_name in task.tag_names
-        ]
+            log.warning("Warning: Filtering by tag name, but 'tag_names' may not be populated.")
+        return [task for task in self.tasks if hasattr(task, "tag_names") and tag_name in task.tag_names]
 
     # FUNC: filter_by_priority
     def filter_by_priority(
@@ -618,20 +524,12 @@ class TaskList:
         filtered = self.tasks
         if exact_priority is not None:
             tolerance = 0.01  # Tolerance for float comparison
-            filtered = [
-                task
-                for task in filtered
-                if abs(task.priority - exact_priority) < tolerance
-            ]
+            filtered = [task for task in filtered if abs(task.priority - exact_priority) < tolerance]
         else:  # Apply range filters only if exact_priority is not given
             if min_priority is not None:
-                filtered = [
-                    task for task in filtered if task.priority >= min_priority
-                ]
+                filtered = [task for task in filtered if task.priority >= min_priority]
             if max_priority is not None:
-                filtered = [
-                    task for task in filtered if task.priority <= max_priority
-                ]
+                filtered = [task for task in filtered if task.priority <= max_priority]
         return filtered
 
     # FUNC: filter_by_attribute
@@ -659,19 +557,11 @@ class TaskList:
             A list of matching Task objects.
         """
         if not self.tasks or not hasattr(self.tasks[0], "_status"):
-            print(
-                "Warning: Filtering by status, but '_status' may not be populated."
-            )
-        return [
-            task
-            for task in self.tasks
-            if hasattr(task, "_status") and task._status == status
-        ]
+            log.warning("Warning: Filtering by status, but '_status' may not be populated.")
+        return [task for task in self.tasks if hasattr(task, "_status") and task._status == status]
 
     # FUNC: filter_completed (More specific than status filter)
-    def filter_completed(
-        self, completed: bool = True
-    ) -> List[Union[Daily, Todo]]:
+    def filter_completed(self, completed: bool = True) -> List[Union[Daily, Todo]]:
         """Returns completed or uncompleted Dailies and Todos.
 
         Args:
@@ -680,11 +570,7 @@ class TaskList:
         Returns:
             A list of matching Daily or Todo objects.
         """
-        return [
-            task
-            for task in self.tasks
-            if isinstance(task, (Daily, Todo)) and task.completed is completed
-        ]
+        return [task for task in self.tasks if isinstance(task, (Daily, Todo)) and task.completed is completed]
 
     # FUNC: filter_due_dailies (More specific than status filter)
     def filter_due_dailies(self, due: bool = True) -> List[Daily]:
@@ -696,11 +582,7 @@ class TaskList:
         Returns:
             A list of matching Daily objects.
         """
-        return [
-            task
-            for task in self.tasks
-            if isinstance(task, Daily) and task.is_due is due
-        ]
+        return [task for task in self.tasks if isinstance(task, Daily) and task.is_due is due]
 
     # FUNC: filter_past_due_todos (More specific than status filter)
     def filter_past_due_todos(self) -> List[Todo]:
@@ -710,20 +592,14 @@ class TaskList:
             A list of matching Todo objects.
         """
         # Relies on the is_past_due property
-        return [
-            task
-            for task in self.tasks
-            if isinstance(task, Todo) and task.is_past_due
-        ]
+        return [task for task in self.tasks if isinstance(task, Todo) and task.is_past_due]
 
     # FUNC: filter_by_challenge
     def filter_by_challenge(
         self,
         challenge_id: Optional[str] = None,
         is_broken: Optional[bool] = None,
-        broken_status: Optional[
-            str
-        ] = None,  # Filter by specific broken type ('task', 'challenge')
+        broken_status: Optional[str] = None,  # Filter by specific broken type ('task', 'challenge')
     ) -> List[Task]:
         """Returns tasks associated with challenges based on criteria.
 
@@ -742,27 +618,14 @@ class TaskList:
         filtered = [task for task in self.tasks if task.challenge is not None]
 
         if challenge_id is not None:
-            filtered = [
-                task
-                for task in filtered
-                if task.challenge and task.challenge.id == challenge_id
-            ]
+            filtered = [task for task in filtered if task.challenge and task.challenge.id == challenge_id]
 
         if broken_status is not None:
             # Filter by specific broken type (most restrictive)
-            filtered = [
-                task
-                for task in filtered
-                if task.challenge
-                and task.challenge.broken_status == broken_status
-            ]
+            filtered = [task for task in filtered if task.challenge and task.challenge.broken_status == broken_status]
         elif is_broken is not None:
             # Filter by general broken state (True or False)
-            filtered = [
-                task
-                for task in filtered
-                if task.challenge and task.challenge.is_broken is is_broken
-            ]
+            filtered = [task for task in filtered if task.challenge and task.challenge.is_broken is is_broken]
         # If is_broken is None and broken_status is None, we just return all tasks linked to any challenge
 
         return filtered

@@ -15,7 +15,7 @@ from typing import Any  # For fallback type hints
 
 # Use themed display components
 try:
-    from ..utils.display import (
+    from pixabit.utils.display import (
         Confirm,
         Prompt,
         console,

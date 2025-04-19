@@ -14,6 +14,7 @@ endpoints like user data, tasks, tags, challenges, party, inbox, and content.
 # SECTION: IMPORTS
 import asyncio
 import json
+import logging
 import time
 from typing import (
     Any,
@@ -24,36 +25,33 @@ from typing import (
 )  # Keep Dict/List for clarity
 
 import httpx
+from rich.logging import RichHandler
+from rich.text import Text
+from rich.traceback import install
+from textual import log
+
+from pixabit.utils.display import console, print
+
+install(show_locals=True)
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True, console=console, markup=True)])
+
+log = logging.getLogger("rich")
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 
 # Local Imports
 try:
     # Assumes config is at the root level or PYTHONPATH is set correctly
-    from ..cli import config  # Import config from the cli package structure
-
     # Use themed console/print from utils
-    from ..utils.display import console, print
+    from pixabit.cli import (
+        config,
+    )  # Import config from the cli package structure
+    from pixabit.utils.display import console, print
+
 except ImportError:
     # Fallback for standalone testing or import issues
-    import builtins
-
-    print = builtins.print
-
-    class DummyConsole:  # Define a simple fallback console
-        def print(self, *args: Any, **kwargs: Any) -> None:
-            builtins.print(*args)
-
-        def log(self, *args: Any, **kwargs: Any) -> None:
-            builtins.print("LOG:", *args)
-
-        def print_exception(self, *args: Any, **kwargs: Any) -> None:
-            import traceback
-
-            traceback.print_exc()
-
-    console = DummyConsole()
-    print(
-        "Warning: pixabit.utils.display or pixabit.cli.config not found, using basic print/log/defaults."
-    )
 
     # Define dummy config values if needed for basic instantiation
     class DummyConfig:
@@ -68,9 +66,7 @@ REQUESTS_PER_MINUTE: int = 29  # Stay under 30/min limit
 MIN_REQUEST_INTERVAL: float = 60.0 / REQUESTS_PER_MINUTE  # ~2.07 seconds
 
 # Type hint for the data payload within a successful Habitica API response
-HabiticaApiResponsePayload = Optional[
-    Union[Dict[str, Any], List[Dict[str, Any]]]
-]
+HabiticaApiResponsePayload = Optional[Union[Dict[str, Any], List[Dict[str, Any]]]]
 
 
 # KLASS: HabiticaAPIError
@@ -103,13 +99,11 @@ class HabiticaAPIError(Exception):
         """String representation of the error."""
         details = []
         if self.status_code is not None:
-            details.append(f"Status={self.status_code}")
+            details.append(f"Status={self.status_code}")  # Plain string part
         if self.error_type:
-            details.append(f"Type='{self.error_type}'")
+            details.append(f"Type='{self.error_type}'")  # Plain string part
         base_msg = super().__str__()
-        return f"HabiticaAPIError: {base_msg}" + (
-            f" ({', '.join(details)})" if details else ""
-        )
+        return f"HabiticaAPIError: {base_msg}" + (f" ({', '.join(details)})" if details else "")
 
 
 # KLASS: HabiticaAPI
@@ -152,12 +146,8 @@ class HabiticaAPI:
         self.api_token: str = api_token or config.HABITICA_API_TOKEN
         self.base_url: str = base_url
 
-        if (
-            not self.user_id or not self.api_token or "DUMMY" in self.user_id
-        ):  # Check for dummy fallback too
-            raise ValueError(
-                "Habitica User ID and API Token are required and must be valid."
-            )
+        if not self.user_id or not self.api_token or "DUMMY" in self.user_id:  # Check for dummy fallback too
+            raise ValueError("Habitica User ID and API Token are required and must be valid.")
 
         self.headers: Dict[str, str] = {
             "x-api-user": self.user_id,
@@ -189,9 +179,7 @@ class HabiticaAPI:
         self.last_request_time = time.monotonic()
 
     # FUNC: _request
-    async def _request(
-        self, method: str, endpoint: str, **kwargs: Any
-    ) -> HabiticaApiResponsePayload:
+    async def _request(self, method: str, endpoint: str, **kwargs: Any) -> HabiticaApiResponsePayload:
         """Internal async method for making API requests with rate limiting & error handling.
 
         Args:
@@ -216,12 +204,8 @@ class HabiticaAPI:
         try:
             # Create a new client per request for simplicity.
             # For better performance (connection reuse), create client once in __init__.
-            async with httpx.AsyncClient(
-                timeout=120
-            ) as client:  # Use instance client if created
-                response = await client.request(
-                    method, url, headers=self.headers, **kwargs
-                )
+            async with httpx.AsyncClient(timeout=120) as client:  # Use instance client if created
+                response = await client.request(method, url, headers=self.headers, **kwargs)
 
             response.raise_for_status()  # Raise httpx.HTTPStatusError for 4xx/5xx
 
@@ -238,12 +222,8 @@ class HabiticaAPI:
                     return response_data.get("data")
                 else:
                     # API indicated failure in the wrapper
-                    error_type = response_data.get(
-                        "error", "Unknown Habitica Error"
-                    )
-                    message = response_data.get(
-                        "message", "No message provided."
-                    )
+                    error_type = response_data.get("error", "Unknown Habitica Error")
+                    message = response_data.get("message", "No message provided.")
                     raise HabiticaAPIError(
                         f"{error_type} - {message}",
                         status_code=response.status_code,
@@ -256,14 +236,12 @@ class HabiticaAPI:
                 return response_data
             else:
                 # Unexpected JSON type (e.g., string, number) for a successful response
-                raise ValueError(
-                    f"Unexpected JSON structure received: {type(response_data).__name__}"
-                )
+                raise ValueError(f"Unexpected JSON structure received: {type(response_data).__name__}")
 
         # --- Specific Exception Handling ---
         except httpx.TimeoutException as timeout_err:
             msg = f"Request timed out for {method} {endpoint}"
-            console.print(f"[error]Timeout Error:[/error] {msg}: {timeout_err}")
+            log.error(f"[error]Timeout Error:[/error] {msg}: {timeout_err}")
             raise HabiticaAPIError(msg, status_code=408) from timeout_err
 
         except httpx.HTTPStatusError as http_err:
@@ -290,65 +268,43 @@ class HabiticaAPI:
             except json.JSONDecodeError:  # Response wasn't JSON
                 body_preview = response.text[:200].replace("\n", "\\n")
                 error_details += f" | Response Body (non-JSON): {body_preview}"
-                console.print(f"[error]Request Failed:[/error] {error_details}")
+                log.error(f"[error]Request Failed:[/error] {error_details}")
                 raise HabiticaAPIError(
                     f"HTTP Error {status_code} with non-JSON body",
                     status_code=status_code,
                 ) from http_err
-            except (
-                Exception
-            ) as parse_err:  # Handle error during error parsing itself
-                console.print(
-                    f"[error]Request Failed & Error Parsing Failed:[/error] {error_details} | Parse Err: {parse_err}"
-                )
+            except Exception as parse_err:  # Handle error during error parsing itself
+                log.error(f"[error]Request Failed & Error Parsing Failed:[/error] {error_details} | Parse Err: {parse_err}")
                 raise HabiticaAPIError(
                     f"HTTP Error {status_code} (error parsing failed)",
                     status_code=status_code,
                 ) from http_err
 
-        except (
-            httpx.RequestError
-        ) as req_err:  # Other network errors (connection, DNS)
+        except httpx.RequestError as req_err:  # Other network errors (connection, DNS)
             msg = f"Network/Request Error for {method} {endpoint}"
-            console.print(f"[error]Network Error:[/error] {msg}: {req_err}")
+            log.error(f"[error]Network Error:[/error] {msg}: {req_err}")
             raise HabiticaAPIError(msg) from req_err
 
-        except (
-            json.JSONDecodeError
-        ) as json_err:  # Parsing failed on a 2xx response
+        except json.JSONDecodeError as json_err:  # Parsing failed on a 2xx response
             msg = f"Could not decode successful JSON response from {method} {endpoint}"
             status = response.status_code if response else "N/A"
-            body = (
-                response.text[:200].replace("\n", "\\n") if response else "N/A"
-            )
-            console.print(
-                f"[error]JSON Decode Error:[/error] {msg} (Status: {status}, Body: {body})"
-            )
-            raise ValueError(
-                f"Invalid JSON received from {method} {endpoint}"
-            ) from json_err
+            body = response.text[:200].replace("\n", "\\n") if response else "N/A"
+            log.error(f"[error]JSON Decode Error:[/error] {msg} (Status: {status}, Body: {body})")
+            raise ValueError(f"Invalid JSON received from {method} {endpoint}") from json_err
 
-        except (
-            ValueError
-        ) as val_err:  # Catch ValueErrors raised internally (e.g., unexpected structure)
-            console.print(
-                f"[error]Data Error:[/error] For {method} {endpoint}: {val_err}"
-            )
+        except ValueError as val_err:  # Catch ValueErrors raised internally (e.g., unexpected structure)
+            log.error(f"[error]Data Error:[/error] For {method} {endpoint}: {val_err}")
             raise  # Re-raise ValueError
 
         except Exception as e:  # Catch-all for other unexpected errors
-            console.print(
-                f"[error]Unexpected Error:[/error] During API request ({method} {endpoint}): {type(e).__name__} - {e}"
-            )
-            # console.print_exception(show_locals=False) # Optional traceback
+            log.error(f"[error]Unexpected Error:[/error] During API request ({method} {endpoint}): {type(e).__name__} - {e}")
+            # log.error_exception(show_locals=False) # Optional traceback
             raise HabiticaAPIError(f"Unexpected error: {e}") from e
 
     # SECTION: Core HTTP Request Methods
 
     # FUNC: get
-    async def get(
-        self, endpoint: str, params: Optional[Dict[str, Any]] = None
-    ) -> HabiticaApiResponsePayload:
+    async def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> HabiticaApiResponsePayload:
         """Sends an asynchronous GET request.
 
         Args:
@@ -400,9 +356,7 @@ class HabiticaAPI:
         return await self._request("PUT", endpoint, json=data, params=params)
 
     # FUNC: delete
-    async def delete(
-        self, endpoint: str, params: Optional[Dict[str, Any]] = None
-    ) -> HabiticaApiResponsePayload:
+    async def delete(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> HabiticaApiResponsePayload:
         """Sends an asynchronous DELETE request with optional query params.
 
         Args:
@@ -427,9 +381,7 @@ class HabiticaAPI:
         return result if isinstance(result, dict) else None
 
     # FUNC: update_user
-    async def update_user(
-        self, update_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def update_user(self, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Async PUT /user - Updates general user settings.
 
         Args:
@@ -455,9 +407,7 @@ class HabiticaAPI:
         """
         if not 0 <= hour <= 23:
             raise ValueError("Hour must be between 0 and 23")
-        result = await self.post(
-            "/user/custom-day-start", data={"dayStart": hour}
-        )
+        result = await self.post("/user/custom-day-start", data={"dayStart": hour})
         return result if isinstance(result, dict) else None
 
     # FUNC: toggle_user_sleep
@@ -469,9 +419,7 @@ class HabiticaAPI:
             or the full data dictionary if API returns more, or None on error.
             (Handles V3/V4 API differences where possible).
         """
-        result = await self.post(
-            "/user/sleep"
-        )  # _request extracts 'data' payload
+        result = await self.post("/user/sleep")  # _request extracts 'data' payload
         # V3 returns boolean in 'data', V4 might return object? Return whatever 'data' is.
         return result
 
@@ -490,9 +438,7 @@ class HabiticaAPI:
     # SECTION: Convenience Methods (Tasks)
 
     # FUNC: get_tasks
-    async def get_tasks(
-        self, task_type: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def get_tasks(self, task_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Async GET /tasks/user - Gets user tasks, optionally filtered by type.
 
         Args:
@@ -506,9 +452,7 @@ class HabiticaAPI:
         return result if isinstance(result, list) else []
 
     # FUNC: create_task
-    async def create_task(
-        self, data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def create_task(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Async POST /tasks/user - Creates a new task.
 
         Args:
@@ -523,9 +467,7 @@ class HabiticaAPI:
         return result if isinstance(result, dict) else None
 
     # FUNC: update_task
-    async def update_task(
-        self, task_id: str, data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def update_task(self, task_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Async PUT /tasks/{taskId} - Updates an existing task.
 
         Args:
@@ -560,9 +502,7 @@ class HabiticaAPI:
         return result is None
 
     # FUNC: score_task
-    async def score_task(
-        self, task_id: str, direction: str = "up"
-    ) -> Optional[Dict[str, Any]]:
+    async def score_task(self, task_id: str, direction: str = "up") -> Optional[Dict[str, Any]]:
         """Async POST /tasks/{taskId}/score/{direction} - Scores a task (+/-).
 
         Args:
@@ -581,9 +521,7 @@ class HabiticaAPI:
         return result if isinstance(result, dict) else None
 
     # FUNC: set_attribute
-    async def set_attribute(
-        self, task_id: str, attribute: str
-    ) -> Optional[Dict[str, Any]]:
+    async def set_attribute(self, task_id: str, attribute: str) -> Optional[Dict[str, Any]]:
         """Async Sets task attribute ('str', 'int', 'con', 'per') via update_task.
 
         Args:
@@ -594,15 +532,11 @@ class HabiticaAPI:
             The updated task object dictionary, or None on error.
         """
         if attribute not in ["str", "int", "con", "per"]:
-            raise ValueError(
-                "Invalid attribute. Must be 'str', 'int', 'con', or 'per'."
-            )
+            raise ValueError("Invalid attribute. Must be 'str', 'int', 'con', or 'per'.")
         return await self.update_task(task_id, {"attribute": attribute})
 
     # FUNC: move_task_to_position
-    async def move_task_to_position(
-        self, task_id: str, position: int
-    ) -> Optional[List[str]]:
+    async def move_task_to_position(self, task_id: str, position: int) -> Optional[List[str]]:
         """Async POST /tasks/{taskId}/move/to/{position} - Moves task (0=top, -1=bottom).
 
         Args:
@@ -664,9 +598,7 @@ class HabiticaAPI:
         return result if isinstance(result, dict) else None
 
     # FUNC: update_tag
-    async def update_tag(
-        self, tag_id: str, name: str
-    ) -> Optional[Dict[str, Any]]:
+    async def update_tag(self, tag_id: str, name: str) -> Optional[Dict[str, Any]]:
         """Async PUT /tags/{tagId} - Updates tag name.
 
         Args:
@@ -722,9 +654,7 @@ class HabiticaAPI:
         return result is None
 
     # FUNC: add_tag_to_task
-    async def add_tag_to_task(
-        self, task_id: str, tag_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def add_tag_to_task(self, task_id: str, tag_id: str) -> Optional[Dict[str, Any]]:
         """Async POST /tasks/{taskId}/tags/{tagId} - Associates tag with task.
 
         Args:
@@ -741,9 +671,7 @@ class HabiticaAPI:
         return result if isinstance(result, dict) else None
 
     # FUNC: delete_tag_from_task
-    async def delete_tag_from_task(
-        self, task_id: str, tag_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def delete_tag_from_task(self, task_id: str, tag_id: str) -> Optional[Dict[str, Any]]:
         """Async DELETE /tasks/{taskId}/tags/{tagId} - Removes tag from task.
 
         Args:
@@ -762,9 +690,7 @@ class HabiticaAPI:
     # SECTION: Convenience Methods (Checklist)
 
     # FUNC: add_checklist_item
-    async def add_checklist_item(
-        self, task_id: str, text: str
-    ) -> Optional[Dict[str, Any]]:
+    async def add_checklist_item(self, task_id: str, text: str) -> Optional[Dict[str, Any]]:
         """Async POST /tasks/{taskId}/checklist - Adds checklist item to a task.
 
         Args:
@@ -776,15 +702,11 @@ class HabiticaAPI:
         """
         if not task_id or not text:
             raise ValueError("task_id and text cannot be empty.")
-        result = await self.post(
-            f"/tasks/{task_id}/checklist", data={"text": text}
-        )
+        result = await self.post(f"/tasks/{task_id}/checklist", data={"text": text})
         return result if isinstance(result, dict) else None
 
     # FUNC: update_checklist_item
-    async def update_checklist_item(
-        self, task_id: str, item_id: str, text: str
-    ) -> Optional[Dict[str, Any]]:
+    async def update_checklist_item(self, task_id: str, item_id: str, text: str) -> Optional[Dict[str, Any]]:
         """Async PUT /tasks/{taskId}/checklist/{itemId} - Updates checklist item text.
 
         Args:
@@ -797,15 +719,11 @@ class HabiticaAPI:
         """
         if not task_id or not item_id or text is None:
             raise ValueError("task_id, item_id, and text required.")
-        result = await self.put(
-            f"/tasks/{task_id}/checklist/{item_id}", data={"text": text}
-        )
+        result = await self.put(f"/tasks/{task_id}/checklist/{item_id}", data={"text": text})
         return result if isinstance(result, dict) else None
 
     # FUNC: delete_checklist_item
-    async def delete_checklist_item(
-        self, task_id: str, item_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def delete_checklist_item(self, task_id: str, item_id: str) -> Optional[Dict[str, Any]]:
         """Async DELETE /tasks/{taskId}/checklist/{itemId} - Deletes checklist item.
 
         Args:
@@ -821,9 +739,7 @@ class HabiticaAPI:
         return result if isinstance(result, dict) else None
 
     # FUNC: score_checklist_item
-    async def score_checklist_item(
-        self, task_id: str, item_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def score_checklist_item(self, task_id: str, item_id: str) -> Optional[Dict[str, Any]]:
         """Async POST /tasks/{taskId}/checklist/{itemId}/score - Toggles checklist item completion.
 
         Args:
@@ -841,9 +757,7 @@ class HabiticaAPI:
     # SECTION: Convenience Methods (Challenges)
 
     # FUNC: get_challenges
-    async def get_challenges(
-        self, member_only: bool = True, page: int = 0
-    ) -> List[Dict[str, Any]]:
+    async def get_challenges(self, member_only: bool = True, page: int = 0) -> List[Dict[str, Any]]:
         """Async GET /challenges/user - Gets challenges user is member of or owns. Handles pagination (fetches one page at a time).
 
         Args:
@@ -863,9 +777,7 @@ class HabiticaAPI:
         return result if isinstance(result, list) else []
 
     # FUNC: get_all_challenges_paginated (Helper for full list)
-    async def get_all_challenges_paginated(
-        self, member_only: bool = True
-    ) -> List[Dict[str, Any]]:
+    async def get_all_challenges_paginated(self, member_only: bool = True) -> List[Dict[str, Any]]:
         """Async helper to fetch ALL challenges using pagination."""
         all_challenges = []
         current_page = 0
@@ -875,23 +787,23 @@ class HabiticaAPI:
         )
         while True:
             try:
-                page_data = await self.get_challenges(
-                    member_only=member_only, page=current_page
-                )
+                page_data = await self.get_challenges(member_only=member_only, page=current_page)
                 if not page_data:  # Empty list signifies the end
                     break
                 all_challenges.extend(page_data)
                 current_page += 1
                 # Optional: Add a small sleep to avoid overwhelming API if many pages
+                await self._wait_for_rate_limit()  # <--- ADD THIS
+
                 # await asyncio.sleep(0.1)
             except HabiticaAPIError as e:
-                console.print(
+                log.error(
                     f"API Error fetching challenges page {current_page}: {e}. Returning partial list.",
                     style="error",
                 )
                 break  # Stop pagination on error
             except Exception as e:
-                console.print(
+                log.error(
                     f"Unexpected Error fetching challenges page {current_page}: {e}. Returning partial list.",
                     style="error",
                 )
@@ -903,9 +815,7 @@ class HabiticaAPI:
         return all_challenges
 
     # FUNC: create_challenge
-    async def create_challenge(
-        self, data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def create_challenge(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Async POST /challenges - Creates a new challenge.
 
         Args:
@@ -914,21 +824,13 @@ class HabiticaAPI:
         Returns:
             The created challenge object dictionary, or None on error.
         """
-        if (
-            not data.get("name")
-            or not data.get("shortName")
-            or not data.get("group")
-        ):
-            raise ValueError(
-                "Challenge creation requires at least 'name', 'shortName', and 'group' ID."
-            )
+        if not data.get("name") or not data.get("shortName") or not data.get("group"):
+            raise ValueError("Challenge creation requires at least 'name', 'shortName', and 'group' ID.")
         result = await self.post("/challenges", data=data)
         return result if isinstance(result, dict) else None
 
     # FUNC: get_challenge_tasks
-    async def get_challenge_tasks(
-        self, challenge_id: str
-    ) -> List[Dict[str, Any]]:
+    async def get_challenge_tasks(self, challenge_id: str) -> List[Dict[str, Any]]:
         """Async GET /tasks/challenge/{challengeId} - Gets tasks for a specific challenge.
 
         Args:
@@ -943,9 +845,7 @@ class HabiticaAPI:
         return result if isinstance(result, list) else []
 
     # FUNC: create_challenge_task
-    async def create_challenge_task(
-        self, challenge_id: str, task_data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def create_challenge_task(self, challenge_id: str, task_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Async POST /tasks/challenge/{challengeId} - Creates a single task for a challenge.
 
         Args:
@@ -962,15 +862,11 @@ class HabiticaAPI:
         if task_data["type"] not in {"habit", "daily", "todo", "reward"}:
             raise ValueError("Invalid task type.")
 
-        result = await self.post(
-            f"/tasks/challenge/{challenge_id}", data=task_data
-        )
+        result = await self.post(f"/tasks/challenge/{challenge_id}", data=task_data)
         return result if isinstance(result, dict) else None
 
     # FUNC: unlink_task_from_challenge
-    async def unlink_task_from_challenge(
-        self, task_id: str, keep: str = "keep"
-    ) -> bool:
+    async def unlink_task_from_challenge(self, task_id: str, keep: str = "keep") -> bool:
         """Async POST /tasks/unlink-one/{taskId}?keep={keep} - Unlinks task from its challenge.
 
            (Note: Endpoint name might differ slightly across API docs, confirm /unlink-one or /unlink).
@@ -988,16 +884,12 @@ class HabiticaAPI:
             raise ValueError("keep must be 'keep' or 'remove'")
         # Confirm endpoint: /unlink or /unlink-one ? Using /unlink as per original code. Adjust if needed.
         # V4 might use POST /tasks/{taskId}/unlink
-        result = await self.post(
-            f"/tasks/{task_id}/unlink", params={"keep": keep}
-        )
+        result = await self.post(f"/tasks/{task_id}/unlink", params={"keep": keep})
         # API v3 returns {"data": null} on success.
         return result is None
 
     # FUNC: unlink_all_challenge_tasks
-    async def unlink_all_challenge_tasks(
-        self, challenge_id: str, keep: str = "keep-all"
-    ) -> bool:
+    async def unlink_all_challenge_tasks(self, challenge_id: str, keep: str = "keep-all") -> bool:
         """Async POST /tasks/unlink-all/{challengeId}?keep={keep} - Unlinks all tasks from a challenge.
 
         Args:
@@ -1012,16 +904,12 @@ class HabiticaAPI:
         if keep not in ["keep-all", "remove-all"]:
             raise ValueError("keep must be 'keep-all' or 'remove-all'")
         # V4 might use POST /challenges/{challengeId}/unlink-all
-        result = await self.post(
-            f"/tasks/unlink-all/{challenge_id}", params={"keep": keep}
-        )
+        result = await self.post(f"/tasks/unlink-all/{challenge_id}", params={"keep": keep})
         # API v3 returns {"data": null} on success.
         return result is None
 
     # FUNC: leave_challenge
-    async def leave_challenge(
-        self, challenge_id: str, keep: str = "keep-all"
-    ) -> bool:
+    async def leave_challenge(self, challenge_id: str, keep: str = "keep-all") -> bool:
         """Async POST /challenges/{challengeId}/leave?keep={keep} - Leaves a challenge.
 
         Args:
@@ -1035,16 +923,12 @@ class HabiticaAPI:
             raise ValueError("challenge_id cannot be empty.")
         if keep not in ["keep-all", "remove-all"]:
             raise ValueError("keep must be 'keep-all' or 'remove-all'")
-        result = await self.post(
-            f"/challenges/{challenge_id}/leave", params={"keep": keep}
-        )
+        result = await self.post(f"/challenges/{challenge_id}/leave", params={"keep": keep})
         # API v3 returns {"data": null} on success.
         return result is None
 
     # FUNC: clone_challenge
-    async def clone_challenge(
-        self, challenge_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def clone_challenge(self, challenge_id: str) -> Optional[Dict[str, Any]]:
         """Async POST /challenges/{challengeId}/clone - Clones a challenge.
 
         Args:
@@ -1059,9 +943,7 @@ class HabiticaAPI:
         return result if isinstance(result, dict) else None
 
     # FUNC: update_challenge
-    async def update_challenge(
-        self, challenge_id: str, data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def update_challenge(self, challenge_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Async PUT /challenges/{challengeId} - Updates challenge details (leader only).
 
         Args:
@@ -1106,25 +988,17 @@ class HabiticaAPI:
                 return None
             # Safely check quest status
             quest_info = party_data.get("quest", {})
-            return isinstance(quest_info, dict) and quest_info.get(
-                "active", False
-            )
+            return isinstance(quest_info, dict) and quest_info.get("active", False)
         except HabiticaAPIError as e:
             # Log specific API error but return None as status is unknown
-            console.print(
-                f"API Error getting quest status: {e}", style="warning"
-            )
+            log.error(f"API Error getting quest status: {e}", style="warning")
             return None
         except Exception as e:
-            console.print(
-                f"Unexpected error getting quest status: {e}", style="error"
-            )
+            log.error(f"Unexpected error getting quest status: {e}", style="error")
             return None
 
     # FUNC: cast_skill
-    async def cast_skill(
-        self, spell_id: str, target_id: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+    async def cast_skill(self, spell_id: str, target_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Async POST /user/class/cast/{spellId}?targetId={targetId} - Casts a class skill.
 
         Args:
@@ -1141,9 +1015,7 @@ class HabiticaAPI:
         return result if isinstance(result, dict) else None
 
     # FUNC: get_group_chat_messages
-    async def get_group_chat_messages(
-        self, group_id: str = "party", older_than: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def get_group_chat_messages(self, group_id: str = "party", older_than: Optional[str] = None) -> List[Dict[str, Any]]:
         """Async GET /groups/{groupId}/chat - Gets chat messages for a group ('party' or guild UUID).
 
            Supports pagination via `older_than` message ID.
@@ -1162,9 +1034,7 @@ class HabiticaAPI:
         return result if isinstance(result, list) else []
 
     # FUNC: like_group_chat_message
-    async def like_group_chat_message(
-        self, group_id: str, chat_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def like_group_chat_message(self, group_id: str, chat_id: str) -> Optional[Dict[str, Any]]:
         """Async POST /groups/{groupId}/chat/{chatId}/like - Likes/unlikes a group chat message.
 
         Args:
@@ -1196,9 +1066,7 @@ class HabiticaAPI:
         return result is None
 
     # FUNC: post_group_chat_message
-    async def post_group_chat_message(
-        self, group_id: str = "party", message_text: str = ""
-    ) -> Optional[Dict[str, Any]]:
+    async def post_group_chat_message(self, group_id: str = "party", message_text: str = "") -> Optional[Dict[str, Any]]:
         """Async POST /groups/{groupId}/chat - Posts a chat message to a group.
 
         Args:
@@ -1219,9 +1087,7 @@ class HabiticaAPI:
     # SECTION: Convenience Methods (Inbox)
 
     # FUNC: get_inbox_messages
-    async def get_inbox_messages(
-        self, page: int = 0, conversation_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+    async def get_inbox_messages(self, page: int = 0, conversation_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Async GET /inbox/messages - Gets inbox messages, optionally filtered by conversation.
 
         Args:
@@ -1233,9 +1099,7 @@ class HabiticaAPI:
         """
         params: Dict[str, Any] = {"page": page}
         if conversation_id:
-            params["conversation"] = (
-                conversation_id  # API uses 'conversation' param
-            )
+            params["conversation"] = conversation_id  # API uses 'conversation' param
         result = await self.get("/inbox/messages", params=params)
         return result if isinstance(result, list) else []
 
@@ -1248,9 +1112,7 @@ class HabiticaAPI:
     #     return result if isinstance(result, dict) else None
 
     # FUNC: send_private_message
-    async def send_private_message(
-        self, recipient_id: str, message_text: str
-    ) -> Optional[Dict[str, Any]]:
+    async def send_private_message(self, recipient_id: str, message_text: str) -> Optional[Dict[str, Any]]:
         """Async POST /members/send-private-message - Sends a private message.
 
         Args:

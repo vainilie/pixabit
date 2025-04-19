@@ -22,7 +22,7 @@ from dotenv import find_dotenv, get_key, set_key, unset_key
 
 # Use themed display components
 try:
-    from ..utils.display import (  # Use .. for parent utils
+    from pixabit.utils.display import (  # Use .. for parent utils
         Confirm,
         Prompt,
         Rule,
@@ -70,14 +70,14 @@ except ImportError:  # Fallback
 
 # Local Imports
 try:
-    from .api import HabiticaAPI  # Import sync API from cli package
+    from pixabit.tui.api import HabiticaAPI  # Import sync API from cli package
 except ImportError:
 
     class HabiticaAPI:
         pass  # type: ignore
 
     print(
-        "[Warning] Could not import cli.api in config_tags.py. Using fallback."
+        "[Warning] Could not import tui.api in config_tags.py. Using fallback."
     )
 
 

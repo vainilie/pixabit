@@ -19,10 +19,14 @@ import requests  # Added for exception type
 
 # Local Imports (Adjust path based on execution context)
 try:
-    from ..utils.dates import convert_to_local_time, is_date_passed  # Use ..
-    from ..utils.display import console, print  # Use ..
-    from ..utils.save_json import save_json  # Use ..
-    from .api import HabiticaAPI  # Import sync API from .cli
+    from pixabit.cli.api import HabiticaAPI  # Import sync API from .cli
+    from pixabit.utils.dates import (
+        convert_to_local_time,
+        is_date_passed,
+    )  # Use ..
+    from pixabit.utils.display import console, print  # Use ..
+    from pixabit.utils.save_json import save_json  # Use ..
+
     from .config import CACHE_FILE_CONTENT  # Import cache filename from .cli
 except ImportError:
     # Fallback imports

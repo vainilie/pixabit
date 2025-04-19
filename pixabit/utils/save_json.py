@@ -10,6 +10,7 @@ Uses the themed console for status messages if available.
 # SECTION: IMPORTS
 import builtins
 import json
+import logging
 from pathlib import Path
 from typing import (
     Any,
@@ -19,14 +20,20 @@ from typing import (
     Union,
 )  # Kept Dict/List for clarity
 
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
+
 # Use themed console/print if available
 try:
     from .display import console, print  # Import print wrapper too
 
-    LOG_FUNC = console.print  # Use the themed print for logging success/errors
-    LOG_DETAIL = (
-        console.log
-    )  # Use log for less critical info like cache hits/misses
+    LOG_FUNC = log.error  # Use the themed print for logging success/errors
+    LOG_DETAIL = log.info  # Use log for less critical info like cache hits/misses
 except ImportError:  # Fallback
     # Provide a dummy console object
     class DummyConsole:  # noqa: D101
@@ -40,9 +47,7 @@ except ImportError:  # Fallback
     print = builtins.print  # Fallback print
     LOG_FUNC = builtins.print  # Fallback logging function
     LOG_DETAIL = lambda *args, **kwargs: None  # No detailed logging in fallback
-    builtins.print(
-        "Warning: pixabit.utils.display not found, using standard print for save/load messages."
-    )
+    builtins.print("Warning: pixabit.utils.display not found, using standard print for save/load messages.")
 
 # SECTION: FUNCTIONS
 
@@ -75,9 +80,7 @@ def save_json(
         with output_path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
 
-        LOG_FUNC(
-            f"[success]Successfully saved data to:[/success] [file]'{output_path}'[/]"
-        )
+        LOG_FUNC(f"[success]Successfully saved data to:[/success] [file]'{output_path}'[/]")
         return True
 
     except TypeError as e:  # Handle non-serializable data
@@ -111,9 +114,7 @@ def load_json(
     input_path = Path(filepath) if not isinstance(filepath, Path) else filepath
 
     if not input_path.is_file():  # Check if it exists and is a file
-        LOG_DETAIL(
-            f"JSON file not found: [file]'{input_path}'[/]", style="subtle"
-        )
+        LOG_DETAIL(f"JSON file not found: [file]'{input_path}'[/]", style="subtle")
         return None
 
     try:
@@ -122,14 +123,10 @@ def load_json(
 
         # Basic validation of loaded data type
         if isinstance(data, (dict, list)):
-            LOG_DETAIL(
-                f"Loaded JSON data from: [file]'{input_path}'[/]", style="info"
-            )
+            LOG_DETAIL(f"Loaded JSON data from: [file]'{input_path}'[/]", style="info")
             return data
         else:
-            LOG_FUNC(
-                f"[warning]Warning:[/warning] Invalid data type ({type(data).__name__}) in JSON file: [file]'{input_path}'[/]"
-            )
+            LOG_FUNC(f"[warning]Warning:[/warning] Invalid data type ({type(data).__name__}) in JSON file: [file]'{input_path}'[/]")
             return None
 
     except (OSError, json.JSONDecodeError) as e:

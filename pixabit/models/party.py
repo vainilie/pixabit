@@ -10,17 +10,25 @@ Includes:
 """
 
 # SECTION: IMPORTS
+import logging
 from typing import Any, Dict, List, Optional  # Keep Dict/List for clarity
 
 import emoji_data_python
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 # Local Imports (assuming models are siblings or configured in path)
 try:
     # MessageList might be used to store chat later
-    from .message import MessageList
+    from pixabit.models.message import MessageList
 except ImportError:
     # Fallback placeholder if imports fail
-    print("Warning: Using placeholder MessageList in party.py.")
+    log.info("Warning: Using placeholder MessageList in party.py.")
     MessageList = list  # type: ignore
 
 # SECTION: DATA CLASSES
@@ -65,9 +73,7 @@ class QuestProgress:
         if self.down != 0.0:
             parts.append(f"down={self.down:.1f}")
         if self.collect_goal:
-            parts.append(
-                f"collect#={self.items_collected}/{sum(self.collect_goal.values())}"
-            )
+            parts.append(f"collect#={self.items_collected}/{sum(self.collect_goal.values())}")
         return f"QuestProgress({', '.join(parts)})"
 
 
@@ -84,13 +90,9 @@ class QuestInfo:
         """
         data = quest_data if isinstance(quest_data, dict) else {}
 
-        self.key: Optional[str] = data.get(
-            "key"
-        )  # The unique key for the quest (e.g., 'basilisk')
+        self.key: Optional[str] = data.get("key")  # The unique key for the quest (e.g., 'basilisk')
         self.active: bool = data.get("active", False)  # Explicit active flag
-        self.rsvp_needed: bool = data.get(
-            "RSVPNeeded", False
-        )  # Does party leader need to accept invites?
+        self.rsvp_needed: bool = data.get("RSVPNeeded", False)  # Does party leader need to accept invites?
         # Quest 'completed' field might be a status string or completion date string (or null)
         self.completed_status: Optional[str] = data.get("completed")
         # Leader might be here if it's a pending invite
@@ -104,22 +106,14 @@ class QuestInfo:
         self.progress: QuestProgress = QuestProgress(data.get("progress"))
 
         # Calculate active status more robustly
-        self.is_active: bool = (
-            self.active and not self.completed_status and bool(self.key)
-        )
+        self.is_active: bool = self.active and not self.completed_status and bool(self.key)
 
     # FUNC: __repr__
     def __repr__(self) -> str:
         """Provides a developer-friendly string representation."""
-        status = (
-            "Active"
-            if self.is_active
-            else ("Completed" if self.completed_status else "Inactive")
-        )
+        status = "Active" if self.is_active else ("Completed" if self.completed_status else "Inactive")
         key_str = f"key='{self.key}'" if self.key else "No Key"
-        return (
-            f"QuestInfo({key_str}, status={status}, progress={self.progress})"
-        )
+        return f"QuestInfo({key_str}, status={status}, progress={self.progress})"
 
 
 # KLASS: Party
@@ -142,33 +136,19 @@ class Party:
         # Core Party Info
         self.id: Optional[str] = party_data.get("id") or party_data.get("_id")
         _name = party_data.get("name", "Unnamed Party")
-        self.name: str = (
-            emoji_data_python.replace_colons(_name)
-            if _name
-            else "Unnamed Party"
-        )
+        self.name: str = emoji_data_python.replace_colons(_name) if _name else "Unnamed Party"
         _desc = party_data.get("description")
-        self.description: Optional[str] = (
-            emoji_data_python.replace_colons(_desc) if _desc else None
-        )
+        self.description: Optional[str] = emoji_data_python.replace_colons(_desc) if _desc else None
         _summary = party_data.get("summary")
-        self.summary: Optional[str] = (
-            emoji_data_python.replace_colons(_summary) if _summary else None
-        )
+        self.summary: Optional[str] = emoji_data_python.replace_colons(_summary) if _summary else None
 
         # Leader Info (usually just ID string in party object)
-        leader_info = party_data.get(
-            "leader"
-        )  # Can be string or object? Assume string usually.
-        self.leader_id: Optional[str] = (
-            leader_info if isinstance(leader_info, str) else None
-        )
+        leader_info = party_data.get("leader")  # Can be string or object? Assume string usually.
+        self.leader_id: Optional[str] = leader_info if isinstance(leader_info, str) else None
         # Could fetch leader details separately if needed
 
         # Member Sorting Info
-        self.member_sort_order: Optional[str] = party_data.get(
-            "order"
-        )  # e.g., "stats.lvl"
+        self.member_sort_order: Optional[str] = party_data.get("order")  # e.g., "stats.lvl"
         # API might return string "true"/"false" or boolean - normalize
         raw_order_asc = party_data.get("orderAscending")
         self.member_sort_ascending: Optional[bool] = None
@@ -178,9 +158,7 @@ class Party:
             self.member_sort_ascending = raw_order_asc.lower() == "true"
 
         # Quest Info (using nested QuestInfo class)
-        self.quest: QuestInfo = QuestInfo(
-            party_data.get("quest")
-        )  # Handles None input
+        self.quest: QuestInfo = QuestInfo(party_data.get("quest"))  # Handles None input
 
         # --- Placeholders for related data (populate separately if needed) ---
         # Chat messages (assuming fetched/added later via set_chat)
@@ -198,26 +176,16 @@ class Party:
         if isinstance(message_list, MessageList):
             self.chat = message_list
         else:
-            print(
-                "Warning: Invalid type provided to Party.set_chat. Expected MessageList."
-            )
+            log.info("Warning: Invalid type provided to Party.set_chat. Expected MessageList.")
 
     # Add methods to add/manage members if you fetch member details
 
     # FUNC: __repr__
     def __repr__(self) -> str:
         """Provides a developer-friendly string representation."""
-        quest_str = (
-            f", quest='{self.quest.key}'"
-            if self.quest and self.quest.key
-            else ", quest=None"
-        )
+        quest_str = f", quest='{self.quest.key}'" if self.quest and self.quest.key else ", quest=None"
         active_str = " (Active)" if self.quest and self.quest.is_active else ""
-        chat_len = (
-            len(self.chat.messages)
-            if self.chat and hasattr(self.chat, "messages")
-            else 0
-        )
+        chat_len = len(self.chat.messages) if self.chat and hasattr(self.chat, "messages") else 0
         chat_str = f", chat={chat_len} msgs" if chat_len > 0 else ", chat=N/A"
         name_preview = self.name[:30] + ("..." if len(self.name) > 30 else "")
         return f"Party(id='{self.id}', name='{name_preview}'{quest_str}{active_str}{chat_str})"

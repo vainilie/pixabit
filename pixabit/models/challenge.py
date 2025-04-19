@@ -10,20 +10,29 @@ Includes:
 """
 
 # SECTION: IMPORTS
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional  # Keep Dict/List for clarity
 
 import emoji_data_python
+from rich.logging import RichHandler
+from textual import log
+
+from pixabit.utils.display import console
+
+FORMAT = "%(message)s"
+logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
 
 # Local Imports (assuming utils and models are siblings or configured in path)
 try:
-    from ..utils.dates import convert_timestamp_to_utc
-    from .task import Task, TaskList  # Import Task and TaskList models
+    from pixabit.models.task import (
+        Task,
+        TaskList,
+    )  # Import Task and TaskList models
+    from pixabit.utils.dates import convert_timestamp_to_utc
 except ImportError:
     # Fallback placeholders if imports fail (e.g., during testing/dev)
-    print(
-        "Warning: Using placeholder Task/TaskList/convert_timestamp_to_utc in challenge.py."
-    )
+    log.warning("Warning: Using placeholder Task/TaskList/convert_timestamp_to_utc in challenge.py.")
     Task = dict  # type: ignore
     TaskList = list  # type: ignore
 
@@ -55,31 +64,15 @@ class Challenge:
         if not isinstance(challenge_data, dict):
             raise TypeError("challenge_data must be a dictionary.")
 
-        self.id: Optional[str] = challenge_data.get("id") or challenge_data.get(
-            "_id"
-        )
+        self.id: Optional[str] = challenge_data.get("id") or challenge_data.get("_id")
         _name = challenge_data.get("name", "Unnamed Challenge")
-        self.name: str = (
-            emoji_data_python.replace_colons(_name)
-            if _name
-            else "Unnamed Challenge"
-        )
+        self.name: str = emoji_data_python.replace_colons(_name) if _name else "Unnamed Challenge"
         _short_name = challenge_data.get("shortName")
-        self.short_name: Optional[str] = (
-            emoji_data_python.replace_colons(_short_name)
-            if _short_name
-            else None
-        )
+        self.short_name: Optional[str] = emoji_data_python.replace_colons(_short_name) if _short_name else None
         _summary = challenge_data.get("summary", "")
-        self.summary: str = (
-            emoji_data_python.replace_colons(_summary) if _summary else ""
-        )
+        self.summary: str = emoji_data_python.replace_colons(_summary) if _summary else ""
         _description = challenge_data.get("description", "")
-        self.description: str = (
-            emoji_data_python.replace_colons(_description)
-            if _description
-            else ""
-        )
+        self.description: str = emoji_data_python.replace_colons(_description) if _description else ""
 
         # Leader Info (can be string ID or object)
         leader_info = challenge_data.get("leader")
@@ -92,45 +85,23 @@ class Challenge:
             # Attempt to get name from common profile structure
             leader_profile = leader_info.get("profile", {})
             _leader_disp_name = leader_profile.get("name")
-            self.leader_name = (
-                emoji_data_python.replace_colons(_leader_disp_name)
-                if _leader_disp_name
-                else None
-            )
+            self.leader_name = emoji_data_python.replace_colons(_leader_disp_name) if _leader_disp_name else None
 
         # Group Info
         group_info = challenge_data.get("group", {})
-        self.group_id: Optional[str] = (
-            group_info.get("_id") if isinstance(group_info, dict) else None
-        )
-        _group_name = (
-            group_info.get("name") if isinstance(group_info, dict) else None
-        )
-        self.group_name: Optional[str] = (
-            emoji_data_python.replace_colons(_group_name)
-            if _group_name
-            else None
-        )
-        self.group_type: Optional[str] = (
-            group_info.get("type") if isinstance(group_info, dict) else None
-        )  # 'party', 'guild', 'tavern'
+        self.group_id: Optional[str] = group_info.get("_id") if isinstance(group_info, dict) else None
+        _group_name = group_info.get("name") if isinstance(group_info, dict) else None
+        self.group_name: Optional[str] = emoji_data_python.replace_colons(_group_name) if _group_name else None
+        self.group_type: Optional[str] = group_info.get("type") if isinstance(group_info, dict) else None  # 'party', 'guild', 'tavern'
 
         # Other Attributes
         self.prize: int = int(challenge_data.get("prize", 0))
         self.member_count: int = int(challenge_data.get("memberCount", 0))
         self.official: bool = challenge_data.get("official", False)
-        self.created_at: Optional[datetime] = convert_timestamp_to_utc(
-            challenge_data.get("createdAt")
-        )
-        self.updated_at: Optional[datetime] = convert_timestamp_to_utc(
-            challenge_data.get("updatedAt")
-        )
-        self.broken: Optional[str] = challenge_data.get(
-            "broken"
-        )  # e.g., "CHALLENGE_DELETED"
-        self.owned: Optional[bool] = challenge_data.get(
-            "owned"
-        )  # May be present if fetched via /user/challenges
+        self.created_at: Optional[datetime] = convert_timestamp_to_utc(challenge_data.get("createdAt"))
+        self.updated_at: Optional[datetime] = convert_timestamp_to_utc(challenge_data.get("updatedAt"))
+        self.broken: Optional[str] = challenge_data.get("broken")  # e.g., "CHALLENGE_DELETED"
+        self.owned: Optional[bool] = challenge_data.get("owned")  # May be present if fetched via /user/challenges
 
         # Task container - populated externally (e.g., by ChallengeList._link_tasks)
         self.tasks: List[Task] = []  # type: ignore # Type hint using imported Task
@@ -143,9 +114,7 @@ class Challenge:
             tasks_to_add: A list of Task model objects.
         """
         # Basic check to add only Task instances (or subclasses)
-        self.tasks.extend(
-            task for task in tasks_to_add if isinstance(task, Task)
-        )
+        self.tasks.extend(task for task in tasks_to_add if isinstance(task, Task))
         # Optional: Sort tasks after adding
         # self.tasks.sort(key=lambda t: (t.type, getattr(t, 'position', 0)))
 
@@ -169,10 +138,7 @@ class Challenge:
         official_flag = " (Official)" if self.official else ""
         task_count = len(self.tasks)
         name_preview = self.name[:30] + ("..." if len(self.name) > 30 else "")
-        return (
-            f"Challenge(id='{self.id}', name='{name_preview}', "
-            f"tasks={task_count}{status}{owner_flag}{official_flag})"
-        )
+        return f"Challenge(id='{self.id}', name='{name_preview}', " f"tasks={task_count}{status}{owner_flag}{official_flag})"
 
 
 # KLASS: ChallengeList
@@ -187,9 +153,7 @@ class ChallengeList:
     def __init__(
         self,
         raw_challenge_list: List[Dict[str, Any]],
-        task_list: Optional[
-            TaskList  # type: ignore
-        ] = None,  # Expects a TaskList object # type: ignore
+        task_list: Optional[TaskList] = None,  # type: ignore  # Expects a TaskList object # type: ignore
     ):
         """Initializes the ChallengeList.
 
@@ -203,46 +167,32 @@ class ChallengeList:
 
         if task_list is not None:
             # Ensure task_list is actually a TaskList instance (or duck-types)
-            if hasattr(task_list, "tasks") and isinstance(
-                task_list.tasks, list
-            ):
+            if hasattr(task_list, "tasks") and isinstance(task_list.tasks, list):
                 self._link_tasks(task_list)
             else:
-                print(
-                    f"Warning: task_list provided to ChallengeList is not a valid TaskList object (type: {type(task_list)}). Skipping task linking."
-                )
+                log.warning(f"Warning: task_list provided to ChallengeList is not a valid TaskList object (type: {type(task_list)}). Skipping task linking.")
 
     # FUNC: _process_list
     def _process_list(self, raw_challenge_list: List[Dict[str, Any]]) -> None:
         """Processes the raw list, creating Challenge instances."""
         processed_challenges: List[Challenge] = []
         if not isinstance(raw_challenge_list, list):
-            print(
-                f"Error: raw_challenge_list must be a list, got {type(raw_challenge_list)}. Cannot process."
-            )
+            log.error(f"Error: raw_challenge_list must be a list, got {type(raw_challenge_list)}. Cannot process.")
             self.challenges = []
             return
 
         for raw_challenge in raw_challenge_list:
             if not isinstance(raw_challenge, dict):
-                print(
-                    f"Skipping invalid entry in raw_challenge_list: {raw_challenge}"
-                )
+                log.warning(f"Skipping invalid entry in raw_challenge_list: {raw_challenge}")
                 continue
             try:
                 challenge_instance = Challenge(raw_challenge)
-                if (
-                    challenge_instance.id
-                ):  # Only add valid challenges with an ID
+                if challenge_instance.id:  # Only add valid challenges with an ID
                     processed_challenges.append(challenge_instance)
                 else:
-                    print(
-                        f"Skipping challenge data missing ID: {raw_challenge.get('name', 'N/A')}"
-                    )
+                    log.warning(f"Skipping challenge data missing ID: {raw_challenge.get('name', 'N/A')}")
             except Exception as e:
-                print(
-                    f"Error processing challenge data for ID {raw_challenge.get('id', 'N/A')}: {e}"
-                )
+                log.error(f"Error processing challenge data for ID {raw_challenge.get('id', 'N/A')}: {e}")
         self.challenges = processed_challenges
 
     # FUNC: _link_tasks
@@ -256,9 +206,7 @@ class ChallengeList:
             task_list: The TaskList instance containing processed Task objects.
         """
         # Create a map for faster challenge lookup by ID
-        challenges_by_id: Dict[str, Challenge] = {
-            chal.id: chal for chal in self.challenges if chal.id
-        }
+        challenges_by_id: Dict[str, Challenge] = {chal.id: chal for chal in self.challenges if chal.id}
 
         # Clear existing tasks lists in challenges before linking
         for challenge in self.challenges:
@@ -266,9 +214,7 @@ class ChallengeList:
 
         linked_count = 0
         # Iterate through all tasks in the TaskList
-        for (
-            task
-        ) in task_list.tasks:  # Iterate through the tasks attribute of TaskList
+        for task in task_list.tasks:  # Iterate through the tasks attribute of TaskList
             # Check if the task belongs to a challenge and has the necessary info
             # Assumes Task has a `challenge` attribute which is a ChallengeData object or None
             if task.challenge and isinstance(task.challenge.id, str):
@@ -322,9 +268,7 @@ class ChallengeList:
         return None
 
     # FUNC: filter_by_name
-    def filter_by_name(
-        self, name_part: str, case_sensitive: bool = False
-    ) -> List[Challenge]:
+    def filter_by_name(self, name_part: str, case_sensitive: bool = False) -> List[Challenge]:
         """Filters challenges by name containing a specific substring.
 
         Args:
@@ -336,9 +280,7 @@ class ChallengeList:
         """
         if not case_sensitive:
             name_part_lower = name_part.lower()
-            return [
-                c for c in self.challenges if name_part_lower in c.name.lower()
-            ]
+            return [c for c in self.challenges if name_part_lower in c.name.lower()]
         else:
             return [c for c in self.challenges if name_part in c.name]
 
@@ -368,9 +310,7 @@ class ChallengeList:
         return [c for c in self.challenges if c.leader_id == leader_id]
 
     # FUNC: filter_by_group
-    def filter_by_group(
-        self, group_id: Optional[str] = None, group_type: Optional[str] = None
-    ) -> List[Challenge]:
+    def filter_by_group(self, group_id: Optional[str] = None, group_type: Optional[str] = None) -> List[Challenge]:
         """Filters challenges by group ID and/or group type.
 
         Args:
@@ -397,9 +337,7 @@ class ChallengeList:
         Returns:
             A list of matching Challenge objects.
         """
-        return [
-            c for c in self.challenges if c.official is official
-        ]  # Explicit comparison
+        return [c for c in self.challenges if c.official is official]  # Explicit comparison
 
     # FUNC: filter_broken
     def filter_broken(self, is_broken: bool = True) -> List[Challenge]:
@@ -429,14 +367,10 @@ class ChallengeList:
             A list of matching Challenge objects.
         """
         # Note: 'owned' might be None if not provided by the API endpoint used
-        return [
-            c for c in self.challenges if c.owned is owned
-        ]  # Explicit comparison
+        return [c for c in self.challenges if c.owned is owned]  # Explicit comparison
 
     # FUNC: filter_by_task_count
-    def filter_by_task_count(
-        self, min_tasks: int = 1, max_tasks: Optional[int] = None
-    ) -> List[Challenge]:
+    def filter_by_task_count(self, min_tasks: int = 1, max_tasks: Optional[int] = None) -> List[Challenge]:
         """Filters challenges by the number of linked tasks.
 
         Args:
@@ -450,11 +384,7 @@ class ChallengeList:
         if max_tasks is None:
             return [c for c in self.challenges if len(c.tasks) >= min_tasks]
         else:
-            return [
-                c
-                for c in self.challenges
-                if min_tasks <= len(c.tasks) <= max_tasks
-            ]
+            return [c for c in self.challenges if min_tasks <= len(c.tasks) <= max_tasks]
 
     # FUNC: filter_containing_task_id
     def filter_containing_task_id(self, task_id: str) -> List[Challenge]:
@@ -468,8 +398,4 @@ class ChallengeList:
         Returns:
             A list of Challenge objects containing the specified task.
         """
-        return [
-            c
-            for c in self.challenges
-            if any(task.id == task_id for task in c.tasks)
-        ]
+        return [c for c in self.challenges if any(task.id == task_id for task in c.tasks)]

@@ -18,9 +18,9 @@ import requests  # For API error handling
 
 # Local Imports (Adjust path based on structure)
 try:
-    from ..utils.display import console, print  # Use ..
-    from ..utils.save_json import save_json  # Use ..
-    from .api import HabiticaAPI  # Import sync API
+    from pixabit.api import HabiticaAPI  # Import sync API
+    from pixabit.utils.display import console, print  # Use ..
+    from pixabit.utils.save_json import save_json  # Use ..
 except ImportError:
     # Fallback imports
     import builtins

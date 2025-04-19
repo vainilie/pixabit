@@ -20,9 +20,9 @@ from pathvalidate import sanitize_filename  # For creating safe filenames
 
 # Local Imports (Adjust based on structure)
 try:
-    from ..utils.display import console, print  # Use themed display
-    from ..utils.save_json import save_json  # Use shared save utility
-    from .api import HabiticaAPI  # Import sync API
+    from pixabit.api import HabiticaAPI  # Import sync API
+    from pixabit.utils.display import console, print  # Use themed display
+    from pixabit.utils.save_json import save_json  # Use shared save utility
 except ImportError:
     # Fallback imports
     import builtins
