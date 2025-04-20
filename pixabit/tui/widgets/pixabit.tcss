@@ -1,0 +1,53 @@
+/* pixabit/tui/pixabit.tcss - Relying on Implicit Grid Placement */
+Header {
+  background: $error;
+  color: $text;
+  height: 1;
+  }
+
+PixabitTUIApp {
+  background: $panel;
+  color: $text;
+  }
+
+TabPanel{
+  background: $text;
+}
+
+Footer {
+  background: $accent;
+  color: $panel;
+  dock: bottom;
+  }
+
+StatsPanel {
+  dock: left;
+  height: 100%;
+  border: round $accent;
+  background: $surface;
+  margin-top: 1;
+  margin: 1;
+  width: 15;
+
+
+  .stat-label { color: $accent;}
+  .stat-value { color: $text; }
+  #stat-level .stat-value { color: $warning; }
+  #stat-hp .stat-value { color: $error; }
+  #stat-mp .stat-value { color: $primary; }
+  #stat-exp .stat-value { color: $success; }
+  #stat-gp .stat-value { color: $warning-darken-2; }
+  #stat-gems .stat-value { color: $secondary; }
+  #stat-class .stat-value { color: $text; }
+  #stat-status .stat-value { color: $text; }
+}
+/* --- Optional Loading Indicator --- */
+LoadingIndicator {
+  background: $accent-darken-2;
+  color: $text;
+  dock: bottom;
+  height: 1;
+  margin-top: 1;
+  opacity: 0;
+  transition: opacity 0.3s linear;
+}

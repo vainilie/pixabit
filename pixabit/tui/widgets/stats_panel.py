@@ -24,34 +24,7 @@ logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[Ric
 class StatsPanel(Static):  # Inherit from Static or Widget/Container
     """A widget to display Habitica user statistics."""
 
-    DEFAULT_CSS = """
-    StatsPanel {
-        border: round $accent;
-        padding: 1;
-        height: auto; /* Adjust height as needed */
-        /* Add more specific styling */
-    }
-    StatsPanel > Vertical > Static { /* Target Static widgets inside */
-        margin-bottom: 1;
-    }
-    .stat-label {
-        color: $text-muted; /* Dim color for labels */
-        margin-right: 1;
-    }
-    .stat-value {
-        /* Add styling for values if needed */
-        color: $text;
-    }
-    /* Colors based on stats_widget.py attempt */
-    #stat-level .stat-value { color: $warning; }
-    #stat-hp .stat-value { color: $error; }
-    #stat-mp .stat-value { color: $primary; }
-    #stat-exp .stat-value { color: $success; }
-    #stat-gp .stat-value { color: $warning-darken-2; }
-    #stat-gems .stat-value { color: $secondary; } /* Example color */
-    #stat-class .stat-value { color: $text; }
-    #stat-status .stat-value { color: $text; }
-    """
+    CSS_PATH = "pixabit.tcss"
 
     # FUNC: compose
     def compose(self) -> ComposeResult:
