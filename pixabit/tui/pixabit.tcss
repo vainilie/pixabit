@@ -21,6 +21,7 @@ TabPanel{
   height: 100%;
 
 }
+DataTable { height: 50%; }  # Temporarily set a fixed height for debugging
 
 TabPane {
   background: $background;  /* Fondo del contenido de la pestaña */
@@ -40,6 +41,7 @@ TasksPanel{
 TabPane#tasks-panel {
   background: $surface;
   border: round red;
+  height: 100;
   /* Fondo específico para la pestaña "Tasks" */
 }
 TabPane#settings-panel {
@@ -65,7 +67,6 @@ TabbedContent .tab-button {
 
 
 }
-
 TabbedContent .tab-button:hover {
   background: $accent-darken-2;
 }

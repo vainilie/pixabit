@@ -1,0 +1,41 @@
+Screen {
+    layout: vertical;
+}
+
+#main-grid {
+    layout: grid;
+    grid-size: 2 1;
+    grid-columns: 30% 70%;
+    grid-rows: 1fr;
+    height: 100%;
+}
+
+#main-grid > .sidebar {
+    dock: left;
+}
+
+#main-tabs {
+    overflow: auto;
+}
+
+
+#modal-title {
+  text-align: center;
+  padding: 1;
+  border-bottom: solid gray;
+  color: cyan;
+}
+
+#modal-actions {
+  padding-top: 1;
+  justify-content: space-between;
+}
+
+EditTaskModal {
+  width: 60%;
+  height: auto;
+  border: round blue;
+  padding: 1;
+  background: $panel;
+}
+

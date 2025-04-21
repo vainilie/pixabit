@@ -23,7 +23,6 @@ from textual.app import App
 
 # Core services & data structures
 from pixabit.tui.api import HabiticaAPI, HabiticaAPIError
-from pixabit.utils.display import console
 from pixabit.utils.message import DataRefreshed, UIMessage
 
 # Use themed console/log from utils
@@ -52,7 +51,9 @@ from .data_processor import TaskProcessor, get_user_stats
 from .game_content import GameContent  # Use the specific GameContent manager
 
 FORMAT = "%(message)s"
-logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
+logging.basicConfig(
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)]
+)
 
 
 # SECTION: PixabitDataStore Class
@@ -124,24 +125,32 @@ class PixabitDataStore:
         # Try loading from cache first
         cached_data = load_json(self.CHALLENGES_CACHE_PATH)
         if isinstance(cached_data, list):  # Check if it's a list (could be empty)
-            log.info(f"DataStore: Loaded {len(cached_data)} challenges from cache: '{self.CHALLENGES_CACHE_PATH}'")
+            log.info(
+                f"DataStore: Loaded {len(cached_data)} challenges from cache: '{self.CHALLENGES_CACHE_PATH}'"
+            )
             self.raw_challenges_cache = cached_data
             loaded_from_cache = True
         else:
-            log.info(f"DataStore: Challenge cache missing or invalid ('{self.CHALLENGES_CACHE_PATH}'). Fetching from API.")
+            log.info(
+                f"DataStore: Challenge cache missing or invalid ('{self.CHALLENGES_CACHE_PATH}'). Fetching from API."
+            )
 
         # Fetch if not loaded from cache
         if not loaded_from_cache:
             try:
                 # Use the paginated fetch helper (ensure rate limit fix is applied there)
-                fetched_challenges = await self.api_client.get_all_challenges_paginated(member_only=True)
+                fetched_challenges = await self.api_client.get_all_challenges_paginated(
+                    member_only=True
+                )
                 if isinstance(fetched_challenges, list):
                     log.info(f"DataStore: Fetched {len(fetched_challenges)} challenges from API.")
                     self.raw_challenges_cache = fetched_challenges
                     # Save the fetched data to cache
                     save_ok = save_json(self.raw_challenges_cache, self.CHALLENGES_CACHE_PATH)
                     if save_ok:
-                        log.info(f"DataStore: Saved challenges to cache: '{self.CHALLENGES_CACHE_PATH}'")
+                        log.info(
+                            f"DataStore: Saved challenges to cache: '{self.CHALLENGES_CACHE_PATH}'"
+                        )
                     else:
                         log.warning(
                             "DataStore: Failed to save challenges cache.",
@@ -160,7 +169,9 @@ class PixabitDataStore:
         """Forces a fetch of challenges from the API and updates the cache."""
         log.info("DataStore: Forcing challenge refresh from API...")
         try:
-            fetched_challenges = await self.api_client.get_all_challenges_paginated(member_only=True)
+            fetched_challenges = await self.api_client.get_all_challenges_paginated(
+                member_only=True
+            )
             if isinstance(fetched_challenges, list):
                 log.info(f"DataStore: Force refresh fetched {len(fetched_challenges)} challenges.")
                 self.raw_challenges_cache = fetched_challenges
@@ -229,7 +240,9 @@ class PixabitDataStore:
                     elif isinstance(result, list):
                         log.info(f"  - {key}: SUCCESS -> List (len={len(result)})")
                     elif isinstance(result, dict):
-                        log.info(f"  - {key}: SUCCESS -> Dict (keys={list(result.keys())[:5]}...)")  # Show first 5 keys
+                        log.info(
+                            f"  - {key}: SUCCESS -> Dict (keys={list(result.keys())[:5]}...)"
+                        )  # Show first 5 keys
                     else:
                         log.info(f"  - {key}: SUCCESS -> Unknown type: {type(result).__name__}")
                 log.info("DataStore: --- End Gather Results ---")
@@ -243,7 +256,9 @@ class PixabitDataStore:
                 if isinstance(raw_data.get("tasks"), Exception):  # Allow empty task list
                     raise raw_data.get("tasks") or ValueError("Task data fetch failed.")
                 if isinstance(raw_data.get("content"), Exception) or not raw_data.get("content"):
-                    raise raw_data.get("content") or ValueError("Content fetch failed or was empty.")
+                    raise raw_data.get("content") or ValueError(
+                        "Content fetch failed or was empty."
+                    )
 
                 # If we got here, critical fetches were okay (or raised exception)
                 log.info(
@@ -288,7 +303,9 @@ class PixabitDataStore:
                 processed_results = self.processor.process_and_categorize_all(raw_data["tasks"])
                 processed_task_objects_dict: Dict[str, Task] = processed_results.get("data", {})
                 self.cats_data = processed_results.get("cats", self.cats_data)
-                log.info(f"DataStore: Tasks processed. Found {len(processed_task_objects_dict)} tasks.")
+                log.info(
+                    f"DataStore: Tasks processed. Found {len(processed_task_objects_dict)} tasks."
+                )
 
                 # --- 5. Instantiate/Update Model Objects & Containers ---
                 log.info("DataStore: Updating state with new models...")
@@ -301,10 +318,14 @@ class PixabitDataStore:
                     self.party_obj = Party(raw_data["party"]) if raw_data.get("party") else None
                     self.tags_list_obj = TagList(raw_data["tags"])
                     self.tasks_list_obj = TaskList(list(processed_task_objects_dict.values()))
-                    self.challenges_list_obj = ChallengeList(self.raw_challenges_cache, task_list=self.tasks_list_obj)
+                    self.challenges_list_obj = ChallengeList(
+                        self.raw_challenges_cache, task_list=self.tasks_list_obj
+                    )
                     # Instantiate SpellList using awaited spells_data
 
-                    log.info(f"DataStore: BEFORE SpellList init. Type of spells_data: {type(spells_data).__name__}")
+                    log.info(
+                        f"DataStore: BEFORE SpellList init. Type of spells_data: {type(spells_data).__name__}"
+                    )
                     if isinstance(spells_data, dict):
                         log.info(f"   Keys: {list(spells_data.keys())[:5]}")
                     # --- End Re-check ---
@@ -316,7 +337,9 @@ class PixabitDataStore:
 
                     log.info("DataStore: Models updated.")
                 except Exception as model_err:
-                    log.error(f"[red]DataStore: FAILED during model instantiation:[/red] {model_err}")
+                    log.error(
+                        f"[red]DataStore: FAILED during model instantiation:[/red] {model_err}"
+                    )
                     raise  # Likely critical if models fail
 
                 # --- 6. Calculate Final Aggregate Stats ---
@@ -340,7 +363,9 @@ class PixabitDataStore:
                         self.user_stats_dict = {}
                     else:
                         self.user_stats_dict = stats_result
-                        log.info(f"DataStore: User stats calculated: { {k: v for k, v in self.user_stats_dict.items() if k in ['level', 'hp', 'mp']} }...")  # Log a sample
+                        log.info(
+                            f"DataStore: User stats calculated: { {k: v for k, v in self.user_stats_dict.items() if k in ['level', 'hp', 'mp']} }..."
+                        )  # Log a sample
                 except Exception as stats_err:
                     log.error(f"[red]DataStore: FAILED during stats calculation:[/red] {stats_err}")
                     self.user_stats_dict = {}  # Reset on error
@@ -377,8 +402,16 @@ class PixabitDataStore:
 
                 end_time = time.monotonic()
                 duration = end_time - start_time
-                status_msg = "successful" if success else ("failed" if not critical_fetch_ok else "completed with non-critical errors")
-                log_style = "success" if success else ("error" if not critical_fetch_ok else "warning")
+                status_msg = (
+                    "successful"
+                    if success
+                    else (
+                        "failed" if not critical_fetch_ok else "completed with non-critical errors"
+                    )
+                )
+                log_style = (
+                    "success" if success else ("error" if not critical_fetch_ok else "warning")
+                )
                 log.info(
                     f"DataStore: Refresh finished in {duration:.2f}s. Status: {status_msg}",
                 )
@@ -388,7 +421,9 @@ class PixabitDataStore:
         return critical_fetch_ok
 
     # FUNC: _handle_fetch_result
-    def _handle_fetch_result(self, result: Any, name: str, default: Union[List[Any], Dict[Any, Any]]) -> Union[List[Any], Dict[Any, Any]]:
+    def _handle_fetch_result(
+        self, result: Any, name: str, default: Union[List[Any], Dict[Any, Any]]
+    ) -> Union[List[Any], Dict[Any, Any]]:
         """Handles results from asyncio.gather, logging errors and returning defaults."""
         if isinstance(result, Exception):
             log.warning(f"DataStore: Warning: Error fetching {name}: {result}")
@@ -463,26 +498,44 @@ class PixabitDataStore:
         Returns:
             A list of Task objects.
         """
-        if not self.tasks_list_obj:
-            return []
-        # Use TaskList's filtering methods if available, or filter manually
-        tasks = self.tasks_list_obj.tasks
+        # Si la lista principal no se ha cargado, devuelve una TaskList vacía.
+        if self.tasks_list_obj is None:
+            self.console.log(
+                "DataStore.get_tasks called before tasks loaded, returning empty TaskList."
+            )
+            return TaskList([])  # Devuelve una instancia vacía
+
+        # Empieza con la lista completa de tareas almacenada en el DataStore.
+        filtered_task_list_obj: TaskList = self.tasks_list_obj
+
+        # Aplica los filtros en cadena, usando los métodos de la clase TaskList.
+        # Cada método de filtro debe devolver una *nueva* instancia de TaskList.
         if filters:
             task_type = filters.get("task_type")
-            status = filters.get("status")
-            tag_id = filters.get("tag_id")
-            text_filter = filters.get("text_filter", "").lower()  # Example text filter
-
             if task_type:
-                tasks = [t for t in tasks if t.type == task_type]
+                # Llama al método de filtro en el objeto TaskList actual
+                filtered_task_list_obj = filtered_task_list_obj.filter_by_type(task_type)
+
+            status = filters.get("status")
             if status:
-                tasks = [t for t in tasks if hasattr(t, "_status") and t._status == status]
+                filtered_task_list_obj = filtered_task_list_obj.filter_by_status(status)
+
+            tag_id = filters.get("tag_id")
             if tag_id:
-                tasks = [t for t in tasks if tag_id in t.tags]
-            if text_filter:
-                tasks = [t for t in tasks if text_filter in t.text.lower()]
-            # Add more filters
-        return tasks
+                filtered_task_list_obj = filtered_task_list_obj.filter_by_tag_id(tag_id)
+
+            text_filter = filters.get("text_filter")
+            if text_filter:  # Asegúrate que filter_by_text existe en TaskList
+                filtered_task_list_obj = filtered_task_list_obj.filter_by_text(text_filter)
+
+            # Añade aquí llamadas a otros métodos de filtro que implementes en TaskList
+            # Ejemplo:
+            # priority = filters.get("priority")
+            # if priority:
+            #     filtered_task_list_obj = filtered_task_list_obj.filter_by_priority(exact_priority=priority)
+
+        # Devuelve el objeto TaskList final (original o filtrado).
+        return filtered_task_list_obj
 
     # FUNC: get_challenges
     def get_challenges(self, **filters: Any) -> List[Challenge]:
@@ -502,7 +555,9 @@ class PixabitDataStore:
             if "is_broken" in filters:
                 challenges = self.challenges_list_obj.filter_broken(filters["is_broken"])
             if "owned" in filters:
-                challenges = [c for c in challenges if c.owned == filters["owned"]]  # Manual filter example
+                challenges = [
+                    c for c in challenges if c.owned == filters["owned"]
+                ]  # Manual filter example
             # Add more filters
         return challenges
 
@@ -543,10 +598,16 @@ class PixabitDataStore:
             result = await self.api_client.toggle_user_sleep()
             if result is not None:  # Check if API call itself succeeded
                 new_state = result  # The actual boolean sleep state
-                textual_log.info(Text.from_markup(f"[success]DataStore: Sleep toggle API successful. New state: {new_state}[/success]"))
+                textual_log.info(
+                    Text.from_markup(
+                        f"[success]DataStore: Sleep toggle API successful. New state: {new_state}[/success]"
+                    )
+                )
                 success_msg = f"Sleep status successfully set to: {new_state}"
                 log.info(f">>> Posting UIMessage (SUCCESS): {success_msg}")  # ADD LOG
-                self.app.post_message(UIMessage(success_msg, severity="information"))  # Optional success msg
+                self.app.post_message(
+                    UIMessage(success_msg, severity="information")
+                )  # Optional success msg
 
                 # Optimistic UI update (optional - update self.user_obj immediately)
                 if self.user_obj:
@@ -563,7 +624,9 @@ class PixabitDataStore:
                 log.warning(
                     "DataStore: Sleep toggle API call failed or returned unexpected data.",
                 )
-                self.app.post_message(UIMessage("Failed to toggle sleep via API.", severity="warning"))
+                self.app.post_message(
+                    UIMessage("Failed to toggle sleep via API.", severity="warning")
+                )
 
                 return False
         except HabiticaAPIError as e:
@@ -571,14 +634,18 @@ class PixabitDataStore:
 
             log.info(f">>> Posting UIMessage (API ERROR): {msg_text}")  # ADD LOG
 
-            textual_log.error(Text.from_markup(f"[error]DataStore: API Error toggling sleep:[/error] {e}"))
+            textual_log.error(
+                Text.from_markup(f"[error]DataStore: API Error toggling sleep:[/error] {e}")
+            )
             self.app.post_message(UIMessage(msg_text, severity="error"))
             return False
         except Exception as e:
             msg_text = "Unexpected error toggling sleep."
             log.info(f">>> Posting UIMessage (UNEXPECTED ERROR): {msg_text}")  # ADD LOG
 
-            textual_log.exception(Text.from_markup("[error]DataStore: Unexpected error toggling sleep:[/error]"))
+            textual_log.exception(
+                Text.from_markup("[error]DataStore: Unexpected error toggling sleep:[/error]")
+            )
             self.app.post_message(UIMessage(msg_text, severity="error"))
 
             return False
@@ -633,7 +700,9 @@ class PixabitDataStore:
                 )
                 # Optimistic UI: Remove challenge from self.challenges_list_obj?
                 if self.challenges_list_obj:
-                    self.challenges_list_obj.challenges = [c for c in self.challenges_list_obj.challenges if c.id != challenge_id]
+                    self.challenges_list_obj.challenges = [
+                        c for c in self.challenges_list_obj.challenges if c.id != challenge_id
+                    ]
                     self.app_notify_update()  # Notify UI of immediate change
                 asyncio.create_task(self.refresh_all_data())
                 return True

@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Type
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.text import Text
-from textual import log
+from textual import events, log
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical  # Keep Container
 from textual.message import (
@@ -28,7 +28,15 @@ from pixabit.utils.display import console
 from pixabit.utils.message import DataRefreshed, UIMessage
 
 FORMAT = "%(message)s"
-logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])  # Keep for rich tracebacks
+logging.basicConfig(
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)]
+)  # Keep for rich tracebacks
+
+from pixabit.tui.widgets.tasks_panel import (
+    ScoreTaskRequest,
+    TaskListWidget,
+    ViewTaskDetailsRequest,
+)
 
 # --- Local Application Imports ---
 try:
@@ -43,6 +51,11 @@ try:
     # Import the NEW StatsPanel widget
     from pixabit.tui.widgets.stats_panel import StatsPanel
     from pixabit.tui.widgets.tabs_panel import TabPanel
+    from pixabit.tui.widgets.tasks_panel import (
+        ScoreTaskRequest,
+        TaskListWidget,
+        ViewTaskDetailsRequest,
+    )
 except ImportError as e:
     import builtins
 
@@ -131,7 +144,9 @@ class PixabitTUIApp(App[None]):
             # Log the exception details using textual's logger
             log.exception(">>> EXCEPTION in refresh_data_worker")
             # Optionally notify the user about the failure
-            self.post_message(UIMessage("Refresh Failed", f"Error during data refresh: {e}", "error"))
+            self.post_message(
+                UIMessage("Refresh Failed", f"Error during data refresh: {e}", "error")
+            )
         finally:
             # set_loading(False) is handled by update_ui_after_refresh via the event
             log.info(">>> refresh_data_worker FINISHED")
@@ -159,7 +174,9 @@ class PixabitTUIApp(App[None]):
     # Optional: Handler for UI messages
     def on_ui_message(self, event: UIMessage) -> None:
         """Handles UIMessage events for notifications."""
-        log.info(f">>> Received UIMessage: Title='{event.title}', Severity='{event.severity}', Text='{event.text}'")
+        log.info(
+            f">>> Received UIMessage: Title='{event.title}', Severity='{event.severity}', Text='{event.text}'"
+        )
         self.notify(event.text, title=event.title, severity=event.severity)
         log.info(">>> Called self.notify inside on_ui_message.")
 
@@ -184,41 +201,17 @@ class PixabitTUIApp(App[None]):
             except Exception as e:
                 log.error(f"Error updating stats panel: {e}")
 
-            # Example: Update Task List (if it exists and is mounted)
-            # try:
-            #     task_list_widget = self.query_one("#task-list-widget", TaskListWidget) # Replace TaskListWidget
-            #     # Decide if sync or async call is needed here:
-            #     # task_list_widget.refresh_data() or await task_list_widget.refresh_data()
-            #     log.info("UI Update: Task list updated.")
-            # except Exception:
-            #     log.debug("Task list widget not found or error during its refresh.") # Use debug for optional components
-            #     pass
-
-            # Update the *currently active* content pane widget if needed
+        # --- Refresh Active Content Widget INSIDE TabPanel ---
         try:
-            tabbed_content = self.query_one(TabbedContent)
-            # Ensure a pane is actually active
-            if tabbed_content.active:
-                active_pane_id = tabbed_content.active
-                active_tab_pane = self.query_one(f"#{active_pane_id}", TabPane)  # Get the active TabPane widget by ID
-                # Assuming the content widget is the first child. More robust: assign ID to content widget too.
-                content_widget = active_tab_pane.children[0]
-
-                if hasattr(content_widget, "refresh_data"):
-                    log.info(f"UI Update: Refreshing active tab content ({type(content_widget).__name__})...")
-                    # *** IMPORTANT: Verify if refresh_data is sync or async ***
-                    # If async:
-                    # await content_widget.refresh_data()
-                    # If sync:
-                    content_widget.refresh_data()  # Assuming sync for now based on original code
-                else:
-                    log.debug(f"UI Update: Active tab content ({type(content_widget).__name__}) has no refresh_data method.")
-            else:
-                log.debug("UI Update: No active tab pane found to refresh.")
+            main_tabs = self.query_one("#main-tabs", TabbedContent)
+            active_tab_pane = main_tabs.active_pane
+            # Si la pestaña activa es la de tareas O si quieres que siempre se refresque
+            if active_tab_pane and active_tab_pane.children:
+                task_list_widget = active_tab_pane.query_one(TaskListWidget)
+                self.run_worker(task_list_widget.load_or_refresh_data)
 
         except Exception as e:
-            log.error(f"Error refreshing active tab content: {e}")
-
+            log.error(f"Error refreshing active tab content: {e}")  # Error gets logged here
         log.info("UI Update: Finished processing refresh notification.")
         # Lock released automatically by 'async with'
 
@@ -247,7 +240,19 @@ class PixabitTUIApp(App[None]):
         # log.info(f"Action Refresh: DataStore lock check omitted, relying on exclusive worker.")
 
         # Use exclusive=True to prevent multiple refreshes running concurrently
-        self.run_worker(self.refresh_data_worker, name="manual_refresh", exclusive=True, group="data_load")  # Pass the method itself  # Ensure worker groups match if exclusivity is desired across types
+        self.run_worker(
+            self.refresh_data_worker, name="manual_refresh", exclusive=True, group="data_load"
+        )  # Pass the method itself  # Ensure worker groups match if exclusivity is desired across types
+
+    async def on_task_list_widget_score_task_request(self, message: ScoreTaskRequest) -> None:
+        """Handles request from TaskListWidget to score a task."""
+        log(f"App received score request: Task={message.task_id}, Dir={message.direction}")
+        self.set_loading(True)
+        self.run_worker(
+            self.datastore.score_task(message.task_id, message.direction),
+            group=f"score_task_{message.task_id}",
+        )
+        # UI updates after refresh notification
 
     # FUNC: action_toggle_sleep (Example action implementation)
     async def action_toggle_sleep(self) -> None:
@@ -256,7 +261,9 @@ class PixabitTUIApp(App[None]):
 
         # It's better to check if *any* critical action (like refresh) is running
         # A simple way is to check if a worker in a specific group is running
-        if self.is_worker_running("data_load"):  # Check if any worker in 'data_load' group is active
+        if self.is_worker_running(
+            "data_load"
+        ):  # Check if any worker in 'data_load' group is active
             self.notify("Action blocked: Data refresh in progress.", severity="warning")
             log.warning("Toggle sleep blocked by active 'data_load' worker.")
             return
@@ -295,6 +302,17 @@ class PixabitTUIApp(App[None]):
     # --- Event Handlers (Placeholders for now) ---
     # async def on_main_menu_selected(self, event: MainMenu.Selected) -> None: ...
     # async def on_task_list_widget_score_task(self, message: TaskListWidget.ScoreTask) -> None: ...
+
+    # --- ADD Message Handler for ViewTaskDetailsRequest (Placeholder) ---
+    async def on_task_list_widget_view_task_details_request(
+        self, message: ViewTaskDetailsRequest
+    ) -> None:
+        """Handles request to view task details (placeholder)."""
+        log(f"App received view details request for task: {message.task_id}")
+        self.notify(f"Details view for {message.task_id} not yet implemented.", severity="warning")
+        # Later: Mount a TaskDetail screen/widget here
+
+    # ... (rest of App methods) ...
 
 
 # SECTION: Main Entry Point
