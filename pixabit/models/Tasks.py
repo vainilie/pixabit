@@ -1,5 +1,4 @@
-# --- Imports ---
-from __future__ import annotations  # Requires Python 3.7+
+from __future__ import annotations
 
 import json
 import logging
@@ -7,32 +6,24 @@ import math
 from collections import defaultdict
 from datetime import datetime, timezone
 from functools import lru_cache
-
-# Added Literal for status properties
 from typing import Any, Dict, List, Literal, Optional, Union
 
-# Third-party imports
 import emoji_data_python
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     ValidationError,
-    # FieldValidationInfo removed as not strictly needed in current validators
     field_validator,
     model_validator,
 )
-
-# Assuming these exist and work as intended
 from rich.logging import RichHandler
 from rich.markdown import Markdown
 
-# from textual import log # Use standard logger instead
-# Assuming these utilities exist
 try:
     from pixabit.utils.converter import MarkdownConverter
 except ImportError:
-    # log.warning("Warning: Pixabit utility imports failed. Using placeholders.") # Use logger
+
     logging.warning("Warning: Pixabit utility imports failed. Using placeholders.")
 
     class MarkdownConverter:
@@ -41,7 +32,6 @@ except ImportError:
             return text
 
 
-# --- Logging Setup ---
 FORMAT = "%(message)s"
 logging.basicConfig(
     level="INFO",
@@ -49,11 +39,9 @@ logging.basicConfig(
     datefmt="[%X]",
     handlers=[RichHandler(rich_tracebacks=True, show_path=False)],
 )
-logger = logging.getLogger(__name__)  # Use standard Python logger
+logger = logging.getLogger(__name__)
 
 
-# --- Constants and Mock Data ---
-# Example gear content (replace with actual loading mechanism)
 ALL_GEAR_CONTENT: dict[str, dict[str, Any]] = {
     "weapon_warrior_1": {"str": 3, "klass": "warrior"},
     "armor_warrior_1": {"con": 2, "klass": "warrior"},
@@ -63,11 +51,7 @@ ALL_GEAR_CONTENT: dict[str, dict[str, Any]] = {
 }
 
 
-# --- Pydantic Models ---
-
-
 class ChecklistItem(BaseModel):
-    """Represents a single item within a Task's checklist."""
 
     model_config = ConfigDict(extra="ignore")
     id: Optional[str] = None
@@ -88,7 +72,6 @@ class ChecklistItem(BaseModel):
 
 
 class ChallengeData(BaseModel):
-    """Represents metadata linking a Task to a Challenge."""
 
     model_config = ConfigDict(extra="ignore")
     task_id: Optional[str] = Field(None, alias="taskId")
@@ -130,7 +113,6 @@ class ChallengeData(BaseModel):
 
 
 class Task(BaseModel):
-    """Base model representing common attributes of all task types."""
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
@@ -150,15 +132,13 @@ class Task(BaseModel):
     reminders: List[Dict[str, Any]] = Field(default_factory=list)
     challenge: Optional[ChallengeData] = Field(None)
 
-    # Fields populated later by external processing
     position: Optional[int] = Field(
         None, description="Calculated display position relative to type."
     )
     tag_names: List[str] = Field(
         default_factory=list, description="Resolved tag names (populated externally)."
     )
-    # REMOVED value_color field
-    # REMOVED status_ field (will use properties in subclasses)
+
     damage_user: Optional[float] = Field(
         None, description="Calculated HP damage to user (populated externally)."
     )
@@ -166,12 +146,11 @@ class Task(BaseModel):
         None, description="Calculated damage to party/boss (populated externally)."
     )
 
-    # --- Validators ---
     @field_validator("id", mode="before")
     @classmethod
     def check_id_exists(cls, v: Any) -> str:
         if not v:
-            raise ValueError("Task data is missing required field '_id'.")  # Simplified error
+            raise ValueError("Task data is missing required field '_id'.")
         return str(v)
 
     @field_validator("text", "notes", mode="before")
@@ -187,7 +166,7 @@ class Task(BaseModel):
         if isinstance(value, str):
             try:
                 dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                # Ensure timezone aware UTC
+
                 return dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 logger.warning(f"Could not parse timestamp: {value}")
@@ -204,19 +183,14 @@ class Task(BaseModel):
         try:
             return float(value)
         except (ValueError, TypeError):
-            # Default priority is 1.0 (Medium), default value is 0.0
-            return (
-                1.0 if value is None else 0.0
-            )  # Check if field is 'priority' if different default needed
 
-    # --- Properties ---
+            return 1.0 if value is None else 0.0
+
     @property
-    @lru_cache(maxsize=1)  # Cache the result
+    @lru_cache(maxsize=1)
     def styled(self) -> Markdown:
-        """Returns the task text formatted as Rich Markdown object."""
         return Markdown(self.text or "")
 
-    # --- Methods ---
     def __repr__(self) -> str:
         text_preview = self.text[:30] + ("..." if len(self.text) > 30 else "")
         return (
@@ -224,11 +198,7 @@ class Task(BaseModel):
         )
 
 
-# --- Specific Task Type Models ---
-
-
 class Habit(Task):
-    """Model for Habit tasks."""
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
     type: Literal["habit"] = "habit"
@@ -257,7 +227,6 @@ class Habit(Task):
 
 
 class Todo(Task):
-    """Model for To-Do tasks."""
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
     type: Literal["todo"] = "todo"
@@ -270,41 +239,37 @@ class Todo(Task):
     @field_validator("completed_date", "due_date", mode="before")
     @classmethod
     def parse_todo_datetime_utc(cls, value: Any) -> Optional[datetime]:
-        # Reusing base class validator implicitly, but can override if needed
-        # For clarity, calling the base method if available, or copying logic
-        return Task.parse_datetime_utc(value)  # Reuse validator from base
+
+        return Task.parse_datetime_utc(value)
 
     @property
     def is_past_due(self) -> bool:
-        """Checks if the To-Do's due date has passed (if not completed)."""
         if self.completed or not self.due_date:
             return False
         return self.due_date < datetime.now(timezone.utc)
 
     @property
     def display_status(self) -> Literal["Complete", "Past Due", "Due", "No Due Date"]:
-        """Calculates the display status based on completion and due date."""
         if self.completed:
             return "Complete"
         elif not self.due_date:
             return "No Due Date"
-        elif self.is_past_due:  # Use the property here
+        elif self.is_past_due:
             return "Past Due"
         else:
-            return "Due"  # Has a due date, not complete, not past due
+            return "Due"
 
     def __repr__(self) -> str:
         status_char = "[X]" if self.completed else "[ ]"
         due_str = f", due={self.due_date.strftime('%Y-%m-%d')}" if self.due_date else ""
         text_preview = self.text[:30] + ("..." if len(self.text) > 30 else "")
-        # Include calculated status in repr
+
         return (
             f"Todo(id='{self.id}', status='{self.display_status}', text='{text_preview}'{due_str})"
         )
 
 
 class Daily(Task):
-    """Model for Daily tasks."""
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
     type: Literal["daily"] = "daily"
@@ -330,12 +295,12 @@ class Daily(Task):
         try:
             return int(value)
         except (ValueError, TypeError):
-            return 1  # Default everyX to 1, streak to 0 if needed adjust logic
+            return 1
 
     @field_validator("start_date", mode="before")
     @classmethod
     def parse_start_date_utc(cls, value: Any) -> Optional[datetime]:
-        # Reuse base validator
+
         return Task.parse_datetime_utc(value)
 
     @field_validator("next_due", mode="before")
@@ -345,14 +310,13 @@ class Daily(Task):
             return []
         parsed_dates = []
         for ts in value:
-            dt = Task.parse_datetime_utc(ts)  # Reuse base validator
+            dt = Task.parse_datetime_utc(ts)
             if dt:
                 parsed_dates.append(dt)
         return parsed_dates
 
     @property
     def display_status(self) -> Literal["Complete", "Due", "Not Due"]:
-        """Calculates display status based on completion and due status."""
         if self.completed:
             return "Complete"
         elif self.is_due:
@@ -361,7 +325,7 @@ class Daily(Task):
             return "Not Due"
 
     def __repr__(self) -> str:
-        # Use property for status
+
         status_repr = f"status='{self.display_status}'"
         streak_str = f" (Streak: {self.streak})" if self.streak > 0 else ""
         text_preview = self.text[:30] + ("..." if len(self.text) > 30 else "")
@@ -369,11 +333,9 @@ class Daily(Task):
 
 
 class Reward(Task):
-    """Model for Reward tasks."""
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
     type: Literal["reward"] = "reward"
-    # Value (cost) is inherited from Task
 
     def __repr__(self) -> str:
         cost_str = f" (Cost: {self.value:.0f} GP)" if self.value > 0 else " (Free)"
@@ -381,13 +343,7 @@ class Reward(Task):
         return f"Reward(id='{self.id}', text='{text_preview}'{cost_str})"
 
 
-# --- Task Container ---
-
-
 class TaskList:
-    """A container for managing a list of Task objects.
-    Assumes it receives already instantiated Task objects.
-    """
 
     def __init__(self, processed_task_list: List[Task]):
         if not isinstance(processed_task_list, list):
@@ -423,7 +379,6 @@ class TaskList:
         count_str = ", ".join(f"{t}:{c}" for t, c in counts.items())
         return f"TaskList(count={len(self.tasks)}, types=[{count_str}])"
 
-    # --- Filtering Methods ---
     def get_by_id(self, task_id: str) -> Optional[Task]:
         return next((task for task in self.tasks if task.id == task_id), None)
 
@@ -436,7 +391,7 @@ class TaskList:
         return TaskList(filtered_tasks)
 
     def filter_by_tag_name(self, tag_name: str) -> TaskList:
-        # Assumes tag_names is populated externally
+
         if not self.tasks or not hasattr(self.tasks[0], "tag_names") or not self.tasks[0].tag_names:
             logger.warning("Filtering by tag name, but 'tag_names' may not be populated.")
         filtered_tasks = [
@@ -466,8 +421,6 @@ class TaskList:
     def filter_by_attribute(self, attribute: str) -> TaskList:
         filtered_tasks = [task for task in self.tasks if task.attribute == attribute]
         return TaskList(filtered_tasks)
-
-    # REMOVED filter_by_status method
 
     def filter_completed(self, completed: bool = True) -> TaskList:
         filtered_tasks = [
@@ -528,11 +481,8 @@ class TaskList:
         return TaskList(actionable)
 
 
-# --- Example Usage (Illustrative) ---
-# (Keep the __main__ block, it should work with the new models/properties)
 if __name__ == "__main__":
 
-    # 1. Load raw data
     try:
         with open("tasks_data.json", encoding="utf-8") as f:
             raw_task_list_data = json.load(f)
@@ -542,7 +492,6 @@ if __name__ == "__main__":
         logger.error(f"Failed to load or parse task data: {e}")
         raw_task_list_data = []
 
-    # 2. Create specific Task objects using Pydantic models
     processed_tasks: List[Task] = []
     task_type_map: Dict[str, type[Task]] = {
         "habit": Habit,
@@ -562,21 +511,15 @@ if __name__ == "__main__":
         except ValueError as e:
             logger.error(f"Skipping task due to processing error: {e}")
 
-    # 3. Optional: External Processing Step (Populate tag_names, damage etc.)
-    #    e.g., processed_tasks = TaskProcessor(tag_collection, user, party).process_all(processed_tasks)
     logger.info(f"Processed {len(processed_tasks)} tasks.")
 
-    # 4. Create TaskList
     task_list = TaskList(processed_tasks)
     logger.info(f"Created TaskList: {task_list}")
 
-    # 5. Use TaskList
     print("\n--- Filtering Examples ---")
-    # ... (Filtering examples remain the same) ...
 
-    # Example accessing new status property
     todos = task_list.filter_by_type("todo")
     if todos:
         print("\n--- Todo Statuses ---")
         for todo in todos:
-            print(f"'{todo.text[:20]}...': {todo.display_status}")  # Use the property
+            print(f"'{todo.text[:20]}...': {todo.display_status}")

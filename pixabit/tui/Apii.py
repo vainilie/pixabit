@@ -20,7 +20,9 @@ DEFAULT_BASE_URL: str = "https://habitica.com/api/v3"
 REQUESTS_PER_MINUTE_LIMIT: int = 29
 MIN_REQUEST_INTERVAL: float = 60.0 / REQUESTS_PER_MINUTE_LIMIT
 # Define client identifier
-CLIENT_IDENTIFIER: str = "pixabit-tui-v0.1.0"  # Consider updating version dynamically
+CLIENT_IDENTIFIER: str = (
+    "pixabit-tui-v0.1.0"  # Consider updating version dynamically
+)
 
 # SECTION: TYPE ALIASES
 # Type alias for the expected structure within the 'data' field of successful responses
@@ -101,14 +103,20 @@ class HabiticaAPI:
             ValueError: If user_id or api_token is missing or invalid.
         """
         if not user_id or not isinstance(user_id, str):
-            raise ValueError("Habitica User ID is required and must be a string.")
+            raise ValueError(
+                "Habitica User ID is required and must be a string."
+            )
         if not api_token or not isinstance(api_token, str):
-            raise ValueError("Habitica API Token is required and must be a string.")
+            raise ValueError(
+                "Habitica API Token is required and must be a string."
+            )
 
         self.user_id: str = user_id
         self.api_token: str = api_token
         # Ensure base_url ends with a slash for urljoin
-        self.base_url: str = base_url if base_url.endswith("/") else base_url + "/"
+        self.base_url: str = (
+            base_url if base_url.endswith("/") else base_url + "/"
+        )
 
         client_header = f"{CLIENT_IDENTIFIER}-{client_id_suffix}"
         self.headers: Dict[str, str] = {
@@ -146,7 +154,9 @@ class HabiticaAPI:
             wait_time = self.request_interval - time_since_last
             logger.debug(f"Rate limit: waiting for {wait_time:.3f} seconds.")
             await asyncio.sleep(wait_time)
-        self.last_request_time = time.monotonic()  # Update time *after* potential wait
+        self.last_request_time = (
+            time.monotonic()
+        )  # Update time *after* potential wait
 
     def _parse_response(self, response: httpx.Response) -> HabiticaApiResponse:
         """Parses the httpx response, handling Habitica's common structure and errors.
@@ -163,7 +173,9 @@ class HabiticaAPI:
         """
         # Check for successful status codes that might have no content
         if response.status_code == 204 or not response.content:
-            logger.debug(f"Request successful with status {response.status_code}, no content.")
+            logger.debug(
+                f"Request successful with status {response.status_code}, no content."
+            )
             return None
 
         # Attempt to parse JSON
@@ -188,9 +200,13 @@ class HabiticaAPI:
             else:
                 # Habitica indicated failure
                 error_type = response_data.get("error", "UnknownHabiticaError")
-                message = response_data.get("message", "No error message provided by API.")
+                message = response_data.get(
+                    "message", "No error message provided by API."
+                )
                 full_message = f"{error_type} - {message}"
-                logger.warning(f"API Error reported (success: false): {full_message}")
+                logger.warning(
+                    f"API Error reported (success: false): {full_message}"
+                )
                 raise HabiticaAPIError(
                     full_message,
                     status_code=response.status_code,
@@ -209,7 +225,9 @@ class HabiticaAPI:
             logger.error(msg)
             raise ValueError(msg)  # Or potentially HabiticaAPIError
 
-    async def _request(self, method: str, endpoint: str, **kwargs: Any) -> HabiticaApiResponse:
+    async def _request(
+        self, method: str, endpoint: str, **kwargs: Any
+    ) -> HabiticaApiResponse:
         """Internal method to perform an asynchronous API request with rate limiting and error handling.
 
         Args:
@@ -233,7 +251,9 @@ class HabiticaAPI:
         logger.debug(f"Making API request: {method} {log_url}")
         response: Optional[httpx.Response] = None
         try:
-            response = await self._client.request(method, relative_url, **kwargs)
+            response = await self._client.request(
+                method, relative_url, **kwargs
+            )
             response.raise_for_status()  # Raise exception for 4xx/5xx statuses
             # Parse successful response using helper
             return self._parse_response(response)
@@ -249,7 +269,9 @@ class HabiticaAPI:
             error_details = f"HTTP Error {status_code} for {method} {log_url}"
             try:
                 # Try parsing error response using the standard parser logic
-                self._parse_response(response)  # This will raise HabiticaAPIError if parsing works
+                self._parse_response(
+                    response
+                )  # This will raise HabiticaAPIError if parsing works
                 # If _parse_response *doesn't* raise (e.g., non-standard error format), raise generic
                 raise HabiticaAPIError(
                     f"HTTP Error {status_code}",
@@ -258,7 +280,9 @@ class HabiticaAPI:
                 )
             except (HabiticaAPIError, ValueError) as api_parse_err:
                 # Catch errors raised by _parse_response (either Habitica format or JSON/Value error)
-                logger.warning(f"Request Failed: {error_details} | Parsed Error: {api_parse_err}")
+                logger.warning(
+                    f"Request Failed: {error_details} | Parsed Error: {api_parse_err}"
+                )
                 if isinstance(api_parse_err, HabiticaAPIError):
                     # Re-raise specific HabiticaAPIError parsed from body
                     raise api_parse_err from http_err
@@ -289,9 +313,12 @@ class HabiticaAPI:
         except Exception as e:
             # Catch-all for truly unexpected issues
             logger.exception(
-                f"Unexpected Error during API request {method} {log_url}", exc_info=True
+                f"Unexpected Error during API request {method} {log_url}",
+                exc_info=True,
             )
-            raise HabiticaAPIError(f"Unexpected error during {method} request: {e}") from e
+            raise HabiticaAPIError(
+                f"Unexpected error during {method} request: {e}"
+            ) from e
 
     # --- Public API Methods ---
 
@@ -370,7 +397,9 @@ class HabiticaAPI:
         # Basic type check, consider Pydantic User.model_validate(result) here
         return result if isinstance(result, dict) else None
 
-    async def update_user(self, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def update_user(
+        self, update_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Updates the user object (/user). Returns raw response data dict."""
         result = await self.put("user", data=update_data)
         return result if isinstance(result, dict) else None
@@ -380,7 +409,9 @@ class HabiticaAPI:
         if not 0 <= hour <= 23:
             raise ValueError("Hour must be between 0 and 23")
         # Note: API expects 'dayStart', Pydantic might use alias if modeling input
-        result = await self.post("user/custom-day-start", data={"dayStart": hour})
+        result = await self.post(
+            "user/custom-day-start", data={"dayStart": hour}
+        )
         return result if isinstance(result, dict) else None
 
     async def toggle_user_sleep(self) -> HabiticaApiResponse:
@@ -393,14 +424,18 @@ class HabiticaAPI:
         result = await self.post("cron")
         return result if isinstance(result, dict) else None
 
-    async def get_tasks(self, task_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_tasks(
+        self, task_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Fetches user tasks, optionally filtered by type. Returns raw list of task dicts."""
         params = {"type": task_type} if task_type else None
         result = await self.get("tasks/user", params=params)
         # Consider TaskList([Task.model_validate(t) for t in result]) here
         return result if isinstance(result, list) else []
 
-    async def create_task(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def create_task(
+        self, data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Creates a new user task."""
         if not data.get("text") or not data.get("type"):
             raise ValueError("Task data requires 'text' and 'type'.")
@@ -408,7 +443,9 @@ class HabiticaAPI:
         result = await self.post("tasks/user", data=data)
         return result if isinstance(result, dict) else None
 
-    async def update_task(self, task_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def update_task(
+        self, task_id: str, data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Updates an existing task."""
         if not task_id:
             raise ValueError("task_id cannot be empty.")
@@ -422,9 +459,13 @@ class HabiticaAPI:
             raise ValueError("task_id cannot be empty.")
         # DELETE often returns 204 No Content on success -> _parse_response returns None
         result = await self.delete(f"tasks/{task_id}")
-        return result is None  # True if successful (no data returned), False otherwise
+        return (
+            result is None
+        )  # True if successful (no data returned), False otherwise
 
-    async def score_task(self, task_id: str, direction: str = "up") -> Optional[Dict[str, Any]]:
+    async def score_task(
+        self, task_id: str, direction: str = "up"
+    ) -> Optional[Dict[str, Any]]:
         """Scores a task up (+) or down (-)."""
         if not task_id:
             raise ValueError("task_id cannot be empty.")
@@ -433,14 +474,20 @@ class HabiticaAPI:
         result = await self.post(f"tasks/{task_id}/score/{direction}")
         return result if isinstance(result, dict) else None
 
-    async def add_checklist_item(self, task_id: str, text: str) -> Optional[Dict[str, Any]]:
+    async def add_checklist_item(
+        self, task_id: str, text: str
+    ) -> Optional[Dict[str, Any]]:
         """Adds a checklist item to a task."""
         if not task_id or not text:
             raise ValueError("task_id and text cannot be empty.")
-        result = await self.post(f"tasks/{task_id}/checklist", data={"text": text})
+        result = await self.post(
+            f"tasks/{task_id}/checklist", data={"text": text}
+        )
         return result if isinstance(result, dict) else None
 
-    async def score_checklist_item(self, task_id: str, item_id: str) -> Optional[Dict[str, Any]]:
+    async def score_checklist_item(
+        self, task_id: str, item_id: str
+    ) -> Optional[Dict[str, Any]]:
         """Scores (completes/uncompletes) a checklist item."""
         if not task_id or not item_id:
             raise ValueError("task_id and item_id required.")
@@ -481,7 +528,9 @@ async def main():
         user_id = os.environ.get("HABITICA_USER_ID")
         api_token = os.environ.get("HABITICA_API_TOKEN")
         if not user_id or not api_token:
-            raise ValueError("Set HABITICA_USER_ID and HABITICA_API_TOKEN environment variables")
+            raise ValueError(
+                "Set HABITICA_USER_ID and HABITICA_API_TOKEN environment variables"
+            )
 
         # --- Initialize Client ---
         api = HabiticaAPI(user_id=user_id, api_token=api_token)
@@ -491,8 +540,12 @@ async def main():
             print("Fetching user data...")
             user_data = await api.get_user_data()
             if user_data:
-                print(f"  Welcome, {user_data.get('profile', {}).get('name', 'User')}!")
-                print(f"  Level: {user_data.get('stats', {}).get('lvl', 'N/A')}")
+                print(
+                    f"  Welcome, {user_data.get('profile', {}).get('name', 'User')}!"
+                )
+                print(
+                    f"  Level: {user_data.get('stats', {}).get('lvl', 'N/A')}"
+                )
             else:
                 print("  Could not fetch user data.")
 
@@ -525,6 +578,8 @@ async def main():
 
 if __name__ == "__main__":
     # Basic logging setup for the example
-    logging.basicConfig(level="INFO", format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        level="INFO", format="%(asctime)s - %(levelname)s - %(message)s"
+    )
     logger.info("Starting Habitica API example...")
     asyncio.run(main())
