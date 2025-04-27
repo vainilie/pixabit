@@ -57,7 +57,7 @@ class TabPanel(Widget):
             self.log.error(f"Failed to switch tab to '{tab}': {e}")
 
     # FUNC: get_active_content_widget (Helper for App)
-    def get_active_content_widget(self) -> Optional[Widget]:
+    def get_active_content_widget(self) -> Widget | None:
         """Returns the main content widget within the currently active TabPane."""
         try:
             tabbed_content = self.query_one(TabbedContent)
@@ -82,7 +82,9 @@ class TabPanel(Widget):
                 # Check if data is already loaded? (Could add a flag to widgets)
                 # if not getattr(content_widget, "_data_loaded", False):
                 self.log(f"Triggering initial load for {content_widget.id}")
-                self.app.run_worker(content_widget.load_or_refresh_data, exclusive=True)
+                self.app.run_worker(
+                    content_widget.load_or_refresh_data, exclusive=True
+                )
                 # Set flag after worker starts? Or rely on widget internal state?
                 # setattr(content_widget, "_data_loaded", True)
 

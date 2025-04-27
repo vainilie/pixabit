@@ -16,7 +16,12 @@ from textual.widget import Widget  # Base class for custom widgets
 from textual.widgets import Static  # Use Static for displaying text/values
 
 FORMAT = "%(message)s"
-logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
+logging.basicConfig(
+    level="NOTSET",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
 
 
 # SECTION: WIDGET CLASS
@@ -43,7 +48,7 @@ class StatsPanel(Static):  # Inherit from Static or Widget/Container
             # Add more stats as needed (e.g., STR, INT, CON, PER from base stats)
 
     # FUNC: update_display
-    def update_display(self, stats_data: Optional[Dict[str, Any]]) -> None:
+    def update_display(self, stats_data: dict[str, Any] | None) -> None:
         """Updates the displayed statistics.
 
         Called by the main App after data is refreshed in the DataStore.
@@ -87,11 +92,21 @@ class StatsPanel(Static):  # Inherit from Static or Widget/Container
 
         # Update the Static widgets using their IDs
         try:
-            self.query_one("#stat-level", Static).update(f"Level: [b]{level}[/]")
-            self.query_one("#stat-class", Static).update(f"Class: [b]{u_class}[/]")
-            self.query_one("#stat-hp", Static).update(f"HP:    [b]{hp:.1f} / {max_hp}[/]")
-            self.query_one("#stat-mp", Static).update(f"MP:    [b]{mp:.1f} / {max_mp}[/]")
-            self.query_one("#stat-exp", Static).update(f"EXP:   [b]{exp:.0f} / {next_lvl}[/]")
+            self.query_one("#stat-level", Static).update(
+                f"Level: [b]{level}[/]"
+            )
+            self.query_one("#stat-class", Static).update(
+                f"Class: [b]{u_class}[/]"
+            )
+            self.query_one("#stat-hp", Static).update(
+                f"HP:    [b]{hp:.1f} / {max_hp}[/]"
+            )
+            self.query_one("#stat-mp", Static).update(
+                f"MP:    [b]{mp:.1f} / {max_mp}[/]"
+            )
+            self.query_one("#stat-exp", Static).update(
+                f"EXP:   [b]{exp:.0f} / {next_lvl}[/]"
+            )
             self.query_one("#stat-gp", Static).update(f"GP:    [b]{gp:.2f}[/]")
             self.query_one("#stat-gems", Static).update(f"Gems:  [b]{gems}[/]")
             self.query_one("#stat-status", Static).update(f"Status:{status}")

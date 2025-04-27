@@ -24,12 +24,15 @@ from textual.widgets import (  # Keep Core widgets
     TabPane,
 )
 
-from pixabit.utils.display import console
-from pixabit.utils.message import DataRefreshed, UIMessage
+from pixabit.helpers._rich import console
+from pixabit.helpers.message import DataRefreshed, UIMessage
 
 FORMAT = "%(message)s"
 logging.basicConfig(
-    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)]
+    level="NOTSET",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
 )  # Keep for rich tracebacks
 
 from pixabit.tui.widgets.tasks_panel import (
@@ -59,7 +62,9 @@ try:
 except ImportError as e:
     import builtins
 
-    builtins.print(f"FATAL ERROR: Could not import Pixabit TUI modules in app.py: {e}")
+    builtins.print(
+        f"FATAL ERROR: Could not import Pixabit TUI modules in app.py: {e}"
+    )
     import sys
 
     sys.exit(1)
@@ -90,7 +95,9 @@ class PixabitTUIApp(App[None]):
         try:
             self.datastore = PixabitDataStore(self)
             # Se podrían añadir logs aquí si se quisiera verificar
-            log.info(">>> PixabitDataStore initialized successfully in __init__.")
+            log.info(
+                ">>> PixabitDataStore initialized successfully in __init__."
+            )
         except Exception as e:
             # Using standard logging before Textual's log might be fully ready
             logging.fatal(f"FATAL: Failed to initialize PixabitDataStore: {e}")
@@ -118,7 +125,9 @@ class PixabitTUIApp(App[None]):
         self.sub_title = "Habitica Assistant"
 
         # Trigger initial data load AFTER mounting panes
-        self.run_worker(self.initial_data_load, exclusive=True, group="data_load")
+        self.run_worker(
+            self.initial_data_load, exclusive=True, group="data_load"
+        )
 
     # ... (rest of App methods) ...
     # --- Workers ---
@@ -130,7 +139,9 @@ class PixabitTUIApp(App[None]):
         self.set_loading(True)
         # DataStore should handle its own errors and potentially post a UIMessage
         await self.datastore.refresh_all_data()  # This will now post DataRefreshed
-        log.info("Initial data load worker finished.")  # UI update happens via event handler
+        log.info(
+            "Initial data load worker finished."
+        )  # UI update happens via event handler
 
     # FUNC: refresh_data_worker (Worker - Using run_in_thread)
     async def refresh_data_worker(self) -> None:
@@ -145,7 +156,9 @@ class PixabitTUIApp(App[None]):
             log.exception(">>> EXCEPTION in refresh_data_worker")
             # Optionally notify the user about the failure
             self.post_message(
-                UIMessage("Refresh Failed", f"Error during data refresh: {e}", "error")
+                UIMessage(
+                    "Refresh Failed", f"Error during data refresh: {e}", "error"
+                )
             )
         finally:
             # set_loading(False) is handled by update_ui_after_refresh via the event
@@ -164,7 +177,12 @@ class PixabitTUIApp(App[None]):
 
         # Check if the refresh was successful (assuming DataRefreshed carries status)
         # Example: if event.success:
-        self.notify("Data refresh complete!", title="Refreshed", severity="information", timeout=4)
+        self.notify(
+            "Data refresh complete!",
+            title="Refreshed",
+            severity="information",
+            timeout=4,
+        )
         log.info(">>> 'Data refresh complete!' notification called.")
         # else:
         #    self.notify("Data refresh finished with errors.", title="Refreshed", severity="warning", timeout=4)
@@ -188,13 +206,17 @@ class PixabitTUIApp(App[None]):
             log.info("UI Update: Acquiring lock and starting UI update.")
             self.set_loading(False)  # Hide loading indicator FIRST
 
-            stats_data = self.datastore.get_user_stats()  # Get potentially updated data
+            stats_data = (
+                self.datastore.get_user_stats()
+            )  # Get potentially updated data
             log.info(f"UI Update: Stats data received from store: {stats_data}")
 
             # Update specific widgets by querying them and calling their update methods
             # Example: Update Stats Panel
             try:
-                stats_panel = self.query_one(StatsPanel)  # Query by class is fine if only one
+                stats_panel = self.query_one(
+                    StatsPanel
+                )  # Query by class is fine if only one
                 # latest_stats = self.datastore.get_user_stats() # Already fetched above
                 stats_panel.update_display(stats_data)
                 log.info("UI Update: Stats panel updated.")
@@ -211,7 +233,9 @@ class PixabitTUIApp(App[None]):
                 self.run_worker(task_list_widget.load_or_refresh_data)
 
         except Exception as e:
-            log.error(f"Error refreshing active tab content: {e}")  # Error gets logged here
+            log.error(
+                f"Error refreshing active tab content: {e}"
+            )  # Error gets logged here
         log.info("UI Update: Finished processing refresh notification.")
         # Lock released automatically by 'async with'
 
@@ -241,12 +265,19 @@ class PixabitTUIApp(App[None]):
 
         # Use exclusive=True to prevent multiple refreshes running concurrently
         self.run_worker(
-            self.refresh_data_worker, name="manual_refresh", exclusive=True, group="data_load"
+            self.refresh_data_worker,
+            name="manual_refresh",
+            exclusive=True,
+            group="data_load",
         )  # Pass the method itself  # Ensure worker groups match if exclusivity is desired across types
 
-    async def on_task_list_widget_score_task_request(self, message: ScoreTaskRequest) -> None:
+    async def on_task_list_widget_score_task_request(
+        self, message: ScoreTaskRequest
+    ) -> None:
         """Handles request from TaskListWidget to score a task."""
-        log(f"App received score request: Task={message.task_id}, Dir={message.direction}")
+        log(
+            f"App received score request: Task={message.task_id}, Dir={message.direction}"
+        )
         self.set_loading(True)
         self.run_worker(
             self.datastore.score_task(message.task_id, message.direction),
@@ -264,13 +295,18 @@ class PixabitTUIApp(App[None]):
         if self.is_worker_running(
             "data_load"
         ):  # Check if any worker in 'data_load' group is active
-            self.notify("Action blocked: Data refresh in progress.", severity="warning")
+            self.notify(
+                "Action blocked: Data refresh in progress.", severity="warning"
+            )
             log.warning("Toggle sleep blocked by active 'data_load' worker.")
             return
 
         # Optional: Check if another 'user_action' is already running
         if self.is_worker_running("user_action"):
-            self.notify("Action blocked: Another user action is in progress.", severity="warning")
+            self.notify(
+                "Action blocked: Another user action is in progress.",
+                severity="warning",
+            )
             log.warning("Toggle sleep blocked by active 'user_action' worker.")
             return
 
@@ -309,7 +345,10 @@ class PixabitTUIApp(App[None]):
     ) -> None:
         """Handles request to view task details (placeholder)."""
         log(f"App received view details request for task: {message.task_id}")
-        self.notify(f"Details view for {message.task_id} not yet implemented.", severity="warning")
+        self.notify(
+            f"Details view for {message.task_id} not yet implemented.",
+            severity="warning",
+        )
         # Later: Mount a TaskDetail screen/widget here
 
     # ... (rest of App methods) ...

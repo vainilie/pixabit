@@ -48,7 +48,7 @@ class TagsWidget(VerticalScroll):
     """
 
     # Reactive state to store tag data (tuples for DataTable)
-    _tags_data: reactive[List[Tuple]] = reactive([])
+    _tags_data: reactive[list[Tuple]] = reactive([])
 
     # FUNC: compose
     def compose(self) -> ComposeResult:
@@ -63,7 +63,7 @@ class TagsWidget(VerticalScroll):
         # Data loading should be triggered by the App after initial refresh
 
     # FUNC: update_display (NEW - Required for new architecture)
-    def update_display(self, tags: List[Dict[str, Any]]) -> None:
+    def update_display(self, tags: list[dict[str, Any]]) -> None:
         """Updates the table with new tag data.
 
         Args:
@@ -88,7 +88,7 @@ class TagsWidget(VerticalScroll):
         self._tags_data = processed_rows
 
     # Watcher method to update the DataTable when reactive data changes
-    def watch__tags_data(self, new_tags_data: List[Tuple]) -> None:
+    def watch__tags_data(self, new_tags_data: list[Tuple]) -> None:
         """Called when the `_tags_data` reactive property changes."""
         try:
             table = self.query_one(DataTable)
@@ -120,8 +120,8 @@ class TagManagerWidget(VerticalScroll):
     """
 
     # Reactive state (if needed for display, but data comes from DataStore)
-    # tags: reactive[List[Dict[str, Any]]] = reactive([])
-    # selected_tag_details: reactive[Optional[Dict[str, Any]]] = reactive(None)
+    # tags: reactive[list[dict[str, Any]]] = reactive([])
+    # selected_tag_details: reactive[dict[str, Any]] | None = reactive(None)
 
     DEFAULT_CSS = """
     TagManagerWidget {
@@ -176,7 +176,7 @@ class TagManagerWidget(VerticalScroll):
         # Data loading triggered by App
 
     # FUNC: update_display (NEW)
-    def update_display(self, tags: List[Dict[str, Any]]) -> None:
+    def update_display(self, tags: list[dict[str, Any]]) -> None:
         """Updates the DataTable with tag data."""
         try:
             table = self.query_one(DataTable)

@@ -57,7 +57,7 @@ def create_auth_file_legacy(filename: str = DEFAULT_CONFIG_FILE_INI) -> None: # 
          print(f"❌ Error writing legacy config file '{filename}': {e}")
 
 # FUNC: get_key_from_config (Legacy - .ini)
-def get_key_from_config_legacy(section: str, key: str, filename: str = DEFAULT_CONFIG_FILE_INI) -> Optional[str]: # Renamed, added Optional
+def get_key_from_config_legacy(section: str, key: str, filename: str = DEFAULT_CONFIG_FILE_INI) -> str | None: # Renamed, added Optional
     """LEGACY: Get a key value from the .ini config file."""
     config = configparser.ConfigParser()
     try:

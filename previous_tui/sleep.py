@@ -60,10 +60,10 @@ class SleepToggleWidget(Horizontal):  # Renamed class for clarity
     )  # Don't init until data received
 
     # Store reference to the switch
-    _switch_widget: Optional[Switch] = None
+    _switch_widget: Switch | None = None
 
     # FUNC: update_display (NEW - Required for new architecture)
-    def update_display(self, sleep_status: Optional[bool]) -> None:
+    def update_display(self, sleep_status: bool | None) -> None:
         """Updates the widget's display based on data from the DataStore.
 
         Args:

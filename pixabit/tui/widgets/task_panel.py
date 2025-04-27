@@ -25,7 +25,11 @@ from textual.widgets import (  # Ensure Input is here
     Select,
     Static,
 )
-from textual.widgets._data_table import CellKey, ColumnKey, RowKey  # Import keys
+from textual.widgets._data_table import (  # Import keys
+    CellKey,
+    ColumnKey,
+    RowKey,
+)
 
 # SECTION: MESSAGE CLASSES
 # Define messages this widget can send to the App
@@ -74,14 +78,19 @@ class TaskListWidget(Widget):
 
     # Reactive variable to trigger refresh when filter changes
     _text_filter = reactive("", layout=True)
-    _datatable: Optional[DataTable] = None
+    _datatable: DataTable | None = None
 
     # Store the base task type this instance should display (e.g., "todo", "daily")
     # This is passed during initialization
     _active_task_type = reactive("todo")  # Empieza mostrando TODOs
 
     # FUNC: __init__
-    def __init__(self, task_type: Optional[str] = None, id: Optional[str] = None, **kwargs):
+    def __init__(
+        self,
+        task_type: str | None = None,
+        id: str | None = None,
+        **kwargs,
+    ):
         """Initialize the TaskListWidget.
 
         Args:
@@ -113,7 +122,9 @@ class TaskListWidget(Widget):
                 allow_blank=False,
             )
             # --- Fin añadir widget ---# Use Vertical to stack Input and DataTable
-            yield Input(placeholder="Filter tasks by text...", id="task-filter-input")
+            yield Input(
+                placeholder="Filter tasks by text...", id="task-filter-input"
+            )
             self._datatable = DataTable(id="tasks-data-table")
             yield self._datatable
 
@@ -135,7 +146,9 @@ class TaskListWidget(Widget):
         table.add_column("Due", key="due", width=12)
         table.add_column("Tags", key="tags")
 
-        self.run_worker(self.load_or_refresh_data, exclusive=True)  # Carga inicial
+        self.run_worker(
+            self.load_or_refresh_data, exclusive=True
+        )  # Carga inicial
 
     # Observador para el filtro de tipo
     def watch__active_task_type(self, new_type: str) -> None:
@@ -165,23 +178,29 @@ class TaskListWidget(Widget):
         # --- Use the stored reference ---
         table = self._datatable
         if not table:
-            self.log.error("DataTable instance is None in load_or_refresh_data!")
+            self.log.error(
+                "DataTable instance is None in load_or_refresh_data!"
+            )
             return
         # --- END Use reference ---
 
         self.log("TaskListWidget: Refreshing...")  # Simplified log
         # ... (get current_row_key_value using 'table' reference) ...
-        current_row_key_value: Optional[str] = None
-        current_cursor_coordinate: Optional[Coordinate] = table.cursor_coordinate
+        current_row_key_value: str | None = None
+        current_cursor_coordinate: Coordinate | None = table.cursor_coordinate
 
         if current_cursor_coordinate is not None and table.is_valid_coordinate(
             current_cursor_coordinate
         ):
             try:
                 # --- Use coordinate_to_cell_key ---
-                cell_key: CellKey = table.coordinate_to_cell_key(current_cursor_coordinate)
+                cell_key: CellKey = table.coordinate_to_cell_key(
+                    current_cursor_coordinate
+                )
                 current_row_key_value = str(cell_key.row_key.value)
-                self.log(f"Saved current row key value: {current_row_key_value}")
+                self.log(
+                    f"Saved current row key value: {current_row_key_value}"
+                )
             except (KeyError, Exception) as e:
                 self.log.warning(
                     f"Could not get row key for coordinate {current_cursor_coordinate}: {e}"
@@ -199,17 +218,21 @@ class TaskListWidget(Widget):
         # --- Obtiene el objeto TaskList del DataStore ---
         try:
             # --- CORREGIDO: El tipo es TaskList ---
-            task_list_obj: TaskList = self.app.datastore.get_tasks(**data_filters)
+            task_list_obj: TaskList = self.app.datastore.get_tasks(
+                **data_filters
+            )
             # --- FIN CORRECCIÓN ---
             self.log(
                 f"Received TaskList with {len(task_list_obj)} tasks from DataStore for {self.id}"
             )
         except Exception as e:
             self.log.error(f"Error getting TaskList from datastore: {e}")
-            task_list_obj = TaskList([])  # Usa una TaskList vacía en caso de error
+            task_list_obj = TaskList(
+                []
+            )  # Usa una TaskList vacía en caso de error
 
         # Prepara filas iterando sobre la TaskList
-        rows: List[Tuple] = []
+        rows: list[Tuple] = []
         # --- El bucle FOR funciona porque TaskList es iterable ---
         for task in task_list_obj:
             try:
@@ -262,7 +285,9 @@ class TaskListWidget(Widget):
                 table.add_row(*content, key=task.id)  # task.id es la key
                 # Apply overflow/nowrap here  # Apply overflow/nowrap here  # ID al final para la clave
             except Exception as e:
-                self.log.error(f"Error processing task {getattr(task, 'id', 'N/A')} for table: {e}")
+                self.log.error(
+                    f"Error processing task {getattr(task, 'id', 'N/A')} for table: {e}"
+                )
 
         # Añadir filas (key es el último elemento de la tupla 'row')
         table.loading = False
@@ -289,7 +314,9 @@ class TaskListWidget(Widget):
                 if table.row_count > 0:
                     table.move_cursor(row=0, animate=False)
         elif table.row_count > 0:
-            table.move_cursor(row=0, animate=False)  # Move to top if no previous cursor
+            table.move_cursor(
+                row=0, animate=False
+            )  # Move to top if no previous cursor
 
     # --- Event Handlers ---
 
@@ -301,7 +328,7 @@ class TaskListWidget(Widget):
             return
         # --- END Use reference ---
 
-        cursor_coordinate: Optional[Coordinate] = table.cursor_coordinate
+        cursor_coordinate: Coordinate | None = table.cursor_coordinate
         if (
             table.row_count > 0
             and cursor_coordinate is not None
@@ -309,8 +336,12 @@ class TaskListWidget(Widget):
         ):
             try:
                 # --- Use coordinate_to_cell_key ---
-                cell_key: CellKey = table.coordinate_to_cell_key(cursor_coordinate)
-                task_id = str(cell_key.row_key.value)  # Extract string value from RowKey
+                cell_key: CellKey = table.coordinate_to_cell_key(
+                    cursor_coordinate
+                )
+                task_id = str(
+                    cell_key.row_key.value
+                )  # Extract string value from RowKey
                 # --- END USE ---
 
                 if task_id:
@@ -324,14 +355,16 @@ class TaskListWidget(Widget):
                         event.stop()
                         # ... other key checks ...
             except (KeyError, Exception) as e:  # Catch potential errors
-                self.log.error(f"Error getting row key or handling key press: {e}")
+                self.log.error(
+                    f"Error getting row key or handling key press: {e}"
+                )
 
     # --- on_data_table_row_selected remains the same ---
     # (event.row_key directly gives the RowKey object)
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         # --- CORRECTED WAY TO GET KEY ---
         # event.row_key ALREADY IS the RowKey object
-        task_id_key: Optional[RowKey] = event.row_key
+        task_id_key: RowKey | None = event.row_key
         if task_id_key is not None:
             task_id = str(task_id_key.value)  # Extract the task ID string
             self.log(f"Row selected, task ID: {task_id}")

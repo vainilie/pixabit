@@ -23,7 +23,7 @@ from typing import Optional
 try:
     # Assuming cli/app.py is the entry point for the OLD Rich app
     from pixabit.cli.app import CliApp
-    from pixabit.utils.display import Rule, console, print
+    from pixabit.helpers._rich import Rule, console, print
 except ImportError as import_err:
     import builtins
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         print("\n─── Welcome to Pixabit (Rich Version) ───")  # Fallback
 
     # ─── Instantiate and Run App ───
-    app_instance: Optional[CliApp] = None  # Type hint
+    app_instance: CliApp | None = None  # Type hint
     try:
         app_instance = CliApp()  # Instantiate the Rich CLI App
         app_instance.run()  # Start the main application loop

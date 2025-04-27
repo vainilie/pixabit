@@ -54,14 +54,19 @@ class TaskListWidget(Widget):
 
     _text_filter = reactive("", layout=True)
     _active_task_type = reactive("todo")
-    _datatable: Optional[DataTable] = None
+    _datatable: DataTable | None = None
 
-    sort_key: Optional[str] = reactive(None)
+    sort_key: str | None = reactive(None)
     sort_ascending: bool = reactive(True)
 
-    tag_colors: Dict[str, str] = {}
+    tag_colors: dict[str, str] = {}
 
-    def __init__(self, task_type: Optional[str] = None, id: Optional[str] = None, **kwargs):
+    def __init__(
+        self,
+        task_type: str | None = None,
+        id: str | None = None,
+        **kwargs,
+    ):
         self.task_type_filter = task_type
         widget_id = id or f"task-list-{task_type or 'all'}"
         super().__init__(id=widget_id, **kwargs)
@@ -80,7 +85,9 @@ class TaskListWidget(Widget):
                 id="task-type-select",
                 allow_blank=False,
             )
-            yield Input(placeholder="Filter tasks by text...", id="task-filter-input")
+            yield Input(
+                placeholder="Filter tasks by text...", id="task-filter-input"
+            )
             self._datatable = DataTable(id="tasks-data-table")
             yield self._datatable
 
@@ -117,14 +124,20 @@ class TaskListWidget(Widget):
     async def load_or_refresh_data(self) -> None:
         table = self._datatable
         if not table:
-            self.log.error("DataTable instance is None in load_or_refresh_data!")
+            self.log.error(
+                "DataTable instance is None in load_or_refresh_data!"
+            )
             return
 
-        current_row_key_value: Optional[str] = None
-        current_cursor_coordinate: Optional[Coordinate] = table.cursor_coordinate
-        if current_cursor_coordinate and table.is_valid_coordinate(current_cursor_coordinate):
+        current_row_key_value: str | None = None
+        current_cursor_coordinate: Coordinate | None = table.cursor_coordinate
+        if current_cursor_coordinate and table.is_valid_coordinate(
+            current_cursor_coordinate
+        ):
             try:
-                cell_key: CellKey = table.coordinate_to_cell_key(current_cursor_coordinate)
+                cell_key: CellKey = table.coordinate_to_cell_key(
+                    current_cursor_coordinate
+                )
                 current_row_key_value = str(cell_key.row_key.value)
             except Exception as e:
                 self.log.warning(f"Could not get row key: {e}")
@@ -144,7 +157,9 @@ class TaskListWidget(Widget):
 
         tasks = sorted(
             task_list_obj,
-            key=lambda t: getattr(t, self.sort_key, 0) if self.sort_key else t.text,
+            key=lambda t: (
+                getattr(t, self.sort_key, 0) if self.sort_key else t.text
+            ),
             reverse=not self.sort_ascending,
         )
 
@@ -155,7 +170,9 @@ class TaskListWidget(Widget):
                 priority = getattr(task, "priority", 1.0)
                 tag_names = getattr(task, "tag_names", [])
 
-                status_cell = Text("●", style=f"bold {self.get_status_style(status)}")
+                status_cell = Text(
+                    "●", style=f"bold {self.get_status_style(status)}"
+                )
                 task_text = Text.from_markup(task.text)
                 due_str = ""
 
@@ -170,7 +187,13 @@ class TaskListWidget(Widget):
                     tag_str.append(f"[{color}]{tag}[/{color}] ")
 
                 table.add_row(
-                    status_cell, task_text, str(value), str(priority), due_str, tag_str, key=task.id
+                    status_cell,
+                    task_text,
+                    str(value),
+                    str(priority),
+                    due_str,
+                    tag_str,
+                    key=task.id,
                 )
 
             except Exception as e:
@@ -179,7 +202,9 @@ class TaskListWidget(Widget):
         table.loading = False
         if current_row_key_value:
             try:
-                new_row_index = table.get_row_index(RowKey(current_row_key_value))
+                new_row_index = table.get_row_index(
+                    RowKey(current_row_key_value)
+                )
                 table.move_cursor(row=new_row_index, animate=False)
             except Exception as e:
                 self.log.warning(f"Could not restore cursor: {e}")
@@ -205,9 +230,15 @@ class TaskListWidget(Widget):
             return
 
         cursor_coordinate = table.cursor_coordinate
-        if table.row_count and cursor_coordinate and table.is_valid_coordinate(cursor_coordinate):
+        if (
+            table.row_count
+            and cursor_coordinate
+            and table.is_valid_coordinate(cursor_coordinate)
+        ):
             try:
-                cell_key: CellKey = table.coordinate_to_cell_key(cursor_coordinate)
+                cell_key: CellKey = table.coordinate_to_cell_key(
+                    cursor_coordinate
+                )
                 task_id = str(cell_key.row_key.value)
 
                 if task_id:
@@ -221,7 +252,7 @@ class TaskListWidget(Widget):
                 self.log.error(f"Key handler error: {e}")
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        task_id_key: Optional[RowKey] = event.row_key
+        task_id_key: RowKey | None = event.row_key
         if task_id_key:
             task_id = str(task_id_key.value)
             self.post_message(ViewTaskDetailsRequest(task_id))

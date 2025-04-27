@@ -42,7 +42,7 @@ def select_option_legacy(action_name: str) -> None: pass
 # SECTION: LEGACY FUNCTIONS
 
 # FUNC: initialize_data (Legacy - Reference Only)
-def initialize_data_legacy() -> List[Any]:
+def initialize_data_legacy() -> list[Any]:
     """Legacy: Initializes or refreshes data from Habitica synchronously."""
     print("[bold green]Refreshing data (Legacy Sync)...[/bold green]")
     # tags = process_tags.process_tags() # Old processor call
@@ -55,7 +55,7 @@ def initialize_data_legacy() -> List[Any]:
 
 
 # FUNC: display_menu (Legacy - Reference Only)
-def display_menu_legacy(title: str, options: List[str]) -> int:
+def display_menu_legacy(title: str, options: list[str]) -> int:
     """Legacy: Displays a menu using Rich and returns user choice."""
     menu_renderable = [f"[b]{num}.[/] [i]{option}" for num, option in enumerate(options, start=1)]
     menu_renderable.insert(0, "[b]0.[/] [i]Return/Exit[/]") # Adjusted label
@@ -84,7 +84,7 @@ def display_menu_legacy(title: str, options: List[str]) -> int:
 # FUNC: display_main_menu (Legacy - Reference Only)
 def display_main_menu_legacy() -> None:
     """Legacy: Displays the main menu and navigates submenus (Sync)."""
-    categories: Dict[str, List[str]] = {
+    categories: dict[str, list[str]] = {
         "Backup": ["Backup Challenges", "Save user data"],
         "Challenges": ["List Challenges"],
         "Tasks": ["Broken tasks", "Sort alphabetically"],

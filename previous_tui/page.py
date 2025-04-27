@@ -113,7 +113,7 @@ class PageScreen(Screen):
 
     # Worker to get source code (can be kept if feature desired)
     @work(thread=True)
-    def get_code(self, source_file: str) -> Optional[str]:
+    def get_code(self, source_file: str) -> str | None:
         """Reads code from disk in a thread. Returns None on error."""
         try:
             with open(source_file, encoding="utf-8") as file_:

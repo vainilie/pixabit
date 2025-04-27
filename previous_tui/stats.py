@@ -23,10 +23,11 @@ from textual.widgets import Digits, Label
 # Third-party Imports
 try:
     import httpx
+
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
-    httpx = None # type: ignore
+    httpx = None  # type: ignore
 
 # Local Imports (These are from the OLD structure - likely invalid now)
 # from heart.basis.auth_keys import get_user_id, get_api_token # Old auth method
@@ -36,6 +37,7 @@ except ImportError:
 # USER_ID = get_user_id() # Should come from config/DataStore
 # API_TOKEN = get_api_token() # Should come from config/DataStore
 # HEADERS = { ... } # Headers should be handled by HabiticaAPI client
+
 
 # SECTION: LEGACY WIDGET CLASS
 # KLASS: StarCount (Legacy Widget)
@@ -83,13 +85,13 @@ class StarCount(Vertical):
 
     # Reactive variables to hold stats (still potentially useful)
     lvl: reactive[int] = reactive(0)
-    mp: reactive[float] = reactive(0.0) # Use float for potential decimals
-    hp: reactive[float] = reactive(0.0) # Use float
-    gp: reactive[float] = reactive(0.0) # Use float
-    exp: reactive[float] = reactive(0.0) # Use float
+    mp: reactive[float] = reactive(0.0)  # Use float for potential decimals
+    hp: reactive[float] = reactive(0.0)  # Use float
+    gp: reactive[float] = reactive(0.0)  # Use float
+    exp: reactive[float] = reactive(0.0)  # Use float
     # Add max values if displaying hp/max_hp etc.
     max_hp: reactive[int] = reactive(50)
-    max_mp: reactive[int] = reactive(30) # Example base
+    max_mp: reactive[int] = reactive(30)  # Example base
     to_next_level: reactive[int] = reactive(0)
 
     # DEPRECATED worker - Fetching logic belongs in DataStore
@@ -99,17 +101,23 @@ class StarCount(Vertical):
     #     # ... (Old httpx fetching logic) ...
 
     # FUNC: update_display (NEW - Required for new architecture)
-    def update_display(self, stats_data: Optional[Dict[str, Any]]) -> None:
+    def update_display(self, stats_data: dict[str, Any] | None) -> None:
         """Updates the widget's display based on data from the DataStore.
 
         Args:
             stats_data: The stats dictionary (e.g., from DataStore.get_user_stats()).
         """
-        if not stats_data: # Handle case where stats are not available
+        if not stats_data:  # Handle case where stats are not available
             self.log.warning("Stats widget received no data to display.")
             # Optionally clear display or show placeholder text
-            self.lvl = 0; self.mp = 0.0; self.hp = 0.0; self.gp = 0.0; self.exp = 0.0
-            self.max_hp = 50; self.max_mp = 30; self.to_next_level = 0
+            self.lvl = 0
+            self.mp = 0.0
+            self.hp = 0.0
+            self.gp = 0.0
+            self.exp = 0.0
+            self.max_hp = 50
+            self.max_mp = 30
+            self.to_next_level = 0
             return
 
         # Update reactive variables from the provided dictionary
@@ -119,48 +127,70 @@ class StarCount(Vertical):
         self.gp = stats_data.get("gp", 0.0)
         self.exp = stats_data.get("exp", 0.0)
         self.max_hp = stats_data.get("maxHealth", 50)
-        self.max_mp = stats_data.get("maxMP", 30) # Get actual max if calculated
+        self.max_mp = stats_data.get(
+            "maxMP", 30
+        )  # Get actual max if calculated
         self.to_next_level = stats_data.get("toNextLevel", 0)
         # Update will trigger recompose/rewatch
 
         # Update Tooltips (since recompose=False for Digits by default)
         try:
             self.query_one("#lvl Digits", Digits).tooltip = f"Level: {self.lvl}"
-            self.query_one("#mp Digits", Digits).tooltip = f"Mana: {self.mp:.1f} / {self.max_mp}"
-            self.query_one("#hp Digits", Digits).tooltip = f"Health: {self.hp:.1f} / {self.max_hp}"
-            self.query_one("#exp Digits", Digits).tooltip = f"Experience: {self.exp:.0f} / {self.to_next_level}"
-            self.query_one("#gp Digits", Digits).tooltip = f"Gold: {self.gp:.2f}"
+            self.query_one("#mp Digits", Digits).tooltip = (
+                f"Mana: {self.mp:.1f} / {self.max_mp}"
+            )
+            self.query_one("#hp Digits", Digits).tooltip = (
+                f"Health: {self.hp:.1f} / {self.max_hp}"
+            )
+            self.query_one("#exp Digits", Digits).tooltip = (
+                f"Experience: {self.exp:.0f} / {self.to_next_level}"
+            )
+            self.query_one("#gp Digits", Digits).tooltip = (
+                f"Gold: {self.gp:.2f}"
+            )
         except Exception as e:
             self.log.error(f"Error updating tooltips: {e}")
 
-
     # Watch methods to update Digits when reactive vars change
     def watch_lvl(self, value: int) -> None:
-        try: self.query_one("#lvl Digits", Digits).update(f"{value}")
-        except Exception: pass # Ignore if widget not ready
-    def watch_mp(self, value: float) -> None:
-        try: self.query_one("#mp Digits", Digits).update(f"{value:.1f}")
-        except Exception: pass
-    def watch_hp(self, value: float) -> None:
-        try: self.query_one("#hp Digits", Digits).update(f"{value:.1f}")
-        except Exception: pass
-    def watch_exp(self, value: float) -> None:
-        try: self.query_one("#exp Digits", Digits).update(f"{value:.0f}")
-        except Exception: pass
-    def watch_gp(self, value: float) -> None:
-        try: self.query_one("#gp Digits", Digits).update(f"{value:.2f}")
-        except Exception: pass
+        try:
+            self.query_one("#lvl Digits", Digits).update(f"{value}")
+        except Exception:
+            pass  # Ignore if widget not ready
 
+    def watch_mp(self, value: float) -> None:
+        try:
+            self.query_one("#mp Digits", Digits).update(f"{value:.1f}")
+        except Exception:
+            pass
+
+    def watch_hp(self, value: float) -> None:
+        try:
+            self.query_one("#hp Digits", Digits).update(f"{value:.1f}")
+        except Exception:
+            pass
+
+    def watch_exp(self, value: float) -> None:
+        try:
+            self.query_one("#exp Digits", Digits).update(f"{value:.0f}")
+        except Exception:
+            pass
+
+    def watch_gp(self, value: float) -> None:
+        try:
+            self.query_one("#gp Digits", Digits).update(f"{value:.2f}")
+        except Exception:
+            pass
 
     # FUNC: compose (Layout structure looks reusable)
     def compose(self) -> ComposeResult:
         """Create UI components."""
         # This layout seems reasonable, using Horizontal for overall layout
         # and Vertical for each stat Label + Digits pair.
-        with Horizontal(): # Contains the vertical stat groups
+        with Horizontal():  # Contains the vertical stat groups
             with Vertical(id="lvl"):
                 yield Label("Level ★")
-                yield Digits(f"{self.lvl}") # Tooltip set in update_display
+                yield Digits(f"{self.lvl}")  # Tooltip set in update_display
 
             with Vertical(id="mp"):
                 yield Label("Mana")
@@ -188,4 +218,3 @@ class StarCount(Vertical):
     #     """DEPRECATED: Refresh stats on click."""
     #     # self.get_stars() # Remove direct fetch
     #     # Instead, could post a message: self.post_message(self.RefreshRequest())
-

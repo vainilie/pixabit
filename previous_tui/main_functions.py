@@ -127,7 +127,7 @@ def sort_alphabetically_legacy() -> None: # Renamed
 
 
 # Dispatch dictionary (Legacy - Reference Only)
-LEGACY_ACTION_MAP: Dict[str, Callable[[], None]] = {
+LEGACY_ACTION_MAP: dict[str, Callable[[], None]] = {
     "Backup Challenges": backup_challenges_legacy,
     "List Challenges": list_challenges_legacy,
     "Broken tasks": check_broken_tasks_legacy,

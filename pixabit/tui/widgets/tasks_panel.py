@@ -40,7 +40,10 @@ except ImportError:
 
 FORMAT = "%(message)s"
 logging.basicConfig(
-    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)]
+    level="NOTSET",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
 )  # Keep for rich tracebacks
 # SECTION: MESSAGE CLASSES
 # Define messages this widget can send to the App
@@ -107,18 +110,25 @@ class TaskListWidget(Widget):
     _text_filter = reactive("", layout=True)
     # Set default directly in reactive()
 
-    _active_task_type = reactive("all")  # Default to 'all' maybe? Or init later?
+    _active_task_type = reactive(
+        "all"
+    )  # Default to 'all' maybe? Or init later?
 
     # Sorting State
-    _sort_column_key: Optional[ColumnKey] = reactive(None)
+    _sort_column_key: ColumnKey | None = reactive(None)
     _sort_reverse: reactive[bool] = reactive(False)
 
     # Internal storage for data and table reference
-    _datatable: Optional[DataTable] = None
-    _tasks: List[Task] = []  # Store the raw Task objects for sorting/filtering
+    _datatable: DataTable | None = None
+    _tasks: list[Task] = []  # Store the raw Task objects for sorting/filtering
 
     # FUNC: __init__
-    def __init__(self, task_type: Optional[str] = None, id: Optional[str] = None, **kwargs):
+    def __init__(
+        self,
+        task_type: str | None = None,
+        id: str | None = None,
+        **kwargs,
+    ):
         """Initialize the TaskListWidget.
 
         Args:
@@ -159,17 +169,29 @@ class TaskListWidget(Widget):
                 id="task-type-select",
                 allow_blank=False,
             )
-            yield Input(placeholder="Filter tasks by text...", id="task-filter-input")
+            yield Input(
+                placeholder="Filter tasks by text...", id="task-filter-input"
+            )
             # Create and store the DataTable instance
             self._datatable = DataTable(
                 id="tasks-data-table", cursor_type="row", zebra_stripes=True
             )
             # Define columns here - this ensures they exist before on_mount tries to load data
-            self._datatable.add_column("S", key="status", width=20)  # No sortable=False
-            self._datatable.add_column("Task Text", key="text", width=40)  # No sortable=True
-            self._datatable.add_column("Value", key="value", width=8)  # No sortable=True
-            self._datatable.add_column("Pri", key="priority", width=5)  # No sortable=True
-            self._datatable.add_column("Due", key="due", width=12)  # No sortable=True
+            self._datatable.add_column(
+                "S", key="status", width=20
+            )  # No sortable=False
+            self._datatable.add_column(
+                "Task Text", key="text", width=40
+            )  # No sortable=True
+            self._datatable.add_column(
+                "Value", key="value", width=8
+            )  # No sortable=True
+            self._datatable.add_column(
+                "Pri", key="priority", width=5
+            )  # No sortable=True
+            self._datatable.add_column(
+                "Due", key="due", width=12
+            )  # No sortable=True
             self._datatable.add_column("Tags", key="tags")  # No sortable=False
             yield self._datatable
 
@@ -182,7 +204,10 @@ class TaskListWidget(Widget):
             return
         # Columns are added in compose now
         self.run_worker(
-            self.load_or_refresh_data, exclusive=True, name=f"load_{self.id}", group="load_tasks"
+            self.load_or_refresh_data,
+            exclusive=True,
+            name=f"load_{self.id}",
+            group="load_tasks",
         )
 
     # --- Data Loading / Refreshing ---
@@ -199,13 +224,19 @@ class TaskListWidget(Widget):
         )
 
         # --- Store current cursor key value ---
-        current_row_key_value: Optional[str] = None
-        current_cursor_coordinate: Optional[Coordinate] = table.cursor_coordinate
-        if current_cursor_coordinate and table.is_valid_coordinate(current_cursor_coordinate):
+        current_row_key_value: str | None = None
+        current_cursor_coordinate: Coordinate | None = table.cursor_coordinate
+        if current_cursor_coordinate and table.is_valid_coordinate(
+            current_cursor_coordinate
+        ):
             try:
-                cell_key: CellKey = table.coordinate_to_cell_key(current_cursor_coordinate)
+                cell_key: CellKey = table.coordinate_to_cell_key(
+                    current_cursor_coordinate
+                )
                 current_row_key_value = str(cell_key.row_key.value)
-                log.info(f"Saved current row key value: {current_row_key_value}")
+                log.info(
+                    f"Saved current row key value: {current_row_key_value}"
+                )
             except Exception as e:
                 log.warning(
                     f"Could not get row key for coordinate {current_cursor_coordinate}: {e}"
@@ -220,20 +251,24 @@ class TaskListWidget(Widget):
         data_filters = {"text_filter": self._text_filter}
 
         # --- Use the REACTIVE _active_task_type ---
-        active_type = self._active_task_type  # Get current value from Select/reactive
+        active_type = (
+            self._active_task_type
+        )  # Get current value from Select/reactive
         if active_type and active_type != "all":
             data_filters["task_type"] = active_type
         # --- END Use Reactive ---
 
-        # Get List[Task] from DataStore
+        # Get list[Task] from DataStore
         try:
-            fetched_tasks: List[Task] = self.app.datastore.get_tasks(**data_filters)
+            fetched_tasks: list[Task] = self.app.datastore.get_tasks(
+                **data_filters
+            )
             log(
                 f"Received {len(fetched_tasks)} tasks (type: {active_type}, text: '{self._text_filter}') from DataStore."
             )
             self._tasks = fetched_tasks
         except Exception as e:
-            log.error(f"Error getting List[Task] from datastore: {e}")
+            log.error(f"Error getting list[Task] from datastore: {e}")
             self._tasks = []
 
         # Sort and display the fetched tasks
@@ -244,7 +279,9 @@ class TaskListWidget(Widget):
         # --- Restore cursor ---
         if current_row_key_value is not None:
             try:
-                new_row_index = table.get_row_index(RowKey(current_row_key_value))
+                new_row_index = table.get_row_index(
+                    RowKey(current_row_key_value)
+                )
                 table.move_cursor(row=new_row_index, animate=False)
                 log.info(
                     f"Restored cursor to row index {new_row_index} for key {current_row_key_value}"
@@ -273,7 +310,9 @@ class TaskListWidget(Widget):
         )
 
         table.clear()
-        log.info(f"sort_and_display_tasks: Table cleared. Row count: {table.row_count}")
+        log.info(
+            f"sort_and_display_tasks: Table cleared. Row count: {table.row_count}"
+        )
 
         sorted_tasks = self._tasks
 
@@ -286,9 +325,13 @@ class TaskListWidget(Widget):
                         sort_key.value
                     )  # Get the string key ('text', 'value', 'priority', 'due')
                     if key_str == "status":
-                        return getattr(task, "_status", "")  # Sort by status string
+                        return getattr(
+                            task, "_status", ""
+                        )  # Sort by status string
                     elif key_str == "text":
-                        return getattr(task, "text", "").lower()  # Case-insensitive text sort
+                        return getattr(
+                            task, "text", ""
+                        ).lower()  # Case-insensitive text sort
                     elif key_str == "value":
                         return getattr(task, "value", 0.0)
                     elif key_str == "priority":
@@ -304,12 +347,16 @@ class TaskListWidget(Widget):
                     else:
                         return None  # Default for unknown keys
 
-                sorted_tasks = sorted(self._tasks, key=get_sort_value, reverse=self._sort_reverse)
+                sorted_tasks = sorted(
+                    self._tasks, key=get_sort_value, reverse=self._sort_reverse
+                )
                 log.info(
                     f"Sorted tasks by '{self._sort_column_key.value}', reverse={self._sort_reverse}"
                 )
             except Exception as e:
-                log.error(f"Error sorting tasks by key '{self._sort_column_key}': {e}")
+                log.error(
+                    f"Error sorting tasks by key '{self._sort_column_key}': {e}"
+                )
                 sorted_tasks = self._tasks  # Revert
 
         # Prepare rows from the (potentially sorted) list
@@ -320,7 +367,9 @@ class TaskListWidget(Widget):
                 # --- Extract and Format Row Data ---
                 status = getattr(task, "_status", "unknown")
                 text = getattr(task, "text", "")
-                styled_text = getattr(task, "styled", "")  # Convert Markdown to styled Text
+                styled_text = getattr(
+                    task, "styled", ""
+                )  # Convert Markdown to styled Text
 
                 value = getattr(task, "value", 0.0)
                 priority = getattr(task, "priority", 1.0)
@@ -357,7 +406,9 @@ class TaskListWidget(Widget):
                 # --- END ADD ROW ---
 
             except Exception as e:
-                log.error(f"Error processing task {getattr(task, 'id', 'N/A')} for row: {e}")
+                log.error(
+                    f"Error processing task {getattr(task, 'id', 'N/A')} for row: {e}"
+                )
 
         # --- ADD LOG: Before add_rows ---
         # log.info(f"sort_and_display_tasks: Prepared {len(rows_to_add)} rows to add.")
@@ -369,7 +420,9 @@ class TaskListWidget(Widget):
         # # Add rows using task ID string as key value
         # if rows_to_add:  # Only call add_rows if there's something to add
         #     table.add_rows(rows_to_add)
-        log.info(f"sort_and_display_tasks: Finished. Final row count: {table.row_count}")
+        log.info(
+            f"sort_and_display_tasks: Finished. Final row count: {table.row_count}"
+        )
 
     def get_status_style(self, status: str) -> str:
         """Maps status string to CSS color variable."""
@@ -390,7 +443,9 @@ class TaskListWidget(Widget):
     # Watchers trigger run_worker, which calls the now non-decorated async method
     def watch__active_task_type(self, new_type: str) -> None:
         self.run_worker(
-            self.load_or_refresh_data, name=f"filter_type_{self.id}", group="load_tasks"
+            self.load_or_refresh_data,
+            name=f"filter_type_{self.id}",
+            group="load_tasks",
         )
 
     def watch__text_filter(self, new_filter: str) -> None:
@@ -436,7 +491,9 @@ class TaskListWidget(Widget):
             )
             self.sort_and_display_tasks()
         except KeyError:
-            log.warning(f"Attempted to sort by invalid or non-existent column key: {column_key}")
+            log.warning(
+                f"Attempted to sort by invalid or non-existent column key: {column_key}"
+            )
         except Exception as e:
             log.error(f"Error during header selection sorting: {e}")
 
@@ -449,7 +506,9 @@ class TaskListWidget(Widget):
         cursor_coordinate = table.cursor_coordinate
         if cursor_coordinate and table.is_valid_coordinate(cursor_coordinate):
             try:
-                cell_key: CellKey = table.coordinate_to_cell_key(cursor_coordinate)
+                cell_key: CellKey = table.coordinate_to_cell_key(
+                    cursor_coordinate
+                )
                 if cell_key.row_key is None:
                     return  # Should have a row key
                 task_id = str(cell_key.row_key.value)
@@ -467,7 +526,7 @@ class TaskListWidget(Widget):
 
     # Handle row selection
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        task_id_key: Optional[RowKey] = event.row_key
+        task_id_key: RowKey | None = event.row_key
         if task_id_key is not None:
             task_id = str(task_id_key.value)
             log.info(f"Row selected, task ID: {task_id}")

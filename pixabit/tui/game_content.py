@@ -18,10 +18,15 @@ from typing import Any, Dict, List, Optional
 from rich.logging import RichHandler
 from textual import log
 
-from pixabit.utils.display import console
+from pixabit.helpers._rich import console
 
 FORMAT = "%(message)s"
-logging.basicConfig(level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(rich_tracebacks=True)])
+logging.basicConfig(
+    level="NOTSET",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
 
 # Local Imports
 try:
@@ -32,14 +37,14 @@ try:
     # CACHE_FILE_RAW = "content_cache_raw.json"
     CACHE_FILE_EXTRACTED = "content_cache_extracted.json"
 
+    from pixabit.helpers._json_helper import load_json, save_json
+    from pixabit.helpers._rich import console, print
     from pixabit.tui.api import HabiticaAPI, HabiticaAPIError
-    from pixabit.utils.display import console, print
-    from pixabit.utils.save_json import load_json, save_json
 except ImportError:
 
     # Define dummy fallback components
     class HabiticaAPI:  # type: ignore
-        async def get_content(self) -> Optional[Dict[str, Any]]:
+        async def get_content(self) -> dict[str, Any] | None:
             return None
 
     HabiticaAPIError = Exception  # type: ignore
@@ -55,7 +60,9 @@ except ImportError:
     # ... (Keep fallbacks, define both cache filenames) ...
     CACHE_FILE_RAW = "content_cache_raw_fallback.json"
     CACHE_FILE_EXTRACTED = "content_cache_extracted_fallback.json"
-    log.error("Warning: Could not import Pixabit components in game_content.py. Using fallbacks.")
+    log.error(
+        "Warning: Could not import Pixabit components in game_content.py. Using fallbacks."
+    )
 
 
 # KLASS: GameContent
@@ -66,7 +73,7 @@ class GameContent:
     CACHE_PATH_EXTRACTED: Path = Path(CACHE_FILE_EXTRACTED)
 
     # FUNC: __init__
-    def __init__(self, api_client: Optional[HabiticaAPI] = None):
+    def __init__(self, api_client: HabiticaAPI | None = None):
         """Initializes the GameContent manager.
 
         Args:
@@ -76,14 +83,18 @@ class GameContent:
         """
         self.console = console
         # Store API client if provided, otherwise create lazily if needed
-        self._api_client_instance: Optional[HabiticaAPI] = api_client
+        self._api_client_instance: HabiticaAPI | None = api_client
         # Stores the *full* raw content if loaded directly or fetched
-        self._raw_content_cache: Optional[Dict[str, Any]] = None
+        self._raw_content_cache: dict[str, Any] | None = None
         # Stores *only* the extracted sections if loaded from extracted cache or after extraction
-        self._extracted_content_cache: Optional[Dict[str, Any]] = None
+        self._extracted_content_cache: dict[str, Any] | None = None
         # Flags
-        self._raw_cache_loaded: bool = False  # Tracks if full cache is in memory
-        self._extracted_cache_loaded: bool = False  # Tracks if extracted cache is in memory/loaded
+        self._raw_cache_loaded: bool = (
+            False  # Tracks if full cache is in memory
+        )
+        self._extracted_cache_loaded: bool = (
+            False  # Tracks if extracted cache is in memory/loaded
+        )
         # Locks and timestamp
         self._fetch_lock = asyncio.Lock()
         self._last_fetch_attempt: float = 0.0
@@ -96,12 +107,16 @@ class GameContent:
                 "GameContent: API client not provided, creating instance...",
             )
             try:
-                self._api_client_instance = HabiticaAPI()  # Assumes config is available
+                self._api_client_instance = (
+                    HabiticaAPI()
+                )  # Assumes config is available
             except Exception as e:
                 log.error(
                     "[error]Failed to auto-create HabiticaAPI client in GameContent![/error]",
                 )
-                raise RuntimeError("GameContent requires a valid HabiticaAPI client.") from e
+                raise RuntimeError(
+                    "GameContent requires a valid HabiticaAPI client."
+                ) from e
         return self._api_client_instance
 
     # FUNC: invalidate_cache
@@ -190,7 +205,9 @@ class GameContent:
                         )
                     self._raw_content_cache = content  # Store fetched raw data
                     self._raw_cache_loaded = True
-                    self._extracted_cache = None  # Invalidate old extracted cache
+                    self._extracted_cache = (
+                        None  # Invalidate old extracted cache
+                    )
                     self._extracted_cache_loaded = False
                     return True
                 else:
@@ -253,7 +270,9 @@ class GameContent:
         # 2. Extracted cache failed, ensure RAW cache is loaded/fetched
         if not self._raw_cache_loaded:  # Check if raw is already in memory
             if not self._load_raw_cache():  # Try loading raw from file
-                if not await self._fetch_and_save_raw_content():  # Fetch raw if load failed
+                if (
+                    not await self._fetch_and_save_raw_content()
+                ):  # Fetch raw if load failed
                     log.error(
                         "Game content unavailable: Failed cache loads and API fetch.",
                     )
@@ -275,7 +294,7 @@ class GameContent:
     # --- Internal Getters (Operating on _raw_content_cache or _extracted_content_cache) ---
     # These are called by the public async getters OR by _generate_and_save_extracted_cache
 
-    def _get_active_cache(self) -> Optional[Dict[str, Any]]:
+    def _get_active_cache(self) -> dict[str, Any] | None:
         """Returns the currently active cache (prefer extracted)."""
         if self._extracted_cache_loaded:
             return self._extracted_content_cache
@@ -284,7 +303,7 @@ class GameContent:
         else:
             return None  # Should not happen if _ensure_content_loaded is called first
 
-    def _get_gear_data_internal(self) -> Dict[str, Any]:
+    def _get_gear_data_internal(self) -> dict[str, Any]:
         """Internal sync getter for gear data."""
         active_cache = self._get_active_cache()
         if active_cache:
@@ -297,22 +316,22 @@ class GameContent:
                 return gear.get("flat", {}) if isinstance(gear, dict) else {}
         return {}
 
-    def _get_skill_data_internal(self) -> Dict[str, Any]:
+    def _get_skill_data_internal(self) -> dict[str, Any]:
         """Internal sync getter for spells data."""
         active_cache = self._get_active_cache()
         return active_cache.get("spells", {}) if active_cache else {}
 
-    def _get_quest_data_internal(self) -> Dict[str, Any]:
+    def _get_quest_data_internal(self) -> dict[str, Any]:
         """Internal sync getter for quests data."""
         active_cache = self._get_active_cache()
         return active_cache.get("quests", {}) if active_cache else {}
 
-    def _get_pets_data_internal(self) -> Dict[str, Any]:
+    def _get_pets_data_internal(self) -> dict[str, Any]:
         """Internal sync getter for pets data."""
         active_cache = self._get_active_cache()
         return active_cache.get("pets", {}) if active_cache else {}
 
-    def _get_mounts_data_internal(self) -> Dict[str, Any]:
+    def _get_mounts_data_internal(self) -> dict[str, Any]:
         """Internal sync getter for mounts data."""
         active_cache = self._get_active_cache()
         return active_cache.get("mounts", {}) if active_cache else {}
@@ -321,37 +340,37 @@ class GameContent:
     # These methods ensure data is loaded before returning sections.
 
     # FUNC: get_all_content (Async)
-    async def get_all_content(self) -> Optional[Dict[str, Any]]:
+    async def get_all_content(self) -> dict[str, Any] | None:
         """Returns the full game content object, loading/fetching if necessary."""
         await self._ensure_content_loaded()
         return self._main_content_cache
 
     # FUNC: get_gear_data (Async)
-    async def get_gear_data(self) -> Dict[str, Any]:
+    async def get_gear_data(self) -> dict[str, Any]:
         """Returns the 'gear.flat' section of game content."""
         await self._ensure_content_loaded()
         # --- CHANGE: Call internal getter ---
         return self._get_gear_data_internal()
 
     # FUNC: get_quest_data (Async)
-    async def get_quest_data(self) -> Dict[str, Any]:
+    async def get_quest_data(self) -> dict[str, Any]:
         """Returns the 'quests' section of game content, loading/fetching if necessary."""
         await self._ensure_content_loaded()
         return self._get_quest_data_internal()
 
     # FUNC: get_skill_data (Async) - Assuming skills/spells are under 'spells' key
-    async def get_skill_data(self) -> Dict[str, Any]:
+    async def get_skill_data(self) -> dict[str, Any]:
         """Returns the 'spells' section (containing class skills) of game content."""
         await self._ensure_content_loaded()
         return self._get_skill_data_internal()
 
     # Add more getters for other content sections as needed (e.g., pets, mounts, food)
-    async def get_pets_data(self) -> Dict[str, Any]:
+    async def get_pets_data(self) -> dict[str, Any]:
         """Returns the 'pets' section of game content."""
         await self._ensure_content_loaded()
         return self._get_pets_data_internal()
 
-    async def get_mounts_data(self) -> Dict[str, Any]:
+    async def get_mounts_data(self) -> dict[str, Any]:
         """Returns the 'mounts' section of game content."""
         await self._ensure_content_loaded()
         return self._get_mounts_data_internal()

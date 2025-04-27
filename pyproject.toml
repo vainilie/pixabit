@@ -4,13 +4,13 @@
 [tool.black]
 
 # Black is very opinionated, less config needed.
-line-length = 80
+line-length = 166
 # Or 88 (Black's default), or 100. Let's go with 99 for a bit more space.
 
 [tool.ruff]
 
 # Same line length as black
-line-length = 80
+line-length = 166
 
 # Tell Ruff it's in the src directory (adjust if your structure differs)
 src = ["pixabit"]

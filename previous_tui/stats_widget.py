@@ -78,7 +78,7 @@ class StatsCount(Vertical):  # Renamed from StarCount? Keep consistent.
     #     # ... (Old API fetching logic) ...
 
     # FUNC: update_display (NEW - Required for new architecture)
-    def update_display(self, stats_data: Optional[Dict[str, Any]]) -> None:
+    def update_display(self, stats_data: dict[str, Any] | None) -> None:
         """Updates the widget's display based on data from the DataStore.
 
         Args:
