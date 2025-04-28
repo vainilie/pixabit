@@ -243,6 +243,8 @@ class DataManager:
                 if isinstance(cached_task_dicts, list):
                     try:
                         # --- CHANGE HERE: Use from_processed_dicts ---
+                        self._tasks = TaskList.from_processed_dicts(cached_task_dicts)
+
                         self._update_refresh_time(data_key)
                         log.success("Tasks loaded successfully from fresh processed cache.")
                         return self._tasks
@@ -570,7 +572,7 @@ class DataManager:
 
             # 3. Process Tasks (Needs User, Tags, Static Content Manager)
             if self._tasks and self._user and self._tags:
-                self._tasks.process_task_statuses_and_damage(user=self._user, tags_provider=self._tags, content_manager=self.static_content_manager)
+                self._tasks.process_tasks(user=self._user, tags_provider=self._tags, content_manager=self.static_content_manager)
                 log.debug("Tasks processed.")
             else:
                 log.error("Skipping task processing: User, Tasks or Tags missing.")  # Should fail dep check

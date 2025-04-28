@@ -11,9 +11,7 @@ from ._rich import RichHandler, console
 
 # --- Constants ---
 LOG_FILENAME = "app.log"
-LOG_FORMAT_FILE = (
-    "%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s"
-)
+LOG_FORMAT_FILE = "%(asctime)s - %(filename)s:%(lineno)d - %(levelname)s - %(message)s"
 SUCCESS_LEVEL_NUM = 25
 
 # --- Custom Log Level ---
@@ -74,9 +72,7 @@ def setup_logging(
     log.addHandler(error_handler)
 
     # Create file handler
-    file_handler = RotatingFileHandler(
-        log_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
-    )
+    file_handler = RotatingFileHandler(log_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
     file_formatter = logging.Formatter(LOG_FORMAT_FILE)
     file_handler.setFormatter(file_formatter)
@@ -106,9 +102,7 @@ _log_instance: Logger | None = None
 def get_logger() -> Logger:
     global _log_instance
     if _log_instance is None:
-        _log_instance = setup_logging(
-            log_level=logging.DEBUG, logger_name="Pixabit"
-        )
+        _log_instance = setup_logging(log_level=logging.INFO, logger_name="Pixabit")
     return _log_instance
 
 
