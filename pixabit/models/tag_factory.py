@@ -528,6 +528,24 @@ class TagList(BaseModel):
             self._update_positions()  # Recalculate positions after remove
         return removed
 
+    def update_tag(self, tag_id: str, update_data: dict[str, Any]) -> bool:
+        """Update a tag by ID. Returns True if updated."""
+        tag = self.get_by_id(tag_id)
+        try:
+            updated_tag = tag.model_validate(update_data, update=True)
+            if not updated_tag:
+                log.warning(f"Failed to process metadata for edited tag {tag_id[:8]}")
+            log.info(f"Edited task: {tag_id[:8]})")
+
+            return updated_tag
+
+        except ValidationError as e:
+            log.error(f"Validation error editing tag {tag_id[:8]}: {e}")
+            return None
+        except Exception as e:
+            log.exception(f"Error editing tag {tag_id[:8]}: {e}")
+            return None
+
     def reorder_tags(self, tag_id: str, new_position: int) -> bool:
         """Moves a tag to a new position index and updates all positions."""
         tag_to_move = self.get_by_id(tag_id)

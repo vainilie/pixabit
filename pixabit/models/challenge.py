@@ -1,14 +1,14 @@
 # pixabit/models/challenge.py
 
-# ─── Title ────────────────────────────────────────────────────────────────────
-#            Habitica Challenge Models
-# ──────────────────────────────────────────────────────────────────────────────
 
 # SECTION: MODULE DOCSTRING
-"""Defines Pydantic models for representing Habitica Challenges, their associated
-metadata (leader, group), and provides a container (`ChallengeList`) for managing
-collections of challenges and linking them to tasks. Includes support for
-group privacy and legacy status calculation.
+"""─── Challenge Model ────────────────────────────────────────────────────.
+
+Defines  Pydantic  models  for  representing  Habitica  Challenges,   their
+associated   metadata   (leader,   group),   and   provides   a   container
+(`ChallengeList`) for managing collections of challenges and  linking  them
+to tasks. Includes support for group privacy and legacy status calculation.
+───────────────────────────────────────────────────────────────────────────
 """
 
 # SECTION: IMPORTS
@@ -71,8 +71,8 @@ except ImportError:
             return len(self.t)
 
         @classmethod
-        def from_raw_api_list(cls, l):
-            return cls(l)
+        def from_raw_api_list(cls, li):
+            return cls(li)
 
     class DateTimeHandler:
         __init__ = lambda s, t: None
@@ -103,7 +103,6 @@ except ImportError:
         pass
 
     # --- End Fallbacks ---
-
 
 # SECTION: PYDANTIC SUB-MODELS
 

@@ -1,0 +1,94 @@
+API Client: Interacción HTTP pura.
+
+Models: Representación y validación de datos.
+
+DataManager: Orquestación de carga, caché en memoria/disco y procesamiento inicial.
+
+Services: Lógica de negocio para acciones específicas, coordinando API y DataManager.
+
+TUI: Presentación y interacción con el usuario.
+
+
+¡Excelente progreso! Ya tienes una base muy sólida con la API, los modelos y ahora la capa de servicio diseñada. El siguiente paso lógico es empezar a construir la Interfaz de Usuario de Texto (TUI) utilizando estos componentes.
+
+Dado que has mencionado Textual en tus helpers (_textual.py, _logger.py), asumiré que ese es el framework elegido.
+
+Pasos Siguientes Detallados:
+
+Diseñar la Estructura Básica de la TUI:
+
+App Principal: Crea tu clase principal que herede de textual.app.App. Aquí configurarás bindings globales, CSS inicial, y posiblemente la carga inicial de datos.
+
+Pantallas (Screens): Decide las vistas principales de tu aplicación. Ejemplos:
+
+TasksScreen: Para mostrar Hábitos, Diarios, Tareas Pendientes, Recompensas.
+
+UserProfileScreen: Para mostrar estadísticas, equipamiento, etc. del usuario.
+
+PartyScreen: Para información del grupo, chat, estado de la misión.
+
+TagsScreen: Para gestionar etiquetas.
+
+ChallengesScreen: Para ver y gestionar desafíos.
+
+Layout Básico: Dentro de cada pantalla, usa contenedores de Textual (Vertical, Horizontal, Grid, Container) para definir la estructura visual inicial. Puedes usar Placeholder temporalmente.
+
+Inicialización y Carga de Datos:
+
+Instanciar Componentes: En el __init__ o on_mount de tu App, crea las instancias de HabiticaClient, StaticContentManager, DataManager, y los Services (TaskService, TagService, ChallengeService). Haz que estas instancias sean accesibles para tus Screens (por ejemplo, pasándolas al constructor de la Screen o a través de self.app).
+
+Carga Inicial: En el on_mount de tu App (o de la primera pantalla que se muestra), utiliza self.run_worker de Textual para llamar a data_manager.load_all_data() y luego a data_manager.process_loaded_data() en segundo plano. Esto evita que la TUI se congele mientras se cargan los datos.
+
+Indicador de Carga: Muestra un LoadingIndicator mientras los datos se cargan. Una vez que el worker termine, oculta el indicador y actualiza la pantalla con los datos cargados.
+
+Mostrar Datos (Read-Only):
+
+Widget de Tareas: Elige un widget adecuado para mostrar las tareas (un DataTable, ListView, o quizás un widget personalizado). En el método que se ejecuta después de que los datos se cargan (por ejemplo, un método llamado por el worker al finalizar), obtén los datos de data_manager.tasks (o a través de task_service.get_tasks()) y popula el widget.
+
+Otros Widgets: Haz lo mismo para mostrar información del usuario, etiquetas, party, etc., usando widgets como Static, Markdown (usando tu MarkdownRenderer), Pretty, etc.
+
+Implementar Acciones Básicas (Interacción):
+
+Ejemplo: Marcar Tarea:
+
+Añade un botón o un binding a tu widget de tareas para "completar" una tarea.
+
+Cuando se active (ej. on_button_pressed), obtén el task_id de la tarea seleccionada.
+
+Llama a self.run_worker para ejecutar await task_service.score_task(task_id, direction="up") en segundo plano.
+
+Maneja el resultado del worker:
+
+Éxito: El task_service ya habrá actualizado el estado de la tarea en data_manager.tasks. Ahora necesitas refrescar la parte de la TUI que muestra esa tarea para reflejar el cambio (ej. marcarla como completada, actualizar contadores/streak si es relevante). Puedes hacer esto volviendo a cargar los datos en el widget o actualizando la fila/item específico.
+
+Error: Captura la excepción (HabiticaAPIError, ValueError) devuelta por el worker. Muestra un mensaje de error al usuario (por ejemplo, usando una Notification de Textual o un widget de estado).
+
+Ejemplo: Crear Tag:
+
+Añade un Input y un Button en TagsScreen.
+
+Al presionar el botón, toma el texto del Input.
+
+Llama a self.run_worker para ejecutar await tag_service.create_tag(nombre_tag).
+
+Éxito: El tag_service habrá añadido el tag a data_manager.tags. Refresca el widget que muestra la lista de tags. Limpia el Input.
+
+Error: Muestra una notificación de error.
+
+Refinar UI y Reactividad:
+
+CSS: Usa archivos CSS (.tcss) para dar estilo a tus widgets y pantallas de forma consistente.
+
+Actualización de UI: Investiga las formas de Textual para actualizar la UI cuando los datos cambian:
+
+Re-render completo: Volver a llamar al método que puebla el widget. Simple pero puede ser ineficiente.
+
+Actualización específica: Modificar directamente el widget (ej. DataTable.update_cell, ListView.refresh_item). Más eficiente.
+
+Variables Reactivas: Si una parte de la UI depende directamente de un atributo (ej. user.hp), puedes usar reactive para que se actualice automáticamente (aunque esto a menudo requiere una capa intermedia o pasar datos a los widgets).
+
+Mensajes: Puedes hacer que los workers o servicios envíen mensajes personalizados a la TUI cuando una operación se completa, y la pantalla/widget correspondiente reacciona a ese mensaje para actualizarse.
+
+Manejo Avanzado de Errores: Implementa un sistema más robusto para mostrar errores de la API o validaciones de forma clara al usuario.
+
+En Resumen: El siguiente gran paso es construir la TUI con Textual, conectando las acciones del usuario a tus nuevos métodos de servicio y actualizando la vista basada en los datos gestionados por DataManager. Empieza por lo básico: estructura de la app, pantallas, carga inicial y visualización de datos. Luego, añade interacciones una por una (marcar tareas, crear tags, etc.).
