@@ -448,9 +448,9 @@ class UserStats(BaseModel):
     base_str_: int = Field(0, alias="str")
 
     # --- Base Max Values (Before CON/INT bonuses) ---
-    max_hp_base: int = Field(50, alias="maxHealth")
-    max_mp_base: int = Field(10, alias="maxMP")  # Base before INT bonus
-    exp_to_next_level: int = Field(0, alias="toNextLevel")
+    max_hp: int = Field(50, alias="maxHealth")
+    max_mp: int = Field(10, alias="maxMP")  # Base before INT bonus
+    max_exp: int = Field(0, alias="toNextLevel")
 
     # --- Modifiers (Nested Models) ---
     buffs: Buffs = Field(default_factory=Buffs)
@@ -465,7 +465,7 @@ class UserStats(BaseModel):
         except (ValueError, TypeError):
             return 0.0
 
-    @field_validator("lvl", "max_hp_base", "max_mp_base", "exp_to_next_level", "base_con", "base_int_", "base_per", "base_str_", mode="before")  # Add base stats here
+    @field_validator("lvl", "max_hp", "max_mp", "max_exp", "base_con", "base_int_", "base_per", "base_str_", mode="before")  # Add base stats here
     @classmethod
     def ensure_int(cls, value: Any) -> int:
         """Ensures integer fields are parsed correctly."""
@@ -618,8 +618,8 @@ class User(BaseModel):
         return self.preferences.sleep
 
     @property
-    def exp_to_next_level(self) -> int:
-        return self.stats.exp_to_next_level
+    def max_exp(self) -> int:
+        return self.stats.max_exp
 
     @computed_field(description="Calculated Gem count.")
     @property
@@ -693,13 +693,13 @@ class User(BaseModel):
         effective_con = eff_stats.get("con", 0.0)
         effective_int = eff_stats.get("int", 0.0)
         # Base HP + 2HP per Effective CON point (floor CON first?) Habitica math can be subtle. Assume direct multiplier for now.
-        max_hp_calc = float(self.stats.max_hp_base + (effective_con * 2.0))
+        max_hp_calc = float(self.stats.max_hp + (effective_con * 2.0))
         # Base MP + 2MP per Effective INT point? (or mana multiplier based on class?) Need accurate formula. Using +2/INT for now.
         # Example: Wizard MP: 30 + 2.5*INT + Lvl/2; Healer MP: 30 + 2*INT + Lvl/4 ? Research needed.
         # Using a simplified base + INT multiplier
-        max_mp_calc = float(self.stats.max_mp_base + (effective_int * 2.0))
-        log.debug(f" -> Calculated MaxHP: {max_hp_calc} (Base: {self.stats.max_hp_base}, EffCON: {effective_con:.1f})")
-        log.debug(f" -> Calculated MaxMP: {max_mp_calc} (Base: {self.stats.max_mp_base}, EffINT: {effective_int:.1f})")
+        max_mp_calc = float(self.stats.max_mp + (effective_int * 2.0))
+        log.debug(f" -> Calculated MaxHP: {max_hp_calc} (Base: {self.stats.max_hp}, EffCON: {effective_con:.1f})")
+        log.debug(f" -> Calculated MaxMP: {max_mp_calc} (Base: {self.stats.max_mp}, EffINT: {effective_int:.1f})")
 
         # 5. Store all calculated values internally
         self._calculated_stats["effective_stats"] = eff_stats
@@ -788,7 +788,7 @@ async def main():
         # Use calculated max values now
         print(f"HP          : {user_instance.hp:.1f} / {user_instance.max_hp:.1f}")
         print(f"MP          : {user_instance.mp:.1f} / {user_instance.max_mp:.1f}")
-        print(f"EXP         : {user_instance.exp:.0f} / {user_instance.exp_to_next_level}")
+        print(f"EXP         : {user_instance.exp:.0f} / {user_instance.max_exp}")
         print(f"Gold        : {user_instance.gp:.2f}")
 
         print("\n--- Effective Stats (incl. Gear) ---")

@@ -75,8 +75,7 @@ try:
     _theme_search_paths = [
         _project_root / "themes" / THEME_FILENAME,
         _project_root / THEME_FILENAME,
-        _current_file_path.parent
-        / THEME_FILENAME,  # Fallback next to this file
+        _current_file_path.parent / THEME_FILENAME,  # Fallback next to this file
     ]
 except NameError:  # Fallback if __file__ is not defined (e.g., interactive)
     _project_root = Path.cwd()
@@ -86,9 +85,7 @@ except NameError:  # Fallback if __file__ is not defined (e.g., interactive)
     ]
 
 # Find the first existing theme file
-theme_file_path: Path | None = next(
-    (p for p in _theme_search_paths if p.is_file()), None
-)
+theme_file_path: Path | None = next((p for p in _theme_search_paths if p.is_file()), None)
 
 
 # Default theme dictionary (simplified fallback based on names in styles file)
@@ -145,15 +142,19 @@ DEFAULT_THEME_DICT = {
 
 # Initialize console with fallback theme stack first
 _fallback_theme = Theme(DEFAULT_THEME_DICT)
-console: Console = Console(theme=_fallback_theme)
+console: Console = Console(
+    theme=_fallback_theme,
+    color_system="auto",  # Prueba con "standard", "256" o "truecolor" si "auto" no funciona
+    highlight=False,
+    width=None,  # Ajusta al ancho de la terminal
+    emoji=False,
+)
 _custom_theme_loaded = False
 
 if theme_file_path:
     try:
         # Attempt to load theme from file
-        custom_theme = Theme.read(
-            str(theme_file_path)
-        )  # Use Theme.read for direct loading
+        custom_theme = Theme.read(str(theme_file_path))  # Use Theme.read for direct loading
         _fallback_theme.push(custom_theme)  # Push loaded theme on top
         _custom_theme_loaded = True
         # Use standard logging here as the logger helper might depend on this console
@@ -164,14 +165,10 @@ if theme_file_path:
             f"WARNING: Error loading theme from '{theme_file_path}': {e}",
             file=sys.stderr,
         )
-        builtins.print(
-            "WARNING: Falling back to default theme.", file=sys.stderr
-        )
+        builtins.print("WARNING: Falling back to default theme.", file=sys.stderr)
         # Fallback theme is already in the stack
 else:
-    logging.warning(
-        f"Theme file '{THEME_FILENAME}' not found in search paths. Using default theme."
-    )
+    logging.warning(f"Theme file '{THEME_FILENAME}' not found in search paths. Using default theme.")
 
 # Use the configured console for subsequent operations
 _themed_print = console.print  # Capture the themed print method

@@ -1,35 +1,6 @@
-# previous_tui_files/stats_widget.py (LEGACY TUI WIDGET ATTEMPT)
-
-# SECTION: MODULE DOCSTRING
-"""LEGACY: Previous attempt at a stats display widget (alternative version).
-
-Similar to stats.py, contains direct API fetching logic which is now deprecated.
-Focus on reusing CSS/layout concepts. Widget should receive data via a method.
-"""
-
-# SECTION: IMPORTS
-from typing import Any, Dict, Optional  # Added typing
-
-# Textual Imports
-from textual import work
-from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.reactive import reactive
-from textual.widgets import Digits, Label, Static  # Added Static
-
-# Local Imports (These are from the OLD structure - likely invalid now)
-# from heart.basis.__get_data import get_user_stats # Old API call
-
-
 # SECTION: LEGACY WIDGET CLASS
 # KLASS: StatsCount (Legacy Widget)
 class StatsCount(Vertical):  # Renamed from StarCount? Keep consistent.
-    """LEGACY WIDGET: Displays Habitica stats with custom colors.
-
-    NOTE: Contains direct API fetching logic (@work) which is DEPRECATED.
-    Widget should receive data from the App/DataStore via an update method.
-    CSS and compose() are potentially reusable.
-    """
 
     DEFAULT_CSS = """
     StatsCount { /* Renamed selector */
@@ -72,11 +43,6 @@ class StatsCount(Vertical):  # Renamed from StarCount? Keep consistent.
     max_hp: reactive[int] = reactive(0)
     max_mp: reactive[int] = reactive(0)
 
-    # DEPRECATED worker
-    # @work
-    # async def fetch_stats(self):
-    #     # ... (Old API fetching logic) ...
-
     # FUNC: update_display (NEW - Required for new architecture)
     def update_display(self, stats_data: dict[str, Any] | None) -> None:
         """Updates the widget's display based on data from the DataStore.
@@ -110,27 +76,17 @@ class StatsCount(Vertical):  # Renamed from StarCount? Keep consistent.
         # Update Tooltips directly
         try:
             self.query_one("#lvl Digits", Digits).tooltip = f"Level: {self.lvl}"
-            self.query_one("#mp Digits", Digits).tooltip = (
-                f"Mana: {self.mp:.1f} / {self.max_mp}"
-            )
-            self.query_one("#hp Digits", Digits).tooltip = (
-                f"Health: {self.hp:.1f} / {self.max_hp}"
-            )
-            self.query_one("#exp Digits", Digits).tooltip = (
-                f"Experience: {self.exp:.0f} / {self.max_exp}"
-            )
-            self.query_one("#gp Digits", Digits).tooltip = (
-                f"Gold: {self.gp:.2f}"
-            )
+            self.query_one("#mp Digits", Digits).tooltip = f"Mana: {self.mp:.1f} / {self.max_mp}"
+            self.query_one("#hp Digits", Digits).tooltip = f"Health: {self.hp:.1f} / {self.max_hp}"
+            self.query_one("#exp Digits", Digits).tooltip = f"Experience: {self.exp:.0f} / {self.max_exp}"
+            self.query_one("#gp Digits", Digits).tooltip = f"Gold: {self.gp:.2f}"
         except Exception as e:
             self.log.error(f"Error updating StatsCount tooltips: {e}")
 
     # Watch methods to update Digits display
     def watch_lvl(self, value: int) -> None:
         try:
-            self.query_one("#lvl Digits", Digits).update(
-                f"{value} Lvl"
-            )  # Add unit
+            self.query_one("#lvl Digits", Digits).update(f"{value} Lvl")  # Add unit
         except Exception:
             pass
 
@@ -148,17 +104,13 @@ class StatsCount(Vertical):  # Renamed from StarCount? Keep consistent.
 
     def watch_exp(self, value: float) -> None:
         try:
-            self.query_one("#exp Digits", Digits).update(
-                f"{value:.0f} XP"
-            )  # Add unit
+            self.query_one("#exp Digits", Digits).update(f"{value:.0f} XP")  # Add unit
         except Exception:
             pass
 
     def watch_gp(self, value: float) -> None:
         try:
-            self.query_one("#gp Digits", Digits).update(
-                f"{value:.2f} GP"
-            )  # Add unit
+            self.query_one("#gp Digits", Digits).update(f"{value:.2f} GP")  # Add unit
         except Exception:
             pass
 
@@ -186,9 +138,3 @@ class StatsCount(Vertical):  # Renamed from StarCount? Keep consistent.
         with Vertical(id="exp"):
             yield Label("Experience")
             yield Digits(f"{self.exp:.0f} XP")
-
-    # FUNC: on_mount (Deprecated - remove data fetch)
-    # def on_mount(self) -> None: ...
-
-    # FUNC: on_click (Deprecated - remove data fetch)
-    # def on_click(self) -> None: ...

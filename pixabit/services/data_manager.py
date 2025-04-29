@@ -6,7 +6,7 @@
 
 # SECTION: MODULE DOCSTRING
 """Provides a DataManager class for loading, caching (live data as files), processing,
-and accessing current Habitica models (User, Tasks, Tags, Party, Challenges).
+and accessing current Habitica Pydantic models (User, Tasks, Tags, Party, Challenges).
 Coordinates API client, static content manager, and models. Persistent archiving
 is handled by a separate Archiver class.
 """
@@ -473,7 +473,7 @@ class DataManager:
 
     # --- Orchestration Methods ---
 
-    async def load_all_data(self, force_refresh: bool = False) -> None:
+    async def load_all_data(self, force_refresh: bool = False) -> bool:
         """Loads all relevant data concurrently: User, Tasks, Tags, Party, and Static Content.
         Uses caching unless `force_refresh` is True for live data. Static content
         cache policy is managed by StaticContentManager (refreshed if needed).
@@ -500,16 +500,19 @@ class DataManager:
         results = await asyncio.gather(*all_tasks, return_exceptions=True)
 
         # Log any errors encountered during loading
+        success = True
+        task_map = ["StaticContent", "User", "Tasks", "Tags", "Party", "Challenges"]  # Match new order
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 # Identify which task failed based on order (requires tasks list order to be consistent)
-                task_map = ["StaticContent", "User", "Tasks", "Tags", "Party", "Challenges"]  # Match new order
                 failed_task_name = task_map[i] if i < len(task_map) else f"UnknownTask_{i}"
                 log.error(f"Error loading {failed_task_name}: {result}")
+                success = False
 
         # Models (_user, _tasks, etc.) are populated by the load methods.
         # Static content is loaded within static_content_manager.
         log.info("load_all_data finished.")
+        return success
 
     async def process_loaded_data(self) -> bool:
         """Orchestrates post-loading processing of models. Requires data to be loaded first.
