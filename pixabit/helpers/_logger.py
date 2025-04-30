@@ -55,51 +55,48 @@ def setup_logging(
     file_handler.setFormatter(file_formatter)
     log.addHandler(file_handler)
 
-    # # Add custom level names to Rich formats
-    # logging._levelToName[SUCCESS_LEVEL_NUM] = "SUCCESS"
+    # Configure root logger to filter messages from other modules
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        # Add a null handler to avoid "No handler found" warnings
+        root_logger.addHandler(logging.NullHandler())
 
-    # # Forward Textual logs to our handler
-    # try:
-    #     textual_logger = logging.getLogger("textual")
-    #     textual_logger.setLevel(log_level)
-    #     textual_logger.handlers.clear()
-    #     textual_logger.addHandler(rich_handler)
-    # except Exception:
-    #     pass
+    # Disable propagation to root logger
+    log.propagate = False
 
     return log
 
 
-# Instancia singleton del logger
+# Instancia singleton del logger (usar esta en toda la aplicación)
 _log_instance = None
 
 
 def get_logger():
     global _log_instance
     if _log_instance is None:
-        _log_instance = setup_logging(log_level=logging.INFO, logger_name="Pixabit")
+        _log_instance = setup_logging(log_level=logging.DEBUG, logger_name="Pixabit")
     return _log_instance
 
 
-# Crear instancia del logger
-log = setup_logging(log_level=logging.DEBUG, logger_name="Pixabit")
-# # --- Singleton Access ---
+# Obtener la instancia del logger
+log = get_logger()
 
 
-# def get_logger() -> Logger:
-#     global _log_instance
-#     if _log_instance is None:
-#         _log_instance = setup_logging(log_level=logging.INFO, logger_name="Pixabit")
-#     return _log_instance
+# Configurar loggers de otras bibliotecas para prevenir mensajes no deseados
+def configure_third_party_loggers():
+    """Configura loggers de terceros para controlar su nivel de detalle"""
+    # Lista de loggers de terceros que quieres silenciar o configurar
+    third_party_loggers = [
+        "urllib3",
+        "requests",
+        # Añade aquí otros módulos que generen logs no deseados
+    ]
+
+    for logger_name in third_party_loggers:
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging.WARNING)  # Solo muestra warnings y errores
+        logger.propagate = False  # No propaga a loggers padres
 
 
-# Example usage in a Textual app:
-# from textual.app import App
-#
-# class MyApp(App):
-#     def on_mount(self):
-#         log.info("Application started")
-#         log.success("Setup complete!")
-#
-#     def on_error(self, event):
-#         log.error(f"Error occurred: {event.error}")
+# Ejecutar configuración de loggers de terceros
+configure_third_party_loggers()

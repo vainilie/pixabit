@@ -19,28 +19,19 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Coroutine, Dict, Type
 
-# Project Imports (Ensure these resolve correctly)
-try:
-    from pydantic import ValidationError
+from pydantic import ValidationError
 
-    from pixabit.api.client import HabiticaClient
-    from pixabit.config import DEFAULT_CACHE_DURATION_DAYS, HABITICA_DATA_PATH, USER_ID
-    from pixabit.helpers._json import load_json, load_pydantic_model, save_json, save_pydantic_model
-    from pixabit.helpers._logger import log
-    from pixabit.helpers.DateTimeHandler import DateTimeHandler
-    from pixabit.models.challenge import Challenge, ChallengeList
-    from pixabit.models.game_content import Gear, Quest, StaticContentManager
-    from pixabit.models.party import Party
-    from pixabit.models.tag import Tag, TagList
-    from pixabit.models.task import AnyTask, Task, TaskList  # Need Task for user calc type hints if used
-    from pixabit.models.user import User
-except ImportError as e:
-    import logging
-
-    log = logging.getLogger(__name__)
-    log.addHandler(logging.NullHandler())
-    log.critical(f"DataManager failed imports: {e}")
-    raise
+from pixabit.api.client import HabiticaClient
+from pixabit.config import DEFAULT_CACHE_DURATION_DAYS, HABITICA_DATA_PATH, USER_ID
+from pixabit.helpers._json import load_json, load_pydantic_model, save_json, save_pydantic_model
+from pixabit.helpers._logger import log
+from pixabit.helpers.DateTimeHandler import DateTimeHandler
+from pixabit.models.challenge import Challenge, ChallengeList
+from pixabit.models.game_content import Gear, Quest, StaticContentManager
+from pixabit.models.party import Party
+from pixabit.models.tag import Tag, TagList
+from pixabit.models.task import AnyTask, Task, TaskList  # Need Task for user calc type hints if used
+from pixabit.models.user import User
 
 # SECTION: CONSTANTS & CONFIG
 
