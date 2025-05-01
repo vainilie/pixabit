@@ -1,0 +1,187 @@
+
+#app-container {
+    width: 100%;
+    height: 100%;
+    layout: grid;
+    grid-size: 2;
+    grid-columns: 1fr 4fr;
+    grid-rows: 100%;
+}
+#sidebar {
+    width: 50;
+    height: 100%;
+    overflow-y: auto;
+        & #api-status-label {
+        margin-top: 1;
+        padding: 1;
+        background: $surface-darken-1;
+        border: solid $accent;
+        text-align: center;
+    }
+}
+#main-content {
+    width: 100%;
+    height: 100%;
+    background: $surface;
+}
+#header {
+    dock: top;
+    height: 1;
+    background: $panel;
+}
+#user-info-container {
+    width: 100%;
+    background: $panel-lighten-1;
+}
+#user-info-static {
+    width: 100%;
+    text-align: center;
+    text-style: bold;
+    color: $text;
+}
+#content {
+    padding: 1;
+}
+.loading {
+    color: $warning;
+    background: $panel-darken-1;
+    padding: 1;
+    text-align: center;
+}
+.success {
+    color: $success;
+}
+.error {
+    color: $error;
+}
+.warning {
+    color: $warning;
+}
+Label{
+    content-align: left middle;
+}
+
+# pixabit/ui/css/task_widgets.css
+
+/* Task Tab Container */
+#task-tab-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+.tab-header {
+    text-style: bold;
+    background: $boost;
+    color: $text;
+    padding: 1;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+/* Container layout for task list and details */
+#tasks-content-container {
+    width: 100%;
+    height: 100%;
+    layout: grid;
+    grid-columns: 3fr 2fr; /* Task list gets 60%, details 40% */
+    grid-rows: 1fr;
+}
+
+/* Task List Widget */
+#task-list-widget {
+    width: 100%;
+    height: 100%;
+    border: round $primary-darken-2;
+    padding: 1;
+}
+
+/* Task Detail Panel */
+#task-detail-panel {
+    width: 100%;
+    height: 100%;
+    border: round $primary-darken-2;
+    padding: 1;
+}
+
+/* Task details content styles */
+#task-details-content {
+    margin-top: 1;
+    width: 100%;
+}
+
+#task-detail-text {
+    width: 100%;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#task-detail-notes {
+    width: 100%;
+    min-height: 3;
+    margin: 1 0;
+    padding: 1;
+    background: $surface-darken-1;
+    border: dashed $primary-background;
+    text-wrap: wrap;
+}
+
+#task-detail-meta {
+    width: 100%;
+    margin-top: 1;
+    color: $text-muted;
+}
+
+/* Action buttons layout and styling */
+#task-detail-actions {
+    margin-top: 2;
+    width: 100%;
+}
+
+/* Container for main action buttons */
+#primary-actions {
+    layout: horizontal;
+    width: 100%;
+    height: 3;
+    align: center middle;
+    margin-bottom: 1;
+}
+
+/* Container for secondary action buttons */
+#secondary-actions {
+    layout: horizontal;
+    width: 100%;
+    height: 3;
+    align: center middle;
+}
+
+/* General button styling */
+#task-detail-actions Button {
+    margin-right: 1;
+    min-width: 8;
+}
+
+/* Score buttons */
+.score-button {
+    width: 4;
+    text-align: center;
+}
+
+/* Styling for selected task */
+.selected-task {
+    text-style: bold;
+    background: $boost;
+}
+
+/* Success and error status styles */
+.success {
+    color: $success;
+}
+
+.error {
+    color: $error;
+}
+
+.loading {
+    color: $primary;
+}

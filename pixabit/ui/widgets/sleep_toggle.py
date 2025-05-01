@@ -1,6 +1,6 @@
-# pixabit/uix/widgets/sleep_toggle.py
-
-from typing import Callable, Optional
+# pixabit/ui/widgets/sleep_toggle.py
+import asyncio
+from typing import Any, Callable, Dict, Optional
 
 from textual.containers import Horizontal
 from textual.widgets import Label, Static, Switch
@@ -32,7 +32,7 @@ class SleepToggle(Horizontal):
         self,
         api_client: Optional[HabiticaClient] = None,
         status_update_callback: Optional[Callable[[str, str], None]] = None,
-        on_sleep_toggled: Optional[Callable[[bool, bool], None]] = None,
+        on_data_changed: Optional[Callable[[Dict[str, Any]], Any]] = None,
         name: Optional[str] = None,
         id: Optional[str] = None,
         classes: Optional[str] = None,
@@ -42,7 +42,7 @@ class SleepToggle(Horizontal):
         Args:
             api_client: HabiticaClient for API calls
             status_update_callback: Callback function to update status messages
-            on_sleep_toggled: Callback called after sleep is toggled successfully
+            on_data_changed: Callback called when data changes to notify parent components
             name: Widget name
             id: Widget ID
             classes: CSS classes
@@ -50,7 +50,7 @@ class SleepToggle(Horizontal):
         super().__init__(name=name, id=id, classes=classes)
         self.api_client = api_client
         self.status_update_callback = status_update_callback
-        self.on_sleep_toggled = on_sleep_toggled
+        self.on_data_changed = on_data_changed
 
         # Flag to prevent toggle loop
         self._updating_ui = False
@@ -115,9 +115,9 @@ class SleepToggle(Horizontal):
                 # Update our cached sleep state to match the API response
                 self._last_sleep_state = new_sleep_state
 
-                # Call the callback to notify the parent component
-                if self.on_sleep_toggled:
-                    await self.on_sleep_toggled(True, new_sleep_state)
+                # Call the callback to notify the parent component using new data_changed pattern
+                if self.on_data_changed:
+                    await self.on_data_changed({"action": "sleep_toggled", "new_value": new_sleep_state})
             else:
                 self._update_status("Failed to toggle sleep state", "error")
                 # Reset switch to match the actual state returned by API
