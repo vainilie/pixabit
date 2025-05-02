@@ -8,6 +8,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
+from textual.screen import ModalScreen
 from textual.widgets import Button, Label, Static, Switch, Tab, TabbedContent, TabPane
 
 from pixabit.api.client import HabiticaClient
@@ -15,13 +16,18 @@ from pixabit.config import HABITICA_DATA_PATH
 from pixabit.helpers._logger import log
 from pixabit.models.game_content import StaticContentManager
 from pixabit.models.user import User
+from pixabit.services.challenge_service import ChallengeService
 from pixabit.services.data_manager import DataManager
+from pixabit.ui.widgets.challenge_view import ChallengeScreen, ChallengeView
+from pixabit.ui.widgets.help_modal import HelpModal
+from pixabit.ui.widgets.main_panel import TaskView
 from pixabit.ui.widgets.sidebar_stats import SidebarStats
 from pixabit.ui.widgets.sleep_toggle import SleepToggle
 
 # Importar widgets modulares
 from pixabit.ui.widgets.stats_count import StatsCount
-from pixabit.ui.widgets.task_widget import TaskDetailPanel, TaskListWidget, TaskTabContainer
+from pixabit.ui.widgets.table_detail_panel import TaskDetailPanel
+from pixabit.ui.widgets.table_list_panel import TaskListWidget
 
 
 class HabiticaApp(App):
@@ -36,6 +42,7 @@ class HabiticaApp(App):
         Binding(key="c", action="complete_task", description="Complete task", show=False),
         Binding(key="e", action="edit_task", description="Edit task", show=False),
         Binding(key="d", action="delete_task", description="Delete task", show=False),
+        Binding(key="?", action="help", description="Show Keyboard Shortcuts"),
     ]
 
     def __init__(self):
@@ -48,6 +55,10 @@ class HabiticaApp(App):
         self.widgets_initialized = False
         self.task_container = None
 
+    def get_bindings_info(self):
+        """Extract (key, action, description) from BINDINGS."""
+        return [(key, action, desc) for key, action, desc in self.BINDINGS]
+
     def _initialize_dependencies(self) -> None:
         """Inicializa las dependencias principales de la aplicación."""
         log.info("Initializing core dependencies")
@@ -59,12 +70,13 @@ class HabiticaApp(App):
         # Setup Data Manager
         cache_dir = HABITICA_DATA_PATH
         self.data_manager = DataManager(api_client=self.api_client, static_content_manager=content_manager, cache_dir=cache_dir)
+        self.challenge_service = ChallengeService(api_client=self.api_client, data_manager=self.data_manager)
 
     async def on_mount(self) -> None:
         """Runs when the app starts: setup and load initial data."""
         # Get references to important widgets
         self.sidebar_stats = self.query_one(SidebarStats)
-        self.task_container = self.query_one("#task-tab-container", TaskTabContainer)
+        # self.task_container = self.query_one("#task-tab-container", TaskView)
         self.widgets_initialized = True
 
         # Initial data load
@@ -146,6 +158,10 @@ class HabiticaApp(App):
                 "collect": {"items": [{"name": "Wood", "count": 3}, {"name": "Stone", "count": 4}]},
             }
 
+    def action_help(self) -> None:
+        """Show the keyboard help modal."""
+        self.app.push_screen(HelpModal())
+
     def update_status(self, message: str, status_class: str = "") -> None:
         """Actualiza el mensaje de estado en la barra lateral.
 
@@ -214,18 +230,18 @@ class HabiticaApp(App):
         self.update_status("Manually refreshing data...", "loading")
         await self.load_and_refresh_data(force_refresh=True)
 
-    # Task-related action handlers
+        # Task-related action handlers
 
-    async def action_complete_task(self) -> None:
-        """Complete the currently selected task."""
-        if not self.task_container:
-            return
+        async def action_complete_task(self) -> None:
+            """Complete the currently selected task."""
+            if not self.task_container:
+                return
 
-        # Use direct widget references for simplicity
-        detail_panel = self.task_container.query_one(TaskDetailPanel)
-        if detail_panel and detail_panel.current_task:
-            task_id = detail_panel.current_task.get("id", "")
-            detail_panel.post_message(TaskDetailPanel.CompleteTask(task_id))
+            # Use direct widget references for simplicity
+            detail_panel = self.task_container.query_one(TaskDetailPanel)
+            if detail_panel and detail_panel.current_task:
+                task_id = detail_panel.current_task.get("id", "")
+                detail_panel.post_message(TaskDetailPanel.CompleteTask(task_id))
 
     async def action_edit_task(self) -> None:
         """Edit the currently selected task."""
@@ -249,8 +265,7 @@ class HabiticaApp(App):
 
     # Event handlers for task-related messages
 
-    @on(TaskTabContainer.ScoreTaskRequest)
-    async def handle_score_task_request(self, message: TaskTabContainer.ScoreTaskRequest) -> None:
+    async def handle_score_task_request(self, message: TaskView.ScoreTaskRequest) -> None:
         """Handle scoring a task."""
         if not self.data_manager:
             self.update_status("No data manager available to score tasks", "error")
@@ -271,9 +286,8 @@ class HabiticaApp(App):
         """Create the UI layout with sidebar and main content."""
         with Container(id="app-container"):
             # Sidebar
-            with Vertical(id="sidebar"):
-                with Vertical(id="header"):
-                    yield Static("Loading user...", id="user-info-static")
+            with Horizontal(id="sidebar"):
+                yield Static("Loading user...", id="user-info-static")
                 # Sidebar stats
                 yield SidebarStats()
             # Main content area
@@ -289,13 +303,12 @@ class HabiticaApp(App):
                             yield SleepToggle(api_client=self.api_client, status_update_callback=self.update_status, on_data_changed=self.on_data_changed)
                         with TabPane("Tasks", id="tasks"):
                             # Integramos el contenedor de tareas aquí
-                            yield TaskTabContainer(
-                                id="task-tab-container", data_manager=self.data_manager, api_client=self.api_client, on_data_changed=self.on_data_changed
-                            )
+                            yield TaskView(id="task-tab-container", data_manager=self.data_manager, api_client=self.api_client, on_data_changed=self.on_data_changed)
+
                         with TabPane("Tags", id="tags"):
                             yield Static("Tags content goes here")
                         with TabPane("Challenges", id="challenges"):
-                            yield Static("Challenges content goes here")
+                            yield ChallengeView(challenge_service=self.challenge_service)
                         with TabPane("Party", id="party"):
                             yield Static("Party content goes here")
                         with TabPane("Messages", id="messages"):

@@ -59,8 +59,11 @@ class ChallengesMixin:
         """
         params: dict[str, Any] = {"page": page}
         # API uses string "true"/"false" for boolean params
-        params["member"] = "true" if member_only else "false"
-        result = await self.get("/challenges/user", params=params)
+        if member_only is True:
+            params["member"] = "true"
+            result = await self.get("/challenges/user", params=params)
+        else:
+            result = await self.get("/challenges/user", params=params)
         # Ensure result is a list, return empty list otherwise
         return cast(list[dict[str, Any]], result) if isinstance(result, list) else []
 
@@ -103,6 +106,14 @@ class ChallengesMixin:
             raise ValueError("challenge_id cannot be empty.")
         result = await self.get(f"/tasks/challenge/{challenge_id}")
         return cast(list[dict[str, Any]], result) if isinstance(result, list) else []
+
+    # FUNC: join_challenge
+    async def join_challenge(self, challenge_id: str) -> list[dict[str, Any]]:
+
+        if not challenge_id:
+            raise ValueError("challenge_id cannot be empty.")
+        result = await self.post(f"/challenges/{challenge_id}/join")
+        return cast(dict[str, Any], result) if isinstance(result, dict) else {}
 
     # FUNC: leave_challenge
     async def leave_challenge(

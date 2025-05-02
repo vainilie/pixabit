@@ -1,55 +1,20 @@
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import ClassVar, Dict, List, Optional
 
-from rich.panel import Panel
 from rich.text import Text
 from textual import log, on
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.css.query import NoMatches
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Button, Label, Static
+from textual.widgets import Button, Static
 
-# Import the Task model (or dummy Task if models are not available)
-try:
-    from ...models.task import Daily, Task, Todo
-except ImportError:
-    # Define dummy types similar to task_list.py if models are not available
-    class Task:
-        def __init__(self, id="dummy", text="Dummy Task", _status="unknown", value=1.0, priority=1.0, tag_names=None, notes=""):
-            self.id = id
-            self.text = text
-            self._status = _status
-            self.value = value
-            self.priority = priority
-            self.tag_names = tag_names or []
-            self.notes = notes
-            self.styled = Text(text)  # Para compatibilidad con lógica previa
-
-        def __repr__(self) -> str:
-            return f"<DummyTask id={self.id} text='{self.text[:15]}...'>"
-
-    class Todo(Task):
-        def __init__(self, id="dummy_todo", text="Dummy Todo", _status="unknown", value=1.0, priority=1.0, tag_names=None, due_date=None, notes=""):
-            super().__init__(id, text, _status, value, priority, tag_names, notes)
-            self.due_date = due_date  # Should be datetime
-
-    class Daily(Task):
-        def __init__(self, id="dummy_daily", text="Dummy Daily", _status="unknown", value=1.0, priority=1.0, tag_names=None, next_due=None, notes=""):
-            super().__init__(id, text, _status, value, priority, tag_names, notes)
-            self.next_due = next_due  # Debe ser lista de datetimes
-
-    TaskList = list  # Asume que TaskList es una lista de objetos Task
-
-    log.warning("Could not import Task models in task_detail_panel.py. Using dummy types.")
-
-
-# --- Mensajes para Acciones ---
-from textual.message import Message
+from pixabit.models.task import Daily, Task, Todo
 
 
 class CompleteTask(Message):
-    """Mensaje publicado cuando se presiona el botón de completar."""
+    """Message to request task completion."""
 
     def __init__(self, task_id: str) -> None:
         super().__init__()
@@ -57,7 +22,7 @@ class CompleteTask(Message):
 
 
 class DeleteTask(Message):
-    """Mensaje publicado cuando se presiona el botón de eliminar."""
+    """Message to request task deletion."""
 
     def __init__(self, task_id: str) -> None:
         super().__init__()
@@ -65,7 +30,7 @@ class DeleteTask(Message):
 
 
 class EditTask(Message):
-    """Mensaje publicado cuando se presiona el botón de editar."""
+    """Message to request task editing."""
 
     def __init__(self, task_id: str) -> None:
         super().__init__()
@@ -73,7 +38,7 @@ class EditTask(Message):
 
 
 class ScoreTaskDetail(Message):
-    """Mensaje publicado cuando se presionan los botones de puntuación en la vista de detalle."""
+    """Message to request task scoring."""
 
     def __init__(self, task_id: str, direction: str) -> None:
         super().__init__()
@@ -82,26 +47,36 @@ class ScoreTaskDetail(Message):
 
 
 class TaskDetailPanel(Widget):
-    """Muestra los detalles de una tarea seleccionada y proporciona botones de acción."""
+    """Panel for displaying and interacting with task details."""
 
-    # Reactivos
+    # Reactive attributes
     current_task = reactive(None)
     tag_colors = reactive({})
-
-    # Constantes de clase para reutilizar
-    DETAIL_FIELDS: ClassVar[List[str]] = ["text", "status", "value", "priority", "due", "tags", "notes"]
-
-    # Estado para seguimiento interno
     _visible = reactive(False)
 
+    # Fields to display in detail panel
+    DETAIL_FIELDS: ClassVar[List[str]] = ["text", "status", "value", "priority", "due", "tags", "notes"]
+    BINDINGS = [
+        ("d", "complete_task", "Complete Task"),
+        ("+", "score_up", "Score Up"),
+        ("-", "score_down", "Score Down"),
+        ("e", "edit_task", "Edit Task"),
+        ("x", "delete_task", "Delete Task"),
+    ]
+
     def compose(self) -> ComposeResult:
+        """Compose the detail panel layout."""
         with Vertical(id="details-container"):
+            # Placeholder when no task is selected
             yield Static("Select a task to view details.", id="task-detail-placeholder")
 
+            # Container for task details
             with Container(id="task-details-content", classes="hidden"):
+                # Create Static widgets for each detail field
                 for field in self.DETAIL_FIELDS:
                     yield Static("", id=f"task-detail-{field}")
 
+            # Container for action buttons
             with Container(id="task-detail-actions", classes="hidden"):
                 with Horizontal():
                     yield Button("Done", id="btn-complete", variant="success")
@@ -112,25 +87,24 @@ class TaskDetailPanel(Widget):
                     yield Button("Delete", id="btn-delete", variant="error")
 
     def on_mount(self) -> None:
-        """Configura el estado inicial cuando el widget se monta."""
+        """Handle widget mount."""
         self._update_visibility()
 
     def watch_current_task(self, task: Task | None) -> None:
-        """Actualiza los detalles mostrados cuando cambia la tarea seleccionada."""
+        """React to changes in the current task."""
         self._visible = task is not None
         if task:
             self._populate_detail_fields(task)
         self._update_visibility()
 
     def watch_tag_colors(self, tag_colors: dict[str, str]) -> None:
-        """Se llama cuando cambian los colores de las etiquetas."""
+        """React to changes in tag colors."""
         log.debug("Watch: Tag colors changed in detail panel.")
-        # Si hay una tarea mostrada actualmente, actualiza su renderizado de etiquetas
         if self.current_task is not None:
             self._update_tags_display(self.current_task)
 
     def _update_visibility(self) -> None:
-        """Actualiza la visibilidad de los contenedores basándose en si hay una tarea seleccionada."""
+        """Update visibility of container elements based on whether a task is selected."""
         placeholder = self.query_one("#task-detail-placeholder", Static)
         content = self.query_one("#task-details-content", Container)
         actions = self.query_one("#task-detail-actions", Container)
@@ -211,31 +185,32 @@ class TaskDetailPanel(Widget):
             return static
 
     # --- Manejadores de Eventos de Botones ---
-    @on(Button.Pressed, "#btn-complete")
-    def on_complete_button_pressed(self) -> None:
-        """Manejador para el botón de completar."""
+    def action_complete_task(self) -> None:
+        """Complete the current task."""
         if self.current_task:
-            log.debug(f"Complete button pressed for task ID: {self.current_task.id}")
+            log.debug(f"Binding: Complete task ID {self.current_task.id}")
             self.post_message(CompleteTask(str(self.current_task.id)))
 
-    @on(Button.Pressed, ".score-button")
-    def on_score_button_pressed(self, event: Button.Pressed) -> None:
-        """Manejador para los botones de puntuación."""
+    def action_score_up(self) -> None:
+        """Score up the current task."""
         if self.current_task:
-            direction = "up" if event.button.id == "btn-score-up" else "down"
-            log.debug(f"Score button '{direction}' pressed for task ID: {self.current_task.id}")
-            self.post_message(ScoreTaskDetail(str(self.current_task.id), direction))
+            log.debug(f"Binding: Score up task ID {self.current_task.id}")
+            self.post_message(ScoreTaskDetail(str(self.current_task.id), "up"))
 
-    @on(Button.Pressed, "#btn-edit")
-    def on_edit_button_pressed(self) -> None:
-        """Manejador para el botón de editar."""
+    def action_score_down(self) -> None:
+        """Score down the current task."""
         if self.current_task:
-            log.debug(f"Edit button pressed for task ID: {self.current_task.id}")
+            log.debug(f"Binding: Score down task ID {self.current_task.id}")
+            self.post_message(ScoreTaskDetail(str(self.current_task.id), "down"))
+
+    def action_edit_task(self) -> None:
+        """Edit the current task."""
+        if self.current_task:
+            log.debug(f"Binding: Edit task ID {self.current_task.id}")
             self.post_message(EditTask(str(self.current_task.id)))
 
-    @on(Button.Pressed, "#btn-delete")
-    def on_delete_button_pressed(self) -> None:
-        """Manejador para el botón de eliminar."""
+    def action_delete_task(self) -> None:
+        """Delete the current task."""
         if self.current_task:
-            log.debug(f"Delete button pressed for task ID: {self.current_task.id}")
+            log.debug(f"Binding: Delete task ID {self.current_task.id}")
             self.post_message(DeleteTask(str(self.current_task.id)))

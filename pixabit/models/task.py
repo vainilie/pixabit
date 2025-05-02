@@ -291,10 +291,10 @@ class Task(BaseModel):
                 if tag and hasattr(tag, "name"):
                     resolved_names.append(tag.name)
                 else:
-                    log.debug(f"Tag ID '{tag_id}' not found for task {self.id}")
+                    # log.debug(f"Tag ID '{tag_id}' not found for task {self.id}")
                     resolved_names.append(f"Unknown:{tag_id[:6]}")
         elif self.tags_id:
-            log.debug(f"No tags_provider for task {self.id[:8]}")
+            # log.debug(f"No tags_provider for task {self.id[:8]}")
             resolved_names = [f"ID:{tid[:6]}" for tid in self.tags_id]
         self._tag_names = resolved_names
 
@@ -499,11 +499,11 @@ class Daily(Task):
                                 party_delta = effective_delta * self.priority
                                 party_damage = party_delta * boss_strength
                                 self._calculated_party_damage = max(0.0, round(party_damage, 1))
-            log.debug(
-                f"Daily {self.id}: UserDmg={self._calculated_user_damage}, "
-                f"PartyDmg={self._calculated_party_damage}, Value:{value:.1f}, "
-                f"Prio:{self.priority:.1f}, Chk:{checklist_progress:.2f}"
-            )
+        #       log.debug(
+        #          f"Daily {self.id}: UserDmg={self._calculated_user_damage}, "
+        #         f"PartyDmg={self._calculated_party_damage}, Value:{value:.1f}, "
+        #        f"Prio:{self.priority:.1f}, Chk:{checklist_progress:.2f}"
+        #   )
         except AttributeError as ae:
             log.error(f"AttributeError during damage calc for Daily {self.id}: {ae}")
         except Exception as e:
@@ -1106,9 +1106,9 @@ async def main():
         print(f"  - Number of Dailies: {len(dailies)}")
         if dailies:
             first_daily = dailies[0]
-            print(f"  - First Daily: {first_daily}")
-            # Access calculated damage (will be None if User was missing)
-            print(f"    -> Calculated User Damage: {getattr(first_daily, 'user_damage', 'N/A')}")
+        #           print(f"  - First Daily: {first_daily}")
+        # Access calculated damage (will be None if User was missing)
+        #            print(f"    -> Calculated User Damage: {getattr(first_daily, 'user_damage', 'N/A')}")
 
         # 5. Save processed data
         log.info(f"Saving processed tasks to {processed_path}...")

@@ -3,7 +3,7 @@
 from typing import Any, Dict
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Label, ProgressBar, Static
 
@@ -13,64 +13,6 @@ from pixabit.models.user import User
 
 class SidebarStats(Vertical):
     """Widget that displays detailed user stats in the sidebar."""
-
-    DEFAULT_CSS = """
-    SidebarStats {
-        width: 100%;
-        height: auto;
-        background: $panel;
-    }
-
-    #stats-container {
-        width: 100%;
-        padding: 1;
-    }
-
-    #api-status-label {
-        margin-top: 1;
-        padding: 1;
-        background: $surface-darken-1;
-
-        & Label {
-        width:15;
-        max-width: 15
-        }
-
-        & .section-title {
-            text-style: bold;
-            color: $accent;
-            padding: 0 1;
-        }
-
-        & .stat-label {
-            width: 100%;
-            padding-left: 1;
-        }
-
-        & .progress-label {
-            width: 100%;
-            text-align: center;
-            margin-bottom: 0;
-        }
-
-        & ProgressBar {
-            margin-bottom: 1;
-        }
-
-        & #day-start-time {
-            color: $text;
-        }
-
-        & #needs-cron {
-            color: $warning;
-            text-style: bold;
-        }
-
-        & #last-log {
-            height: auto;
-        }
-    }
-    """
 
     def __init__(self, name: str | None = None, id: str | None = None, classes: str | None = None):
         """Inicializa el widget de estadísticas de la barra lateral."""
@@ -103,6 +45,8 @@ class SidebarStats(Vertical):
             self.day_start = "00:00"
             self.needs_cron = False
             self.last_log = "No activity logs available"
+            self.username = ""
+            self.composed_user = ""
             return
 
         # Sleep status with emoji
@@ -135,21 +79,24 @@ class SidebarStats(Vertical):
 
         # Needs cron check
         self.needs_cron = getattr(user_data, "needs_cron", False)
+        self.username = getattr.user_data.username
+        self.user_class = getattr.user_data.klass
+
+        # Emojis
+        class_emoji = {"warrior": "🗡️", "wizard": "🧙", "healer": "💚", "rogue": "⚔️", "": "👤"}.get(self.user_class.lower(), "👤")
+        self.composed_user = f"{class_emoji} [b]{self.username}[/b]"
 
         # Last activity log (simplified - in real app, get from actual logs)
         # In a real implementation, you'd fetch this from user history or activity logs
-        last_action = getattr(user_data, "last_action", None)
-        if last_action:
-            self.last_log = f"{last_action.get('timestamp', 'Unknown time')}: {last_action.get('message', 'Unknown action')}"
-        else:
-            self.last_log = "No recent activity"
+
+        # Update widgets
 
     def watch_is_sleeping(self, sleeping: bool) -> None:
         """Updates the sleep status label when sleep state changes."""
         try:
             emoji = "💤" if sleeping else "👁️‍🗨️"
             status = "Sleeping" if sleeping else "Awake"
-            self.query_one("#sleep-status", Label).update(f"{emoji} {status}")
+            self.query_one("#sleep-status", Label).update(f"{self.composed_user} {emoji} {status} ")
         except Exception as e:
             log.error(f"Error updating sleep status: {e}")
 
@@ -164,7 +111,7 @@ class SidebarStats(Vertical):
     def watch_quest_name(self, name: str) -> None:
         """Updates the quest name when it changes."""
         try:
-            self.query_one("#quest-name", Label).update(f"🐣 {name}")
+            self.query_one("#quest-name", Label).update(f"🐣 {name} ")
         except Exception as e:
             log.error(f"Error updating quest name: {e}")
 
@@ -178,14 +125,14 @@ class SidebarStats(Vertical):
     def watch_total_damage(self, damage: float) -> None:
         """Updates the total damage when it changes."""
         try:
-            self.query_one("#total-damage", Label).update(f"💥 {damage:.1f}")
+            self.query_one("#total-damage", Label).update(f"💥 {damage:.1f} ")
         except Exception as e:
             log.error(f"Error updating total damage: {e}")
 
     def watch_day_start(self, time: str) -> None:
         """Updates the day start time when it changes."""
         try:
-            self.query_one("#day-start-time", Label).update(f"🌙 {time}")
+            self.query_one("#day-start-time", Label).update(f"🌙 {time} ")
         except Exception as e:
             log.error(f"Error updating day start time: {e}")
 
@@ -194,20 +141,20 @@ class SidebarStats(Vertical):
         try:
             label = self.query_one("#needs-cron", Label)
             if needs_cron:
-                label.update("⚠️ Cron needed!")
+                label.update("⚠️ Cron needed! ")
                 label.add_class("needs-action")
             else:
-                label.update("🆗 Cron")
+                label.update("🆗 Cron ")
                 label.remove_class("needs-action")
         except Exception as e:
             log.error(f"Error updating cron status: {e}")
 
-    def watch_last_log(self, log_text: str) -> None:
-        """Updates the last activity log when it changes."""
-        try:
-            self.query_one("#last-log", Static).update(log_text)
-        except Exception as e:
-            self.update_status(f"Error updating last log: {e}")
+    # def watch_last_log(self, log_text: str) -> None:
+    #     """Updates the last activity log when it changes."""
+    #     try:
+    #         self.query_one("#last-log", Static).update(last_action)
+    #     except Exception as e:
+    #         self.update_status(f"Error updating last log: {e}")
 
     def update_status(self, message: str, status_class: str = "") -> None:
         """Updates the status label with a message and optional CSS class."""
@@ -227,13 +174,10 @@ class SidebarStats(Vertical):
 
     def compose(self) -> ComposeResult:
         """Create sidebar components."""
-        yield Label("", id="sleep-status", classes="stat-label")
-
-        yield Label("", id="quest-name", classes="stat-label")
-        yield Label("", id="total-damage", classes="stat-label")
-
-        yield Label("", id="day-start-time", classes="stat-label")
-        yield Label("", id="needs-cron", classes="stat-label")
-
-        yield Static("Loading activity...", id="last-log")
-        yield Label("", id="api-status-label")
+        with Horizontal(id="sidebar"):
+            yield Label("", id="sleep-status", classes="stat-label")
+            yield Label("", id="quest-name", classes="stat-label")
+            yield Label("", id="total-damage", classes="stat-label")
+            yield Label("", id="day-start-time", classes="stat-label")
+            yield Label("", id="needs-cron", classes="stat-label")
+            yield Label("", id="api-status-label")

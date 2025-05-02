@@ -253,7 +253,7 @@ class Challenge(BaseModel):
         # Determine ownership
         if current_user_id and self.leader and self.leader.id == current_user_id:
             self.owned = True
-            log.debug(f"Challenge {self.id} marked as owned by leader match.")
+            # log.debug(f"Challenge {self.id} marked as owned by leader match.")
         else:
             # Set explicitly to False if context was available but didn't match,
             # otherwise keep None if context was missing.
@@ -340,6 +340,8 @@ class Challenge(BaseModel):
 
 # KLASS: ChallengeList
 class ChallengeList(BaseModel):
+    """ChallengeList."""
+
     model_config = ConfigDict(extra="forbid", frozen=False, arbitrary_types_allowed=False)
     challenges: list[Challenge] = Field(default_factory=list)
 
@@ -391,7 +393,7 @@ class ChallengeList(BaseModel):
                 linked += 1
             else:
                 skip_found += 1
-                log.debug(f"Task {getattr(task,'id','N/A')} links to missing chal {challenge_id_from_task}")
+                # log.debug(f"Task {getattr(task,'id','N/A')} links to missing chal {challenge_id_from_task}")
         log.info(f"Linking done. Linked:{linked}, NoLinkInfo:{skip_link}, NotFound:{skip_found}.")
         return linked
 

@@ -57,6 +57,7 @@ from textual.widgets import (
     LoadingIndicator,
     Markdown,  # Added Markdown base widget
     MarkdownViewer,
+    OptionList,
     Placeholder,  # Added Placeholder
     Pretty,  # Added Pretty
     RadioButton,
@@ -88,9 +89,7 @@ class EnhancedContainer(Container):
     """Example Container with additional convenience methods."""
 
     # FUNC: get_widget_by_id
-    def get_widget_by_id(
-        self, widget_id: str, *, expected_type: Type[T] = Widget  # type: ignore
-    ) -> T:
+    def get_widget_by_id(self, widget_id: str, *, expected_type: Type[T] = Widget) -> T:  # type: ignore
         """Safely gets a widget by ID, raising a specific error if not found or type mismatch.
 
         Args:
@@ -120,9 +119,7 @@ class EnhancedContainer(Container):
                 actual_type = type(actual_widget).__name__
             except Exception:
                 actual_type = "unknown"
-            raise TypeError(
-                f"Widget '#{widget_id}' found, but its type ('{actual_type}') does not match expected type ('{expected_type.__name__}')."
-            ) from e
+            raise TypeError(f"Widget '#{widget_id}' found, but its type ('{actual_type}') does not match expected type ('{expected_type.__name__}').") from e
 
 
 # KLASS: PixabitButton (Example styled button)
@@ -203,6 +200,7 @@ __all__ = [
     "Label",
     "ListItem",
     "ListView",
+    "OptionList",
     "RadioButton",
     "RadioSet",
     "Select",

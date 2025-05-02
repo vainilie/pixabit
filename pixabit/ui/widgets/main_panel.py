@@ -1,381 +1,220 @@
-"""Generated file to handle table list and table details. TODO review"""
+from typing import Any, Dict, List, Optional
+
+from textual import on
+from textual.app import ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, Horizontal
+from textual.message import Message
+from textual.widget import Widget
+from textual.widgets import Static, TabbedContent, TabPane
+
+from pixabit.helpers._logger import log
+from pixabit.models.task import Task
+from pixabit.ui.widgets.table_detail_panel import (
+    CompleteTask,
+    DeleteTask,
+    EditTask,
+    ScoreTaskDetail,
+    TaskDetailPanel,
+)
+from pixabit.ui.widgets.table_list_panel import (
+    ScoreTaskRequest,
+    TaskListWidget,
+    ViewTaskDetailsRequest,
+)
 
 
-class HabiticaTUIApp(App):
-    """Habitica TUI App with Task List and Detail Panel."""
-
-    # --- CSS para el layout y estilo ---
-    CSS = """
-    /* Variables para configuración global de colores y estilos */
-    $panel-border: round $panel;
-    $content-padding: 1;
-    $margin-between-items: 1;
-    $button-spacing: 1;
-
-    /* Define the main layout with two columns */
-    #main-layout {
-        layout: grid;
-        grid-columns: 3fr 2fr; /* Task list gets 60%, details 40% */
-        grid-rows: 1fr;
-        padding: $content-padding;
-        height: 100%;
-    }
-
-    /* Styling for both panels */
-    .app-panel {
-        border: $panel-border;
-        padding: $content-padding;
-        overflow: auto;
-        height: 100%;
-    }
-
-    /* Task list panel specific styling */
-    TaskListWidget {
-        width: 100%;
-    }
-
-    /* Basic styling for the detail panel */
-    TaskDetailPanel {
-        width: 100%;
-    }
-
-    /* Styling for detail content items */
-    #task-details-content {
-        margin-top: $margin-between-items;
-    }
-
-    #task-details-content Static {
-        margin-bottom: $margin-between-items;
-        width: 100%;
-        text-wrap: wrap;
-    }
-
-    #task-details-content #task-detail-text {
-        text-style: bold;
-    }
-
-    #task-details-content #task-detail-notes {
-        min-height: 3;
-        margin-top: $margin-between-items;
-        padding: 1;
-        background: $surface-darken-1;
-        border: thin $primary-background;
-    }
-
-    /* Action buttons layout and styling */
-    #task-detail-actions {
-        margin-top: 2;
-    }
-
-    /* Container for main action buttons */
-    #primary-actions {
-        layout: horizontal;
-        width: 100%;
-        height: 3;
-        align: center middle;
-        margin-bottom: $margin-between-items;
-    }
-
-    /* Container for secondary action buttons */
-    #secondary-actions {
-        layout: horizontal;
-        width: 100%;
-        height: 3;
-        align: center middle;
-    }
-
-    /* General button styling */
-    #task-detail-actions Button {
-        margin-right: $button-spacing;
-        min-width: 8;
-    }
-
-    /* Styling for score buttons */
-    .score-button {
-        width: 4;
-        text-align: center;
-    }
-
-    /* Status bar styling */
-    #app-status-bar {
-        dock: bottom;
-        background: $surface;
-        color: $text;
-        height: 1;
-    }
-
-    /* Style for hiding content */
-    .hidden {
-        display: none;
-    }
-
-    /* Hover effect for interactive elements */
-    Button:hover {
-        background: $accent;
-    }
+class TaskView(Widget):
+    """A container widget that holds a tabbed task list and a detail panel side by side.
+    This widget handles the communication between the TaskListWidget and TaskDetailPanel.
     """
 
-    # --- Keyboard Bindings ---
     BINDINGS = [
-        ("q", "quit_app", "Quit"),
-        ("f1", "toggle_help", "Help"),
-        ("r", "refresh_data", "Refresh"),
-        # Acciones comunes
-        ("c", "complete_task", "Complete"),
-        ("e", "edit_task", "Edit"),
-        ("d", "delete_task", "Delete"),
-        # Navegación
-        ("up", "focus_up", "Up"),
-        ("down", "focus_down", "Down"),
-        ("tab", "next_panel", "Next Panel"),
-        ("shift+tab", "prev_panel", "Prev Panel"),
+        Binding(key="c", action="complete_task", description="Complete task"),
+        Binding(key="e", action="edit_task", description="Edit task"),
+        Binding(key="d", action="delete_task", description="Delete task"),
     ]
 
-    # --- Compose App Layout ---
+    def __init__(
+        self,
+        task_service=None,
+        id: str = "task-view",
+        **kwargs,
+    ):
+        super().__init__(id=id, **kwargs)
+        self.task_service = task_service
+        self.tag_colors = {}
+        self._last_selected_task_id = None
+
     def compose(self) -> ComposeResult:
-        """Compose the main application layout with all components."""
-        # Main layout container
-        with Container(id="main-layout"):
-            yield TaskListWidget(id="task-list", classes="app-panel")
-            yield TaskDetailPanel(id="task-detail-panel", classes="app-panel")
+        """Compose the TaskView with a task list and detail panel."""
+        with Horizontal(id="task-view-container"):
+            with Container(id="task-list-container"):
+                with TabbedContent(id="task-tabs"):
+                    with TabPane("Todos", id="todo-tab"):
+                        yield TaskListWidget(task_type="todo", id="todo-list")
+                    with TabPane("Dailies", id="daily-tab"):
+                        yield TaskListWidget(task_type="daily", id="daily-list")
+                    with TabPane("Habits", id="habit-tab"):
+                        yield TaskListWidget(task_type="habit", id="habit-list")
+                    with TabPane("Rewards", id="reward-tab"):
+                        yield TaskListWidget(task_type="reward", id="reward-list")
+                    with TabPane("All", id="all-tab"):
+                        yield TaskListWidget(task_type="all", id="all-list")
 
-        # Status bar in the bottom
-        yield Static("Ready", id="app-status-bar")
+            # Task detail panel on the right
+            yield TaskDetailPanel(id="task-detail-panel")
 
-    # --- App Setup on Mount ---
     async def on_mount(self) -> None:
-        """Setup the app on startup."""
-        # Initialize datastore and component references
-        self.datastore = DummyDataStore()
-        self.task_list_widget = self.query_one("#task-list", TaskListWidget)
-        self.task_detail_panel = self.query_one("#task-detail-panel", TaskDetailPanel)
-        self.status_bar = self.query_one("#app-status-bar", Static)
+        """Initialize after widget is mounted."""
+        # Get all task list widgets and detail panel
+        task_lists = self.query(TaskListWidget)
+        detail_panel = self.query_one(TaskDetailPanel)
 
-        # Set focus to the task list initially
-        self.set_focus(self.task_list_widget)
+        # Initialize tag colors in all widgets
+        self.tag_colors = await self._get_tag_colors()
+        for task_list in task_lists:
+            task_list.tag_colors = self.tag_colors
+        detail_panel.tag_colors = self.tag_colors
 
-        # Configure components with necessary data
-        await self._configure_components()
+        # Initialize task lists with data
+        for task_list in task_lists:
+            await task_list.load_or_refresh_data()
 
-        # Update status bar
-        self.status_bar.update("Ready - Press F1 for help")
+    async def _get_tag_colors(self) -> Dict[str, str]:
+        """Get tag colors from the data store."""
+        if hasattr(self.app, "datastore") and self.app.datastore:
+            try:
+                return await self.app.run_in_thread(self.app.datastore.get_tag_colors)
+            except Exception as e:
+                log.error(f"Error fetching tag colors: {e}")
+        return {}
 
-        log.info("App mounted and initialized successfully.")
+    async def refresh_all_task_lists(self) -> None:
+        """Refresh all task list widgets."""
+        task_lists = self.query(TaskListWidget)
+        for task_list in task_lists:
+            await task_list.load_or_refresh_data()
 
-    async def _configure_components(self) -> None:
-        """Configure all components with necessary data."""
-        try:
-            # Pass tag colors from the datastore to the widgets
-            self.task_list_widget.tag_colors = self.datastore.tag_colors
-            self.task_detail_panel.tag_colors = self.datastore.tag_colors
+    # Event handlers for communication between widgets
 
-            # Initial load of tasks
-            await self.task_list_widget.load_or_refresh_data()
-
-            # Subscribe to any datastore events if applicable
-            # self.datastore.subscribe_to_changes(self._on_data_changed)
-        except Exception as e:
-            log.error(f"Error configuring components: {e}")
-            self.update_status(f"Error: {str(e)}", error=True)
-
-    def update_status(self, message: str, error: bool = False) -> None:
-        """Update the status bar with a message."""
-        style = "red" if error else "green"
-        self.status_bar.update(f"[{style}]{message}[/{style}]")
-
-        # Opcional: Programar un temporizador para borrar el mensaje después de unos segundos
-        def clear_status():
-            self.status_bar.update("Ready - Press F1 for help")
-
-        # Si usas asyncio, podrías implementar un temporizador así:
-        # self.set_timer(5, clear_status)
-        # O si prefieres evitar temporizadores, simplemente deja el mensaje
-
-    # --- Message Handlers ---
-
-    @on(ViewTaskDetailsRequest)
-    async def handle_view_task_details_request(self, message: ViewTaskDetailsRequest) -> None:
+    async def handle_view_task_details(self, event: ViewTaskDetailsRequest) -> None:
         """Handle request to view task details."""
-        log.info(f"Viewing details for Task ID: {message.task_id}")
+        log.info(f"TaskView: Request to view details for task {event.task_id}")
+        detail_panel = self.query_one(TaskDetailPanel)
 
         try:
-            # Fetch the task and update detail panel
-            task = self.datastore.get_task_by_id(message.task_id)
+            # Store the last selected task ID
+            self._last_selected_task_id = event.task_id
+
+            # Get task from data store and update detail panel
+            task = await self.app.run_in_thread(self.app.datastore.get_task_by_id, event.task_id)
+
             if task:
-                self.task_detail_panel.current_task = task
-                self.update_status(f"Viewing task: {task.text[:30]}...")
+                detail_panel.current_task = task
             else:
-                log.warning(f"Task with ID {message.task_id} not found.")
-                self.task_detail_panel.current_task = None
-                self.update_status("Task not found", error=True)
+                detail_panel.current_task = None
+                log.warning(f"Task with ID {event.task_id} not found.")
         except Exception as e:
             log.error(f"Error fetching task details: {e}")
-            self.task_detail_panel.current_task = None
-            self.update_status(f"Error: {str(e)}", error=True)
+            detail_panel.current_task = None
 
-    @on(ScoreTaskRequest, ScoreTaskDetail)
-    async def handle_score_task(self, message: Any) -> None:
-        """Handle scoring tasks from either panel."""
-        task_id = message.task_id
-        direction = message.direction
-        log.info(f"Scoring task {task_id} {direction}")
+    async def handle_score_task(self, event: Message) -> None:
+        """Handle request to score a task."""
+        task_id = event.task_id
+        direction = event.direction
+        log.info(f"TaskView: Scoring task {task_id} {direction}")
 
         try:
-            if self.datastore.score_task(task_id, direction):
-                await self._refresh_ui_after_task_change(task_id)
-                self.update_status(f"Task scored {direction}")
+            # Score the task
+            result = await self.app.run_in_thread(self.app.datastore.score_task, task_id, direction)
+
+            if result:
+                # Refresh all task lists and update detail panel
+                await self.refresh_all_task_lists()
+
+                # Update detail panel if it's showing the scored task
+                detail_panel = self.query_one(TaskDetailPanel)
+                if detail_panel.current_task and getattr(detail_panel.current_task, "id", None) == task_id:
+                    task = await self.app.run_in_thread(self.app.datastore.get_task_by_id, task_id)
+                    detail_panel.current_task = task
             else:
-                self.update_status("Failed to score task", error=True)
+                log.warning(f"Failed to score task {task_id}")
         except Exception as e:
             log.error(f"Error scoring task: {e}")
-            self.update_status(f"Error: {str(e)}", error=True)
 
-    @on(CompleteTask)
-    async def handle_complete_task(self, message: CompleteTask) -> None:
+    async def handle_complete_task(self, event: CompleteTask) -> None:
         """Handle request to complete a task."""
-        task_id = message.task_id
-        log.info(f"Completing task {task_id}")
+        task_id = event.task_id
+        log.info(f"TaskView: Completing task {task_id}")
 
         try:
-            if self.datastore.complete_task(task_id):
-                await self.task_list_widget.load_or_refresh_data()
-                self.task_detail_panel.current_task = None
-                self.update_status("Task completed")
-                self.set_focus(self.task_list_widget)
+            # Complete the task
+            result = await self.app.run_in_thread(self.app.datastore.complete_task, task_id)
+
+            if result:
+                # Refresh all task lists and clear detail panel
+                await self.refresh_all_task_lists()
+
+                # Clear detail panel
+                detail_panel = self.query_one(TaskDetailPanel)
+                detail_panel.current_task = None
             else:
-                self.update_status("Failed to complete task", error=True)
+                log.warning(f"Failed to complete task {task_id}")
         except Exception as e:
             log.error(f"Error completing task: {e}")
-            self.update_status(f"Error: {str(e)}", error=True)
 
-    @on(DeleteTask)
-    async def handle_delete_task(self, message: DeleteTask) -> None:
+    async def handle_delete_task(self, event: DeleteTask) -> None:
         """Handle request to delete a task."""
-        task_id = message.task_id
-        log.info(f"Deleting task {task_id}")
+        task_id = event.task_id
+        log.info(f"TaskView: Deleting task {task_id}")
 
         try:
-            if self.datastore.delete_task(task_id):
-                await self.task_list_widget.load_or_refresh_data()
-                self.task_detail_panel.current_task = None
-                self.update_status("Task deleted")
-                self.set_focus(self.task_list_widget)
+            # Delete the task
+            result = await self.app.run_in_thread(self.app.datastore.delete_task, task_id)
+
+            if result:
+                # Refresh all task lists and clear detail panel
+                await self.refresh_all_task_lists()
+
+                # Clear detail panel
+                detail_panel = self.query_one(TaskDetailPanel)
+                detail_panel.current_task = None
             else:
-                self.update_status("Failed to delete task", error=True)
+                log.warning(f"Failed to delete task {task_id}")
         except Exception as e:
             log.error(f"Error deleting task: {e}")
-            self.update_status(f"Error: {str(e)}", error=True)
 
-    @on(EditTask)
-    async def handle_edit_task(self, message: EditTask) -> None:
+    async def handle_edit_task(self, event: EditTask) -> None:
         """Handle request to edit a task."""
-        task_id = message.task_id
-        log.info(f"Editing task {task_id}")
+        task_id = event.task_id
+        log.info(f"TaskView: Edit request for task {task_id}")
 
-        # Aquí normalmente abrirías un diálogo modal
-        # Por ahora, solo mostramos un mensaje en la barra de estado
-        self.update_status("Edit feature not implemented yet")
+        # This would be implemented when you have an edit task dialog
+        log.info("Edit task feature not yet implemented")
 
-        # Para implementación futura con un modal:
-        # task = self.datastore.get_task_by_id(task_id)
-        # if task:
-        #     edit_screen = TaskEditModal(task)
-        #     result = await self.push_screen(edit_screen)
-        #     if result:  # Si el usuario guardó los cambios
-        #         await self._refresh_ui_after_task_change(task_id)
+    # Actions for key bindings
 
-    # --- Helper Methods ---
-
-    async def _refresh_ui_after_task_change(self, task_id: str) -> None:
-        """Refresh UI components after a task has been modified."""
-        # Refresh task list
-        await self.task_list_widget.load_or_refresh_data()
-
-        # Refresh detail panel if needed
-        if self.task_detail_panel.current_task and getattr(self.task_detail_panel.current_task, "id", None) == task_id:
-            updated_task = self.datastore.get_task_by_id(task_id)
-            self.task_detail_panel.current_task = updated_task
-
-    # --- App Actions ---
-
-    def action_quit_app(self) -> None:
-        """Quit the application."""
-        log.info("Quitting application.")
-        self.exit()
-
-    def action_toggle_help(self) -> None:
-        """Show a help modal dialog."""
-        # En una implementación real, esto abriría un modal con ayuda
-        self.update_status("Help: Press Q to quit, TAB to switch panels")
-
-    async def action_refresh_data(self) -> None:
-        """Refresh all data from the datastore."""
-        self.update_status("Refreshing data...")
-        try:
-            await self.task_list_widget.load_or_refresh_data()
-            if self.task_detail_panel.current_task:
-                task_id = getattr(self.task_detail_panel.current_task, "id", None)
-                if task_id:
-                    updated_task = self.datastore.get_task_by_id(task_id)
-                    self.task_detail_panel.current_task = updated_task
-            self.update_status("Data refreshed")
-        except Exception as e:
-            log.error(f"Error refreshing data: {e}")
-            self.update_status(f"Error refreshing: {str(e)}", error=True)
-
-    def action_next_panel(self) -> None:
-        """Switch focus to the next panel."""
-        if self.focused == self.task_list_widget:
-            self.set_focus(self.task_detail_panel)
-        else:
-            self.set_focus(self.task_list_widget)
-
-    def action_prev_panel(self) -> None:
-        """Switch focus to the previous panel."""
-        if self.focused == self.task_detail_panel:
-            self.set_focus(self.task_list_widget)
-        else:
-            self.set_focus(self.task_detail_panel)
-
-    def action_focus_up(self) -> None:
-        """Focus handling for up key."""
-        # Delegate to appropriate widget if task list is focused
-        if self.focused == self.task_list_widget:
-            self.task_list_widget.action_cursor_up()
-
-    def action_focus_down(self) -> None:
-        """Focus handling for down key."""
-        # Delegate to appropriate widget if task list is focused
-        if self.focused == self.task_list_widget:
-            self.task_list_widget.action_cursor_down()
-
-    # Acciones para implementar teclas rápidas para completar/editar/eliminar
     async def action_complete_task(self) -> None:
-        """Complete the currently selected task."""
-        if self.task_detail_panel.current_task:
-            task_id = str(self.task_detail_panel.current_task.id)
-            await self.handle_complete_task(CompleteTask(task_id))
+        """Action to complete the currently selected task."""
+        detail_panel = self.query_one(TaskDetailPanel)
+        if detail_panel.current_task:
+            task_id = getattr(detail_panel.current_task, "id", None)
+            if task_id:
+                await self.handle_complete_task(CompleteTask(task_id))
 
     async def action_edit_task(self) -> None:
-        """Edit the currently selected task."""
-        if self.task_detail_panel.current_task:
-            task_id = str(self.task_detail_panel.current_task.id)
-            await self.handle_edit_task(EditTask(task_id))
+        """Action to edit the currently selected task."""
+        detail_panel = self.query_one(TaskDetailPanel)
+        if detail_panel.current_task:
+            task_id = getattr(detail_panel.current_task, "id", None)
+            if task_id:
+                await self.handle_edit_task(EditTask(task_id))
 
     async def action_delete_task(self) -> None:
-        """Delete the currently selected task."""
-        if self.task_detail_panel.current_task:
-            task_id = str(self.task_detail_panel.current_task.id)
-            await self.handle_delete_task(DeleteTask(task_id))
-
-
-# --- Main Execution Block ---
-if __name__ == "__main__":
-    # Configuración de logging
-    import logging
-
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
-    log.info("Starting the Habitica TUI App.")
-    app = HabiticaTUIApp()
-    app.run()
+        """Action to delete the currently selected task."""
+        detail_panel = self.query_one(TaskDetailPanel)
+        if detail_panel.current_task:
+            task_id = getattr(detail_panel.current_task, "id", None)
+            if task_id:
+                await self.handle_delete_task(DeleteTask(task_id))

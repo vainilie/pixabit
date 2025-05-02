@@ -1,187 +1,145 @@
 
 #app-container {
-    width: 100%;
-    height: 100%;
-    layout: grid;
-    grid-size: 2;
-    grid-columns: 1fr 4fr;
-    grid-rows: 100%;
+width: 100%;
+height: 100%;
+layout: grid;
+grid-size: 1;
+grid-rows: 1fr 10fr;
 }
 #sidebar {
-    width: 50;
-    height: 100%;
-    overflow-y: auto;
-        & #api-status-label {
-        margin-top: 1;
-        padding: 1;
-        background: $surface-darken-1;
-        border: solid $accent;
-        text-align: center;
-    }
+height: 1;
+dock: bottom;
 }
-#main-content {
-    width: 100%;
-    height: 100%;
-    background: $surface;
+#user-info-static{
+width: auto;
+margin-right: 2;
+height:1;
 }
-#header {
-    dock: top;
-    height: 1;
+#api-status-label {
+text-wrap: wrap;
+}
+SidebarStats {
+width: 100%;
+height: 1;
+background: $panel;
+}
+#stats-container {
+width: 100%;
+}
+#api-status-label {
+background: $surface-darken-1;
+margin-left: 2;
+& Label {
+width:15;
+max-width: 15
+}
+& .section-title {
+text-style: bold;
+color: $accent;
+}
+& .stat-label {
+width: 100%;
+padding-left: 1;
+}
+& .progress-label {
+width: 100%;
+text-align: center;
+}
+& ProgressBar {
+}
+& #day-start-time {
+color: $text;
+}
+& #needs-cron {
+color: $warning;
+text-style: bold;
+}
+& #last-log {
+}
+}
+#challenge-layout {
+width: 100%;
+height: 100%;
+layout: grid;
+grid-columns: 1fr;
+grid-rows: 1fr;
+grid-size: 1 2;
+}
+#sidebar-container {
+width: 100%;
+height: 100%;
+border-bottom: thick cornflowerblue;
+}
+#content-container {
+width: 100%;
+min-width: 40;
+height: 100%;
+}
+#sidebar-header {
+height: 1;
+padding: 0 1;
+}
+#sidebar-title {
+width: 100%;
+content-align: center middle;
+color: cornflowerblue;
+text-style: bold;
+}
+#challenge-tree {
+height: 100%;
+overflow: auto;
+}
+#challenge-detail-header {
+height: 1;
+color: cornflowerblue;
+text-style: bold;
+}
+#challenge-details {
+margin: 1 0;
+padding: 1;
+}
+.action-row {
+height: 3;
+margin: 1 0;
+}
+.hidden {
+display: none;
+}
+#tasks-header {
+height: 0;
+border-bottom: solid cornflowerblue;
+}
+#tasks-title {
+color: cornflowerblue;
+text-style: bold;
+}
+#tasks-filters {
+height: 1;
+}
+#tasks-container {
+min-height: 10;
+max-height: 20;
+overflow: auto;
+}
+#tasks-markdown {
+padding: 0;
+}
+#help-title {
+    text-align: center;
+    padding: 1 2;
+    border-bottom: solid $accent;
+    color: $accent;
+}
+
+#help-list {
+    padding: 2;
     background: $panel;
-}
-#user-info-container {
-    width: 100%;
-    background: $panel-lighten-1;
-}
-#user-info-static {
-    width: 100%;
-    text-align: center;
-    text-style: bold;
-    color: $text;
-}
-#content {
-    padding: 1;
-}
-.loading {
-    color: $warning;
-    background: $panel-darken-1;
-    padding: 1;
-    text-align: center;
-}
-.success {
-    color: $success;
-}
-.error {
-    color: $error;
-}
-.warning {
-    color: $warning;
-}
-Label{
-    content-align: left middle;
-}
-
-# pixabit/ui/css/task_widgets.css
-
-/* Task Tab Container */
-#task-tab-container {
-    width: 100%;
-    height: 100%;
-    padding: 1;
-}
-
-.tab-header {
-    text-style: bold;
-    background: $boost;
-    color: $text;
-    padding: 1;
-    text-align: center;
-    margin-bottom: 1;
-}
-
-/* Container layout for task list and details */
-#tasks-content-container {
-    width: 100%;
-    height: 100%;
-    layout: grid;
-    grid-columns: 3fr 2fr; /* Task list gets 60%, details 40% */
-    grid-rows: 1fr;
-}
-
-/* Task List Widget */
-#task-list-widget {
-    width: 100%;
-    height: 100%;
-    border: round $primary-darken-2;
-    padding: 1;
-}
-
-/* Task Detail Panel */
-#task-detail-panel {
-    width: 100%;
-    height: 100%;
-    border: round $primary-darken-2;
-    padding: 1;
-}
-
-/* Task details content styles */
-#task-details-content {
-    margin-top: 1;
-    width: 100%;
-}
-
-#task-detail-text {
-    width: 100%;
-    text-style: bold;
-    margin-bottom: 1;
-}
-
-#task-detail-notes {
-    width: 100%;
-    min-height: 3;
-    margin: 1 0;
-    padding: 1;
-    background: $surface-darken-1;
-    border: dashed $primary-background;
-    text-wrap: wrap;
-}
-
-#task-detail-meta {
-    width: 100%;
-    margin-top: 1;
-    color: $text-muted;
-}
-
-/* Action buttons layout and styling */
-#task-detail-actions {
-    margin-top: 2;
-    width: 100%;
-}
-
-/* Container for main action buttons */
-#primary-actions {
-    layout: horizontal;
-    width: 100%;
-    height: 3;
-    align: center middle;
-    margin-bottom: 1;
-}
-
-/* Container for secondary action buttons */
-#secondary-actions {
-    layout: horizontal;
-    width: 100%;
-    height: 3;
+    border: round $accent;
+    width: 50%;
+    height: auto;
     align: center middle;
 }
 
-/* General button styling */
-#task-detail-actions Button {
-    margin-right: 1;
-    min-width: 8;
-}
-
-/* Score buttons */
-.score-button {
-    width: 4;
-    text-align: center;
-}
-
-/* Styling for selected task */
-.selected-task {
-    text-style: bold;
-    background: $boost;
-}
-
-/* Success and error status styles */
-.success {
-    color: $success;
-}
-
-.error {
-    color: $error;
-}
-
-.loading {
-    color: $primary;
+#help-item {
+    padding: 0 1;
 }

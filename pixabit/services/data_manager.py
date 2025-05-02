@@ -549,20 +549,20 @@ class DataManager:
             # Note: Ownership is now handled during validation via context.
             # We only need to explicitly set `joined` here.
             if self._user and self._challenges:
-                profile = getattr(self._user, "profile", None)
                 # Ensure profile.challenges exists and is a list
-                user_challenges_list = getattr(profile, "challenges", []) if profile else []
+                user_challenges_list = getattr(self._user, "challenges", [])
                 joined_ids = set(user_challenges_list if isinstance(user_challenges_list, list) else [])
                 # joined_ids = set(self._user.profile.challenges) if self._user.profile else set()
                 count_joined = 0
                 for c in self._challenges.challenges:
                     is_joined = c.id in joined_ids
                     if c.joined != is_joined:  # Only log if changed
-                        log.debug(f"Challenge '{c.id[:8]}' joined status -> {is_joined}")
+                        pass
+                        # log.debug(f"Challenge '{c.id[:8]}' joined status -> {is_joined}")
                     c.joined = is_joined
                     if is_joined:
                         count_joined += 1
-                log.debug(f"Challenge joined status processed ({count_joined} marked as joined).")
+                # log.debug(f"Challenge joined status processed ({count_joined} marked as joined).")
 
             # 3. Process Tasks (Needs User, Tags, Static Content Manager)
             if self._tasks and self._user and self._tags:
