@@ -9,7 +9,15 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import Button, Label, Static, Switch, Tab, TabbedContent, TabPane
+from textual.widgets import (
+    Button,
+    Label,
+    Static,
+    Switch,
+    Tab,
+    TabbedContent,
+    TabPane,
+)
 
 from pixabit.api.client import HabiticaClient
 from pixabit.config import HABITICA_DATA_PATH
@@ -18,6 +26,7 @@ from pixabit.models.game_content import StaticContentManager
 from pixabit.models.user import User
 from pixabit.services.challenge_service import ChallengeService
 from pixabit.services.data_manager import DataManager
+from pixabit.services.task_service import TaskService
 from pixabit.ui.widgets.challenge_view import ChallengeScreen, ChallengeView
 from pixabit.ui.widgets.help_modal import HelpModal
 from pixabit.ui.widgets.main_panel import TaskView
@@ -39,9 +48,18 @@ class HabiticaApp(App):
         Binding(key="escape", action="quit", description="Salir"),
         Binding(key="r", action="refresh_data", description="Actualizar datos"),
         # Add task-specific bindings
-        Binding(key="c", action="complete_task", description="Complete task", show=False),
-        Binding(key="e", action="edit_task", description="Edit task", show=False),
-        Binding(key="d", action="delete_task", description="Delete task", show=False),
+        Binding(
+            key="c",
+            action="complete_task",
+            description="Complete task",
+            show=False,
+        ),
+        Binding(
+            key="e", action="edit_task", description="Edit task", show=False
+        ),
+        Binding(
+            key="d", action="delete_task", description="Delete task", show=False
+        ),
         Binding(key="?", action="help", description="Show Keyboard Shortcuts"),
     ]
 
@@ -69,8 +87,17 @@ class HabiticaApp(App):
         content_manager = StaticContentManager(cache_dir=static_cache_dir)
         # Setup Data Manager
         cache_dir = HABITICA_DATA_PATH
-        self.data_manager = DataManager(api_client=self.api_client, static_content_manager=content_manager, cache_dir=cache_dir)
-        self.challenge_service = ChallengeService(api_client=self.api_client, data_manager=self.data_manager)
+        self.data_manager = DataManager(
+            api_client=self.api_client,
+            static_content_manager=content_manager,
+            cache_dir=cache_dir,
+        )
+        self.challenge_service = ChallengeService(
+            api_client=self.api_client, data_manager=self.data_manager
+        )
+        self.task_service = TaskService(
+            api_client=self.api_client, data_manager=self.data_manager
+        )
 
     async def on_mount(self) -> None:
         """Runs when the app starts: setup and load initial data."""
@@ -82,7 +109,9 @@ class HabiticaApp(App):
         # Initial data load
         await self.load_and_refresh_data(show_status=True)
 
-    async def load_and_refresh_data(self, force_refresh: bool = False, show_status: bool = True) -> bool:
+    async def load_and_refresh_data(
+        self, force_refresh: bool = False, show_status: bool = True
+    ) -> bool:
         """Carga todos los datos necesarios y actualiza la UI.
 
         Args:
@@ -98,11 +127,15 @@ class HabiticaApp(App):
         success = False
         try:
             # Paso 1: Cargar datos
-            data_loaded = await self.data_manager.load_all_data(force_refresh=force_refresh)
+            data_loaded = await self.data_manager.load_all_data(
+                force_refresh=force_refresh
+            )
 
             # Paso 2: Procesar datos
             if data_loaded:
-                processing_successful = await self.data_manager.process_loaded_data()
+                processing_successful = (
+                    await self.data_manager.process_loaded_data()
+                )
 
                 # Paso 3: Obtener datos de quest si el usuario está en una
                 if processing_successful and self.data_manager.user:
@@ -110,14 +143,18 @@ class HabiticaApp(App):
                         self.quest_data = await self._get_quest_data()
 
                 # Paso 4: Actualizar UI con los datos cargados
-                await self.update_ui_with_data(data_loaded, processing_successful)
+                await self.update_ui_with_data(
+                    data_loaded, processing_successful
+                )
 
                 # Establecer éxito general
                 success = processing_successful
 
                 if show_status:
                     if success:
-                        self.update_status("Data loaded successfully", "success")
+                        self.update_status(
+                            "Data loaded successfully", "success"
+                        )
                     else:
                         self.update_status("Error processing data", "error")
             else:
@@ -155,7 +192,12 @@ class HabiticaApp(App):
                 "title": "Gather Supplies",
                 "progress": 7,  # Items collected
                 "progressNeeded": 15,  # Items needed
-                "collect": {"items": [{"name": "Wood", "count": 3}, {"name": "Stone", "count": 4}]},
+                "collect": {
+                    "items": [
+                        {"name": "Wood", "count": 3},
+                        {"name": "Stone", "count": 4},
+                    ]
+                },
             }
 
     def action_help(self) -> None:
@@ -174,10 +216,14 @@ class HabiticaApp(App):
         else:
             log.info(f"Status update: {message}")
 
-    async def update_ui_with_data(self, data_loaded: bool, processing_successful: bool) -> None:
+    async def update_ui_with_data(
+        self, data_loaded: bool, processing_successful: bool
+    ) -> None:
         """Update UI widgets with data from DataManager."""
         if not self.data_manager or not self.widgets_initialized:
-            log.error("DataManager is not initialized or widgets not ready when trying to update UI.")
+            log.error(
+                "DataManager is not initialized or widgets not ready when trying to update UI."
+            )
             return
 
         try:
@@ -192,15 +238,25 @@ class HabiticaApp(App):
                 # Update user info
                 username = self.data_manager.user.username
                 user_class = self.data_manager.user.klass
-                is_sleeping = getattr(self.data_manager.user, "is_sleeping", False)
+                is_sleeping = getattr(
+                    self.data_manager.user, "is_sleeping", False
+                )
 
                 # Emojis
-                class_emoji = {"warrior": "🗡️", "wizard": "🧙", "healer": "💚", "rogue": "⚔️", "": "👤"}.get(user_class.lower(), "👤")
+                class_emoji = {
+                    "warrior": "🗡️",
+                    "wizard": "🧙",
+                    "healer": "💚",
+                    "rogue": "⚔️",
+                    "": "👤",
+                }.get(user_class.lower(), "👤")
 
                 # Update widgets
                 user_info_widget.update(f"{class_emoji} [b]{username}[/b]")
                 stats_widget.update_display(self.data_manager.user)
-                sidebar_stats.update_sidebar_stats(self.data_manager.user, self.quest_data)
+                sidebar_stats.update_sidebar_stats(
+                    self.data_manager.user, self.quest_data
+                )
                 sleep_toggle.update_sleep_state(self.data_manager.user)
 
                 # Refresh task data if task container is initialized
@@ -265,22 +321,22 @@ class HabiticaApp(App):
 
     # Event handlers for task-related messages
 
-    async def handle_score_task_request(self, message: TaskView.ScoreTaskRequest) -> None:
-        """Handle scoring a task."""
-        if not self.data_manager:
-            self.update_status("No data manager available to score tasks", "error")
-            return
+    # async def handle_score_task_request(self, message: TaskView.ScoreTaskRequest) -> None:
+    #     """Handle scoring a task."""
+    #     if not self.data_manager:
+    #         self.update_status("No data manager available to score tasks", "error")
+    #         return
 
-        try:
-            if await self.data_manager.score_task(message.task_id, message.direction):
-                self.update_status(f"Task scored {message.direction}", "success")
-                # Refresh data after scoring
-                await self.load_and_refresh_data(force_refresh=True, show_status=False)
-            else:
-                self.update_status("Failed to score task", "error")
-        except Exception as e:
-            log.error(f"Error scoring task: {e}")
-            self.update_status(f"Error: {str(e)}", "error")
+    #     try:
+    #         if await self.data_manager.score_task(message.task_id, message.direction):
+    #             self.update_status(f"Task scored {message.direction}", "success")
+    #             # Refresh data after scoring
+    #             await self.load_and_refresh_data(force_refresh=True, show_status=False)
+    #         else:
+    #             self.update_status("Failed to score task", "error")
+    #     except Exception as e:
+    #         log.error(f"Error scoring task: {e}")
+    #         self.update_status(f"Error: {str(e)}", "error")
 
     def compose(self) -> ComposeResult:
         """Create the UI layout with sidebar and main content."""
@@ -296,19 +352,30 @@ class HabiticaApp(App):
                     with TabbedContent(id="main-tabs"):
                         # Paneles de pestañas
                         with TabPane("User", id="user"):
-                            yield Static("Main content area - Tasks will display here")
+                            yield Static(
+                                "Main content area - Tasks will display here"
+                            )
                             yield StatsCount()
                             # Pasamos una referencia del método on_data_changed para que el widget
                             # pueda notificar cambios en los datos
-                            yield SleepToggle(api_client=self.api_client, status_update_callback=self.update_status, on_data_changed=self.on_data_changed)
+                            yield SleepToggle(
+                                api_client=self.api_client,
+                                status_update_callback=self.update_status,
+                                on_data_changed=self.on_data_changed,
+                            )
                         with TabPane("Tasks", id="tasks"):
                             # Integramos el contenedor de tareas aquí
-                            yield TaskView(id="task-tab-container", data_manager=self.data_manager, api_client=self.api_client, on_data_changed=self.on_data_changed)
+                            yield TaskView(
+                                id="task-tab-container",
+                                task_service=self.task_service,
+                            )
 
                         with TabPane("Tags", id="tags"):
                             yield Static("Tags content goes here")
                         with TabPane("Challenges", id="challenges"):
-                            yield ChallengeView(challenge_service=self.challenge_service)
+                            yield ChallengeView(
+                                challenge_service=self.challenge_service
+                            )
                         with TabPane("Party", id="party"):
                             yield Static("Party content goes here")
                         with TabPane("Messages", id="messages"):

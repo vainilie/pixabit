@@ -5,8 +5,11 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from pixabit.api.mixin.task_mixin import TaskData  #! IMPORT TaskData FROM HERE
 from pixabit.helpers._logger import log
-from pixabit.models.task import AnyTask, TaskData  # Import specific model if needed
+from pixabit.models.task import (
+    AnyTask,  # Import specific model if needed
+)
 
 if TYPE_CHECKING:
     from pixabit.api.client import HabiticaClient
@@ -37,7 +40,9 @@ class TaskService:
     def get_tasks(self) -> TaskList | None:
         """Returns the cached TaskList instance from the DataManager."""
         if not self.dm.tasks:
-            log.warning("Attempted to get tasks, but TaskList is not loaded in DataManager.")
+            log.warning(
+                "Attempted to get tasks, but TaskList is not loaded in DataManager."
+            )
         return self.dm.tasks
 
     def get_task_by_id(self, task_id: str) -> AnyTask | None:
@@ -47,7 +52,9 @@ class TaskService:
             return task_list.get_by_id(task_id)
         return None
 
-    def get_tasks_by_type(self, task_type: Literal[habit, daily, todo, reward]) -> list[AnyTask]:
+    def get_tasks_by_type(
+        self, task_type: Literal[habit, daily, todo, reward]
+    ) -> list[AnyTask]:
         """Gets tasks of a specific type from the cached TaskList."""
         task_list = self.get_tasks()
         if task_list:
@@ -57,7 +64,9 @@ class TaskService:
 
     # --- Write Operations (Asynchronous) ---
 
-    async def create_task(self, task_input: TaskData | dict[str, Any]) -> AnyTask | None:
+    async def create_task(
+        self, task_input: TaskData | dict[str, Any]
+    ) -> AnyTask | None:
         """Creates a new task via the API and adds it to the local TaskList.
 
         Args:
@@ -74,7 +83,9 @@ class TaskService:
         try:
             # 1. Call API
             # create_task expects dict or TaskData model, handles validation
-            task_data: dict[str, Any] | None = await self.api.create_task(task=task_input)
+            task_data: dict[str, Any] | None = await self.api.create_task(
+                task=task_input
+            )
 
             if not task_data:
                 log.error("API call to create task did not return data.")
@@ -86,7 +97,9 @@ class TaskService:
                 # add_task should validate the raw dict and create the correct subclass
                 new_task_instance = task_list.add_task(task_data)
                 if new_task_instance:
-                    log.info(f"Successfully created and cached task: {new_task_instance}")
+                    log.info(
+                        f"Successfully created and cached task: {new_task_instance}"
+                    )
                     # self.dm.save_tasks() # Optional: Save updated cache
                     return new_task_instance
                 else:
@@ -95,7 +108,9 @@ class TaskService:
                     # Maybe return the raw dict? Or None? Let's return None for now.
                     return None
             else:
-                log.error("Cannot add created task: TaskList not loaded in DataManager.")
+                log.error(
+                    "Cannot add created task: TaskList not loaded in DataManager."
+                )
                 return None  # Local cache not available
 
         except ValueError as ve:
@@ -105,7 +120,9 @@ class TaskService:
             log.exception(f"Failed to create task: {e}")
             raise
 
-    async def update_task(self, task_id: str, update_data: dict[str, Any]) -> AnyTask | None:
+    async def update_task(
+        self, task_id: str, update_data: dict[str, Any]
+    ) -> AnyTask | None:
         """Updates an existing task via the API and updates the local cache.
 
         Args:
@@ -125,28 +142,40 @@ class TaskService:
 
         task_list = self.get_tasks()
         if not task_list or task_id not in task_list:
-            log.error(f"Cannot update task '{task_id}': Task not found or TaskList not loaded.")
+            log.error(
+                f"Cannot update task '{task_id}': Task not found or TaskList not loaded."
+            )
             raise ValueError(f"Task with ID '{task_id}' not found locally.")
 
         log.info(f"Attempting to update task '{task_id}'...")
         try:
             # 1. Call API
-            updated_data_from_api = await self.api.update_task(task_id=task_id, data=update_data)
+            updated_data_from_api = await self.api.update_task(
+                task_id=task_id, data=update_data
+            )
 
             if not updated_data_from_api:
-                log.error(f"API call to update task '{task_id}' did not return data.")
+                log.error(
+                    f"API call to update task '{task_id}' did not return data."
+                )
                 return None
 
             # 2. Update local cache using TaskList's method
             # edit_task should handle validation and updating the existing instance
-            updated_task_instance = task_list.edit_task(task_id, updated_data_from_api)
+            updated_task_instance = task_list.edit_task(
+                task_id, updated_data_from_api
+            )
 
             if updated_task_instance:
-                log.info(f"Successfully updated and cached task: {updated_task_instance}")
+                log.info(
+                    f"Successfully updated and cached task: {updated_task_instance}"
+                )
                 # self.dm.save_tasks() # Optional
                 return updated_task_instance
             else:
-                log.error(f"Failed to update task '{task_id}' in local TaskList.")
+                log.error(
+                    f"Failed to update task '{task_id}' in local TaskList."
+                )
                 return None
 
         except ValueError as ve:
@@ -171,7 +200,9 @@ class TaskService:
         """
         task_list = self.get_tasks()
         if not task_list or task_id not in task_list:
-            log.error(f"Cannot delete task '{task_id}': Task not found or TaskList not loaded.")
+            log.error(
+                f"Cannot delete task '{task_id}': Task not found or TaskList not loaded."
+            )
             raise ValueError(f"Task with ID '{task_id}' not found locally.")
 
         log.info(f"Attempting to delete task '{task_id}'...")
@@ -187,11 +218,15 @@ class TaskService:
             deleted_task = task_list.delete_task(task_id)
 
             if deleted_task:
-                log.info(f"Successfully deleted task '{task_id}' from API and cache.")
+                log.info(
+                    f"Successfully deleted task '{task_id}' from API and cache."
+                )
                 # self.dm.save_tasks() # Optional
                 return True
             else:
-                log.warning(f"API deletion successful, but failed to remove task '{task_id}' from local cache.")
+                log.warning(
+                    f"API deletion successful, but failed to remove task '{task_id}' from local cache."
+                )
                 return False
 
         except ValueError as ve:
@@ -201,7 +236,9 @@ class TaskService:
             log.exception(f"Failed to delete task '{task_id}': {e}")
             raise
 
-    async def score_task(self, task_id: str, direction: ScoreDirection | Literal[up, down]) -> dict[str, Any] | None:
+    async def score_task(
+        self, task_id: str, direction: ScoreDirection | Literal[up, down]
+    ) -> dict[str, Any] | None:
         """Scores a task (up or down) via the API, updates local user stats,
         and updates the local task state.
 
@@ -219,7 +256,9 @@ class TaskService:
         task_list = self.get_tasks()
         user = self.dm.user
         if not task_list or task_id not in task_list:
-            log.error(f"Cannot score task '{task_id}': Task not found or TaskList not loaded.")
+            log.error(
+                f"Cannot score task '{task_id}': Task not found or TaskList not loaded."
+            )
             raise ValueError(f"Task with ID '{task_id}' not found locally.")
         if not user:
             log.error(f"Cannot score task '{task_id}': User data not loaded.")
@@ -227,13 +266,19 @@ class TaskService:
 
         task = task_list.get_by_id(task_id)  # Get the specific task instance
 
-        log.info(f"Attempting to score task '{task_id}' direction '{direction}'...")
+        log.info(
+            f"Attempting to score task '{task_id}' direction '{direction}'..."
+        )
         try:
             # 1. Call API
-            score_result = await self.api.score_task(task_id=task_id, direction=direction)
+            score_result = await self.api.score_task(
+                task_id=task_id, direction=direction
+            )
 
             if not score_result:
-                log.error(f"API call to score task '{task_id}' failed or returned no data.")
+                log.error(
+                    f"API call to score task '{task_id}' failed or returned no data."
+                )
                 return None
 
             # 2. Update local User stats based on score_result deltas
@@ -243,7 +288,9 @@ class TaskService:
 
             # --- Apply Deltas to User (Simplified Example) ---
             # A more robust implementation would parse all possible delta keys
-            user.stats.hp = max(0, user.stats.hp + score_result.get("hp", 0))  # Ensure HP doesn't go below 0
+            user.stats.hp = max(
+                0, user.stats.hp + score_result.get("hp", 0)
+            )  # Ensure HP doesn't go below 0
             user.stats.mp += score_result.get("mp", 0)
             user.stats.exp += score_result.get("exp", 0)
             user.stats.gp += score_result.get("gp", 0)
@@ -271,7 +318,9 @@ class TaskService:
                 update_payload["completed"] = direction == "up"
                 if direction == "up":
                     # TODO: Add completedDate? API might set this implicitly.
-                    update_payload["dateCompleted"] = datetime.now(timezone.utc).isoformat()
+                    update_payload["dateCompleted"] = datetime.now(
+                        timezone.utc
+                    ).isoformat()
                 else:
                     update_payload["dateCompleted"] = None
 
@@ -279,12 +328,18 @@ class TaskService:
             if update_payload:
                 updated_task = task_list.edit_task(task_id, update_payload)
                 if updated_task:
-                    log.debug(f"Updated local task state after scoring: {updated_task}")
+                    log.debug(
+                        f"Updated local task state after scoring: {updated_task}"
+                    )
                 else:
-                    log.warning(f"Failed to update local task state for {task_id} after scoring.")
+                    log.warning(
+                        f"Failed to update local task state for {task_id} after scoring."
+                    )
             else:
                 # For rewards, scoring consumes GP, no task state change usually needed
-                log.debug(f"Scored reward '{task_id}'. No local task state change applied.")
+                log.debug(
+                    f"Scored reward '{task_id}'. No local task state change applied."
+                )
 
             # 4. Return API score result
             return score_result
@@ -316,14 +371,22 @@ class TaskService:
                 return False
 
             # 2. Remove completed Todos locally
-            ids_to_remove = [task.id for task in task_list.get_tasks_by_type("todo") if task.completed]
-            log.debug(f"Found {len(ids_to_remove)} completed Todos locally to remove.")
+            ids_to_remove = [
+                task.id
+                for task in task_list.get_tasks_by_type("todo")
+                if task.completed
+            ]
+            log.debug(
+                f"Found {len(ids_to_remove)} completed Todos locally to remove."
+            )
             removed_count = 0
             for task_id in ids_to_remove:
                 if task_list.delete_task(task_id):
                     removed_count += 1
 
-            log.info(f"Cleared completed Todos. API success: True. Local removed: {removed_count}/{len(ids_to_remove)}.")
+            log.info(
+                f"Cleared completed Todos. API success: True. Local removed: {removed_count}/{len(ids_to_remove)}."
+            )
             # self.dm.save_tasks() # Optional
             return True
 
@@ -333,7 +396,9 @@ class TaskService:
 
     # --- Tagging/Checklist Methods (Example: Add Tag) ---
 
-    async def add_tag_to_task(self, task_id: str, tag_id: str) -> AnyTask | None:
+    async def add_tag_to_task(
+        self, task_id: str, tag_id: str
+    ) -> AnyTask | None:
         """Adds a tag to a task via API and updates local cache."""
         task_list = self.get_tasks()
         tag_list = self.dm.tags
@@ -345,7 +410,9 @@ class TaskService:
         log.info(f"Attempting to add tag '{tag_id}' to task '{task_id}'...")
         try:
             # 1. Call API
-            updated_task_data = await self.api.add_tag_to_task(task_id=task_id, tag_id=tag_id)
+            updated_task_data = await self.api.add_tag_to_task(
+                task_id=task_id, tag_id=tag_id
+            )
             if not updated_task_data:
                 log.error("API call to add tag to task returned no data.")
                 return None
@@ -354,18 +421,26 @@ class TaskService:
             # The API response should contain the updated task data including the new tag list
             updated_task = task_list.edit_task(task_id, updated_task_data)
             if updated_task:
-                log.info(f"Successfully added tag '{tag_id}' to task '{task_id}'.")
+                log.info(
+                    f"Successfully added tag '{tag_id}' to task '{task_id}'."
+                )
                 # self.dm.save_tasks() # Optional
                 return updated_task
             else:
-                log.error(f"Failed to update local task '{task_id}' after adding tag.")
+                log.error(
+                    f"Failed to update local task '{task_id}' after adding tag."
+                )
                 return None
 
         except Exception as e:
-            log.exception(f"Failed to add tag '{tag_id}' to task '{task_id}': {e}")
+            log.exception(
+                f"Failed to add tag '{tag_id}' to task '{task_id}': {e}"
+            )
             raise
 
-    async def delete_tag_from_task(self, task_id: str, tag_id: str) -> AnyTask | None:
+    async def delete_tag_from_task(
+        self, task_id: str, tag_id: str
+    ) -> AnyTask | None:
         """Removes a tag from a task via API and updates local cache."""
         task_list = self.get_tasks()
         tag_list = self.dm.tags  # Assuming TagList holds tag info
@@ -377,10 +452,14 @@ class TaskService:
         #     log.warning(f"Tag '{tag_id}' not found on task '{task_id}' locally, attempting API removal anyway.")
         #     # return existing_task # Or proceed? Proceed for now.
 
-        log.info(f"Attempting to remove tag '{tag_id}' from task '{task_id}'...")
+        log.info(
+            f"Attempting to remove tag '{tag_id}' from task '{task_id}'..."
+        )
         try:
             # 1. Call API
-            updated_task_data = await self.api.delete_tag_from_task(task_id=task_id, tag_id=tag_id)
+            updated_task_data = await self.api.delete_tag_from_task(
+                task_id=task_id, tag_id=tag_id
+            )
             if not updated_task_data:
                 log.error("API call to remove tag from task returned no data.")
                 return None
@@ -388,19 +467,27 @@ class TaskService:
             # 2. Update local task
             updated_task = task_list.edit_task(task_id, updated_task_data)
             if updated_task:
-                log.info(f"Successfully removed tag '{tag_id}' from task '{task_id}'.")
+                log.info(
+                    f"Successfully removed tag '{tag_id}' from task '{task_id}'."
+                )
                 # self.dm.save_tasks() # Optional
                 return updated_task
             else:
-                log.error(f"Failed to update local task '{task_id}' after removing tag.")
+                log.error(
+                    f"Failed to update local task '{task_id}' after removing tag."
+                )
                 return None
 
         except Exception as e:
-            log.exception(f"Failed to remove tag '{tag_id}' from task '{task_id}': {e}")
+            log.exception(
+                f"Failed to remove tag '{tag_id}' from task '{task_id}': {e}"
+            )
             raise
 
     # --- Checklist Methods (Example: Add Item) ---
-    async def add_checklist_item(self, task_id: str, text: str) -> AnyTask | None:
+    async def add_checklist_item(
+        self, task_id: str, text: str
+    ) -> AnyTask | None:
         """Adds a checklist item via API and updates local cache."""
         if not text.strip():
             raise ValueError("Checklist item text cannot be empty.")
@@ -411,12 +498,16 @@ class TaskService:
 
         existing_task = task_list.get_by_id(task_id)
         if existing_task.type not in ["daily", "todo"]:
-            raise ValueError("Checklists are only supported for Dailies and Todos.")
+            raise ValueError(
+                "Checklists are only supported for Dailies and Todos."
+            )
 
         log.info(f"Attempting to add checklist item to task '{task_id}'...")
         try:
             # 1. Call API
-            updated_task_data = await self.api.add_checklist_item(task_id=task_id, text=text)
+            updated_task_data = await self.api.add_checklist_item(
+                task_id=task_id, text=text
+            )
             if not updated_task_data:
                 log.error("API call to add checklist item returned no data.")
                 return None
@@ -424,15 +515,21 @@ class TaskService:
             # 2. Update local task
             updated_task = task_list.edit_task(task_id, updated_task_data)
             if updated_task:
-                log.info(f"Successfully added checklist item to task '{task_id}'.")
+                log.info(
+                    f"Successfully added checklist item to task '{task_id}'."
+                )
                 # self.dm.save_tasks() # Optional
                 return updated_task
             else:
-                log.error(f"Failed to update local task '{task_id}' after adding checklist item.")
+                log.error(
+                    f"Failed to update local task '{task_id}' after adding checklist item."
+                )
                 return None
 
         except Exception as e:
-            log.exception(f"Failed to add checklist item to task '{task_id}': {e}")
+            log.exception(
+                f"Failed to add checklist item to task '{task_id}': {e}"
+            )
             raise
 
     # Add other checklist/tagging methods following the same pattern...
